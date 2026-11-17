@@ -24,3 +24,14 @@ export function formatDate(d: string | Date, locale: Locale, withTime = false): 
 export function cn(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
 }
+
+/** ISO timestamp -> "YYYY-MM-DDTHH:mm" in Baghdad time, for datetime-local inputs. */
+export function toBaghdadInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  return new Date(new Date(iso).getTime() + 3 * 3600000).toISOString().slice(0, 16);
+}
+
+/** Is a scheduled feature window currently active? */
+export function inWindow(from: string | null | undefined, until: string | null | undefined, now = Date.now()): boolean {
+  return (!from || new Date(from).getTime() <= now) && (!until || new Date(until).getTime() >= now);
+}

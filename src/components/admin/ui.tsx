@@ -71,3 +71,5 @@ export const STATUS_TONE: Record<string, "neutral" | "good" | "warn" | "bad" | "
   delivered: "good",
   cancelled: "bad",
 };
+
+export const BULK_TONE: Record<string, "neutral" | "good" | "warn" | "bad" | "dark"> = { new: "warn", contacted: "neutral", quoted: "neutral", approved: "good", rejected: "bad", converted: "dark" };

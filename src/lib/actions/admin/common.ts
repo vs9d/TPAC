@@ -21,3 +21,11 @@ export function dbError(e: { code?: string; message?: string } | null): ActionSt
   console.error("admin db error", e);
   return { ok: false, error: "generic" };
 }
+
+/** datetime-local inputs carry no zone: interpret them as Baghdad time (UTC+3, no DST). */
+export function baghdadIso(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const withZone = /[zZ]|[+-]\d{2}:\d{2}$/.test(v) ? v : `${v.length === 16 ? `${v}:00` : v}+03:00`;
+  const d = new Date(withZone);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}

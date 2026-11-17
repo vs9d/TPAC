@@ -7,6 +7,7 @@ import { getCategories, getCollections, searchProducts } from "@/lib/data/catalo
 import { Hero, CategoriesSection, ProductRail, FeaturedCollection, CustomDesignSection, BulkSection, StorySection, SocialSection, NewsletterSection } from "@/components/home/sections";
 import { JsonLd } from "@/components/seo/json-ld";
 import { publicEnv } from "@/lib/env";
+import { inWindow } from "@/lib/format";
 import type { HomepageSection } from "@/lib/types";
 
 const DEFAULT_ORDER = ["hero", "categories", "new_arrivals", "featured_collection", "best_sellers", "custom_design", "bulk", "story", "social", "newsletter"];
@@ -32,7 +33,9 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   ]);
   const byKey = new Map<string, HomepageSection>(sections.map((s) => [s.key, s]));
   const order = sections.length ? sections.map((s) => s.key) : DEFAULT_ORDER;
-  const featuredSlug = (byKey.get("featured_collection")?.data?.collection_slug as string) ?? collections.find((c) => c.is_featured)?.slug;
+  // A collection scheduled as featured (within its window) takes precedence over the section default.
+  const scheduled = collections.find((c) => c.is_featured && (c.featured_from || c.featured_until) && inWindow(c.featured_from, c.featured_until));
+  const featuredSlug = scheduled?.slug ?? (byKey.get("featured_collection")?.data?.collection_slug as string) ?? collections.find((c) => c.is_featured && inWindow(c.featured_from, c.featured_until))?.slug;
   const featured = collections.find((c) => c.slug === featuredSlug) ?? null;
 
   const [newArrivals, bestSellers, featuredItems] = await Promise.all([
