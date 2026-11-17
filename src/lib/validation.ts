@@ -147,8 +147,9 @@ const designObject = z.object({
   location: z.enum(["front", "back", "left_chest", "sleeve"]),
   left: z.number().finite(),
   top: z.number().finite(),
-  scaleX: z.number().finite().positive().max(50),
-  scaleY: z.number().finite().positive().max(50),
+  // tiny artwork may be scaled up a lot; what matters is the rendered size (checked below)
+  scaleX: z.number().finite().positive().max(5000),
+  scaleY: z.number().finite().positive().max(5000),
   angle: z.number().finite().min(-360).max(360),
   width: z.number().finite().positive().max(20000),
   height: z.number().finite().positive().max(20000),
@@ -158,7 +159,7 @@ const designObject = z.object({
   fontFamily: z.string().max(60).optional(),
   fontSize: z.number().positive().max(400).optional(),
   fontWeight: z.union([z.string(), z.number()]).optional(),
-});
+}).refine((o) => o.width * o.scaleX <= 1200 && o.height * o.scaleY <= 1400, { message: "max", path: ["scaleX"] });
 
 export const designSchema = z.object({
   garment_type: z.enum(["tshirt", "oversized", "hoodie", "sweatshirt"]),

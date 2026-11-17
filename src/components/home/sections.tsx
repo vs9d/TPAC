@@ -43,7 +43,7 @@ export function Hero({ locale, dict, banner }: Ctx & { banner: PromoBanner | nul
           </Reveal>
         </div>
         <div className="relative order-1 md:order-2 md:col-span-6">
-          <div className="relative mx-auto aspect-[4/5] w-full max-w-[560px] overflow-hidden">
+          <div className="relative mx-auto aspect-[4/5] max-h-[46svh] w-full max-w-[560px] overflow-hidden md:max-h-none">
             <Image src={image} alt="" fill priority sizes="(min-width:768px) 50vw, 100vw" className="object-cover" />
             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-ink/70 to-transparent p-5 text-xs font-semibold tracking-[0.25em]">
               <span>TPAC</span>
@@ -163,9 +163,11 @@ export function CustomDesignSection({ locale, dict, section }: Ctx) {
           <Link href={`/${locale}/design`} className="btn btn-accent mt-10">{pick(section, "cta_label", locale) ?? dict.home.customCta}</Link>
         </Reveal>
         <Reveal delay={0.1}>
-          <div className="relative mx-auto aspect-square w-full max-w-lg">
-            <div className="absolute inset-[6%] rounded-full border border-dashed border-paper/20" />
-            <Image src={section?.image_url || "/products/custom-print-tee-white-front.webp"} alt="" fill sizes="(min-width:768px) 45vw, 90vw" className="object-contain mix-blend-luminosity [mask-image:radial-gradient(circle,black_58%,transparent_72%)]" />
+          <div className="relative mx-auto aspect-[4/5] w-full max-w-md">
+            <div className="absolute -inset-3 border border-dashed border-amber/50" aria-hidden />
+            <div className="relative h-full w-full overflow-hidden bg-bone">
+              <Image src={section?.image_url || "/products/custom-print-tee-white-front.webp"} alt="" fill sizes="(min-width:768px) 40vw, 90vw" className="object-cover" />
+            </div>
           </div>
         </Reveal>
       </div>
@@ -246,7 +248,7 @@ export function SocialSection({ locale, dict, section, settings, fallbackImages 
 export function NewsletterSection({ locale, dict, section }: Ctx) {
   return (
     <section className="container-x">
-      <div className="grid items-center gap-8 bg-amber px-6 py-12 md:grid-cols-2 md:px-12 md:py-16">
+      <div className="grid grid-cols-1 items-center gap-8 bg-amber px-6 py-12 md:grid-cols-2 md:px-12 md:py-16">
         <div>
           <h2 className="display text-4xl md:text-5xl">{pick(section, "title", locale) ?? dict.home.newsletterTitle}</h2>
           <p className="mt-3 max-w-md text-ink/75">{pick(section, "body", locale) ?? dict.home.newsletterBody}</p>

@@ -29,7 +29,8 @@ export function AdminForm({
   action: (prev: ActionState, form: FormData) => Promise<ActionState>;
   children: React.ReactNode;
   className?: string;
-  redirectTo?: string | ((id?: string) => string);
+  /** URL to go to on success; "{id}" is replaced with the id returned by the action. */
+  redirectTo?: string;
   resetOnSuccess?: boolean;
   successMessage?: string;
 }) {
@@ -42,7 +43,7 @@ export function AdminForm({
     if (state.ok) {
       toast.success(successMessage ?? state.message ?? (locale === "ar" ? "تم الحفظ" : "Saved"));
       if (resetOnSuccess) ref.current?.reset();
-      if (redirectTo) router.push(typeof redirectTo === "function" ? redirectTo(state.id) : redirectTo);
+      if (redirectTo) router.push(redirectTo.replace("{id}", state.id ?? ""));
       else router.refresh();
     } else {
       const e = ERR[state.error] ?? [state.error === "generic" ? "حدث خطأ" : state.error, state.error === "generic" ? "Something went wrong" : state.error];

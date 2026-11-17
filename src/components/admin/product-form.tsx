@@ -9,7 +9,7 @@ export function ProductForm({ product, categories, collections, selectedCollecti
   const { locale } = useI18n();
   const t = adminT(locale);
   return (
-    <AdminForm action={saveProduct} redirectTo={product ? undefined : (id) => `/${locale}/admin/products/${id}`} className="grid gap-6 xl:grid-cols-3">
+    <AdminForm action={saveProduct} redirectTo={product ? undefined : `/${locale}/admin/products/{id}`} className="grid gap-6 xl:grid-cols-3">
       {product && <input type="hidden" name="id" value={product.id} />}
       <div className="card-admin space-y-4 p-5 xl:col-span-2">
         <div className="grid gap-4 sm:grid-cols-2">

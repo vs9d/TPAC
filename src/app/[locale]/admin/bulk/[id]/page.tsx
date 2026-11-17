@@ -67,8 +67,9 @@ export default async function AdminBulkDetail({ params }: { params: Promise<{ lo
             <Card key={q.id} title={`${t("عرض السعر", "Quotation")} ${q.quote_number}`} actions={<Pill tone={q.status === "approved" ? "good" : q.status === "converted" ? "dark" : "neutral"}>{q.status}</Pill>}>
               <QuotationEditor requestId={id} quotation={q as QuotationData} suggested={suggested} />
               {q.status === "approved" && (
-                <AdminForm action={convertQuotation} className="mt-4 border-t border-line pt-4" redirectTo={(orderId) => `/${locale}/admin/orders/${orderId}`}>
+                <AdminForm action={convertQuotation} className="mt-4 border-t border-line pt-4">
                   <input type="hidden" name="id" value={q.id} />
+                  <input type="hidden" name="locale" value={locale} />
                   <Submit variant="accent">{t("تحويل إلى طلب", "Convert to order")}</Submit>
                 </AdminForm>
               )}

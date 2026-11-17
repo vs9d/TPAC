@@ -19,7 +19,7 @@ export default async function StoreLayout({ children, params }: { children: Reac
   const nav = categories.filter((c) => !c.parent_id).map((c) => ({ slug: c.slug, name_ar: c.name_ar, name_en: c.name_en }));
   return (
     <>
-      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:start-2 focus:top-2 focus:z-[100] focus:bg-paper focus:p-3">
+      <a href="#main" className="fixed start-2 top-2 z-[100] -translate-y-24 bg-paper p-3 text-sm font-semibold focus:translate-y-0">
         {locale === "ar" ? "انتقل إلى المحتوى" : "Skip to content"}
       </a>
       {!isSupabaseConfigured() && <div className="bg-amber px-4 py-2 text-center text-xs font-semibold text-ink">{dict.common.serviceUnavailable}</div>}

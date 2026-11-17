@@ -1,5 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { assertStaff } from "@/lib/auth";
 import { quotationSchema, bulkPricingRuleSchema, fieldErrors } from "@/lib/validation";
@@ -60,7 +61,9 @@ export async function convertQuotation(_prev: ActionState, form: FormData): Prom
   const { data, error } = await supabase.rpc("convert_quotation_to_order", { p_quotation_id: str(form.get("id")) });
   if (error) return error.message?.includes("not_approved") ? { ok: false, error: "quotation_not_approved" } : dbError(error);
   revalidatePath("/[locale]/admin", "layout");
-  return { ok: true, id: (data as { order_id: string }).order_id, message: (data as { order_number: string }).order_number };
+  // Redirect from the server: the converted quotation's form disappears on re-render.
+  const locale = str(form.get("locale")) === "en" ? "en" : "ar";
+  redirect(`/${locale}/admin/orders/${(data as { order_id: string }).order_id}`);
 }
 
 export async function savePricingRule(_prev: ActionState, form: FormData): Promise<ActionState> {

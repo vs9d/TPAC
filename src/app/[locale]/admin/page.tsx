@@ -31,6 +31,12 @@ export default async function AdminHome({ params, searchParams }: { params: Prom
     supabase.from("notifications").select("id, title, body, link, created_at, read_at").eq("audience", "admin").eq("channel", "in_app").order("created_at", { ascending: false }).limit(8),
   ]);
   const s = (statsRaw ?? {}) as Stats;
+  // Fill every day of the range (Baghdad time) so gaps show as zero instead of stretching bars.
+  const byDay = new Map((s.daily ?? []).map((d) => [String(d.day).slice(0, 10), d]));
+  const series = Array.from({ length: days }, (_, i) => {
+    const day = new Date(Date.now() + 3 * 3600000 - (days - 1 - i) * 86400000).toISOString().slice(0, 10);
+    return byDay.get(day) ?? { day, total: 0, orders: 0 };
+  });
   return (
     <div className="space-y-6">
       <PageHeader
@@ -49,7 +55,7 @@ export default async function AdminHome({ params, searchParams }: { params: Prom
         <Stat label={t("العملاء المسجلون", "Registered customers")} value={formatNumber(s.customers ?? 0, locale)} />
         <Stat label={t("طلبات جملة جديدة", "New bulk requests")} value={formatNumber(s.new_bulk_requests ?? 0, locale)} tone={(s.new_bulk_requests ?? 0) > 0 ? "warn" : undefined} />
       </div>
-      <Card title={t("المبيعات اليومية", "Daily sales")}><SalesChart data={s.daily ?? []} /></Card>
+      <Card title={t("المبيعات اليومية", "Daily sales")}><SalesChart data={series} /></Card>
       <div className="grid gap-6 xl:grid-cols-2">
         <Card title={t("الأكثر مبيعاً", "Best sellers")}>
           {s.best_sellers?.length ? (

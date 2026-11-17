@@ -40,6 +40,7 @@ export function Designer({ garments, locations, colors, fonts, initialGarment }:
   const [uploading, setUploading] = useState(false);
   const [lowRes, setLowRes] = useState(false);
   const [saving, startSaving] = useTransition();
+  const [ready, setReady] = useState(false);
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const elRef = useRef<HTMLCanvasElement>(null);
@@ -179,6 +180,7 @@ export function Designer({ garments, locations, colors, fonts, initialGarment }:
         constrain(t as unknown as Tagged);
       });
       await renderScene();
+      if (!disposed) setReady(true);
     })();
     return () => {
       disposed = true;
@@ -372,6 +374,7 @@ export function Designer({ garments, locations, colors, fonts, initialGarment }:
           </div>
           <div ref={wrapRef} className="relative mx-auto w-full max-w-[680px] bg-[radial-gradient(ellipse_at_50%_40%,#F6F4F0_0%,#E9E5DD_75%)]" style={{ aspectRatio: `${ARTBOARD.width} / ${ARTBOARD.height}` }}>
             <canvas ref={elRef} aria-label={dict.designer.title} />
+            {!ready && <div className="absolute inset-0 grid place-items-center"><Loader2 className="size-6 animate-spin text-mute" /></div>}
             {saving && (
               <div className="absolute inset-0 grid place-items-center bg-paper/70">
                 <p className="flex items-center gap-2 text-sm font-semibold"><Loader2 className="size-4 animate-spin" /> {dict.designer.saving}</p>
@@ -430,12 +433,12 @@ export function Designer({ garments, locations, colors, fonts, initialGarment }:
         </section>
 
         <section className="grid grid-cols-2 gap-2">
-          <label className={cn("btn btn-outline cursor-pointer", uploading && "pointer-events-none opacity-50")}>
+          <label className={cn("btn btn-outline cursor-pointer", (uploading || !ready) && "pointer-events-none opacity-50")} aria-disabled={!ready}>
             {uploading ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
             {uploading ? dict.designer.uploading : dict.designer.upload}
-            <input type="file" accept={ACCEPT_DESIGN} className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onUpload(f); }} />
+            <input type="file" accept={ACCEPT_DESIGN} className="sr-only" disabled={!ready} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onUpload(f); }} />
           </label>
-          <button onClick={addText} className="btn btn-outline"><TypeIcon className="size-4" /> {dict.designer.addText}</button>
+          <button onClick={addText} disabled={!ready} className="btn btn-outline"><TypeIcon className="size-4" /> {dict.designer.addText}</button>
           <p className="col-span-2 text-xs text-mute">{dict.designer.uploadHint}</p>
           {lowRes && <p className="col-span-2 flex items-center gap-2 text-xs font-semibold text-amber-deep"><AlertTriangle className="size-4" /> {dict.designer.lowResWarning}</p>}
         </section>
@@ -504,7 +507,7 @@ export function Designer({ garments, locations, colors, fonts, initialGarment }:
             </div>
             <p className="display text-2xl tabular-nums">{formatIQD(price * qty, locale)}</p>
           </div>
-          <button onClick={save} disabled={saving || uploading} className="btn btn-primary h-14 w-full">
+          <button onClick={save} disabled={saving || uploading || !ready} className="btn btn-primary h-14 w-full">
             {saving ? <><Loader2 className="size-4 animate-spin" /> {dict.designer.saving}</> : dict.designer.addToCart}
           </button>
         </section>

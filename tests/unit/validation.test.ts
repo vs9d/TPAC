@@ -63,6 +63,11 @@ describe("designer payload validation", () => {
   const obj = { type: "text", location: "front", left: 300, top: 200, scaleX: 1, scaleY: 1, angle: 0, width: 100, height: 40, text: "بغداد", fill: "#FFFFFF" };
   const ok = { garment_type: "tshirt", color_id: V, size_code: "L", objects: [obj], preview_front: "data:image/jpeg;base64,AAAA", preview_back: "data:image/jpeg;base64,AAAA" };
   it("accepts a valid design", () => expect(designSchema.safeParse(ok).success).toBe(true));
+  it("accepts tiny artwork scaled up into the print area, rejects absurd rendered sizes", () => {
+    const img = { ...obj, type: "image", width: 2, height: 2, scaleX: 110, scaleY: 110, artwork_id: V };
+    expect(designSchema.safeParse({ ...ok, objects: [img] }).success).toBe(true);
+    expect(designSchema.safeParse({ ...ok, objects: [{ ...img, scaleX: 4000 }] }).success).toBe(false);
+  });
   it("rejects empty designs, unknown placements, script-y previews", () => {
     expect(designSchema.safeParse({ ...ok, objects: [] }).success).toBe(false);
     expect(designSchema.safeParse({ ...ok, objects: [{ ...obj, location: "hat" }] }).success).toBe(false);

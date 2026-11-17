@@ -15,6 +15,7 @@ export function NewsletterForm({ dark = false }: { dark?: boolean }) {
       <input
         id={`nl-${dark}`}
         name="email"
+        size={1}
         type="email"
         required
         autoComplete="email"

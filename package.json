@@ -6,12 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:db": "vitest run tests/db",
-    "db:local": "bash scripts/local-db.sh"
+    "db:local": "bash scripts/local-db.sh",
+    "test:e2e:emulator": "node tests/e2e/supabase-emulator.mjs",
+    "test:e2e": "node tests/e2e/flows.mjs",
+    "seed:generate": "node scripts/generate-seed.mjs",
+    "images:render": "node scripts/render-product-images.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

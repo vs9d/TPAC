@@ -13,7 +13,7 @@ export function Footer({ locale, dict, settings, categories }: { locale: Locale;
   const wa = settings.contact.whatsapp;
   return (
     <footer className="mt-24 bg-ink text-paper">
-      <div className="container-x grid gap-12 py-16 md:grid-cols-12">
+      <div className="container-x grid grid-cols-1 gap-12 py-16 md:grid-cols-12">
         <div className="md:col-span-4">
           <Image src="/brand/tpac-logo-white.png" alt="TPAC" width={1512} height={806} className="h-12 w-auto" />
           <p className="mt-5 max-w-xs text-sm leading-relaxed text-paper/60">{locale === "ar" ? settings.brand.tagline_ar : settings.brand.tagline_en}</p>

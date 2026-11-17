@@ -38,6 +38,7 @@ interface CartState {
   replace: (lines: CartLine[]) => void;
   setDiscountCode: (code: string) => void;
   openDrawer: (open: boolean) => void;
+  setHydrated: () => void;
 }
 
 export const useCart = create<CartState>()(
@@ -67,15 +68,25 @@ export const useCart = create<CartState>()(
       replace: (lines) => set({ lines }),
       setDiscountCode: (discountCode) => set({ discountCode }),
       openDrawer: (drawerOpen) => set({ drawerOpen }),
+      setHydrated: () => set({ hydrated: true }),
     }),
     {
       name: "tpac-cart",
       version: 1,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({ lines: s.lines, discountCode: s.discountCode }),
-      onRehydrateStorage: () => () => useCart.setState({ hydrated: true }),
+      // NB: rehydration can run synchronously while `useCart` is still being created,
+      // so use the state passed to the callback rather than the store binding.
+      onRehydrateStorage: () => (state) => state?.setHydrated(),
     },
   ),
 );
 
 export const cartCount = (lines: CartLine[]) => lines.reduce((n, l) => n + l.quantity, 0);
+
+// Safety net: if storage is unavailable (private mode, blocked) or hydration
+// errored, still mark the store hydrated so the cart UI never hangs.
+if (typeof window !== "undefined") {
+  if (useCart.persist.hasHydrated()) useCart.setState({ hydrated: true });
+  useCart.persist.onFinishHydration(() => useCart.setState({ hydrated: true }));
+}

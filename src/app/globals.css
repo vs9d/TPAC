@@ -54,6 +54,8 @@
     color: var(--color-ink);
   }
   input, select, textarea, button { font: inherit; }
+  /* grid tracks must never be widened by intrinsic content (inputs, long words) */
+  :where(.grid) > * { min-width: 0; }
   [dir="rtl"] .flip-rtl { transform: scaleX(-1); }
 }
 
