@@ -162,6 +162,8 @@ export async function addTestimonial(_prev: ActionState, form: FormData): Promis
   const rating = Number(form.get("rating"));
   const source = str(form.get("source"));
   const photo = str(form.get("photo")).trim();
+  const avatar = str(form.get("avatar_url")).trim();
+  if (avatar && !/^https:\/\//.test(avatar) && !avatar.startsWith("/")) return { ok: false, error: "validation", fields: { avatar_url: "url" } };
   if (!author) return { ok: false, error: "validation", fields: { author_name: "required" } };
   if (!body && !photo) return { ok: false, error: "validation", fields: { body: "required" } };
   if (!(rating >= 1 && rating <= 5)) return { ok: false, error: "validation", fields: { rating: "required" } };
@@ -173,6 +175,8 @@ export async function addTestimonial(_prev: ActionState, form: FormData): Promis
     rating,
     body: body || null,
     photos: photo ? [photo] : [],
+    avatar_url: avatar || null,
+    label: str(form.get("label")).trim().slice(0, 40) || null,
     source: ["site", "instagram", "whatsapp", "tiktok", "other"].includes(source) ? source : "other",
     product_id: str(form.get("product_id")) || null,
     is_featured: bool(form.get("is_featured")),

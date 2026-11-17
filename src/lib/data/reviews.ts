@@ -14,25 +14,32 @@ export interface PublicReview {
   is_verified: boolean;
   is_featured: boolean;
   created_at: string;
-  product: { slug: string; name_ar: string; name_en: string } | null;
+  avatar_url: string | null;
+  label: string | null;
+  product: { slug: string; name_ar: string; name_en: string; category: { name_ar: string; name_en: string } | null } | null;
 }
 
-export interface ReviewStats { count: number; average: number; with_photos: number; by_rating: Record<string, number> }
+export interface ReviewStats { count: number; average: number; satisfaction: number; with_photos: number; by_rating: Record<string, number> }
 
 /** Private customer uploads are served through short-lived signed URLs; admin screenshots are public URLs. */
-export async function resolvePhotos(reviews: { photos: string[] }[]) {
-  const priv = reviews.flatMap((r) => r.photos).filter((p) => !/^https?:\/\//.test(p) && !p.startsWith("/"));
+const isPublic = (p: string) => /^https?:\/\//.test(p) || p.startsWith("/");
+
+export async function resolvePhotos(reviews: { photos: string[]; avatar_url?: string | null }[]) {
+  const priv = reviews.flatMap((r) => [...r.photos, r.avatar_url ?? ""]).filter((p) => p && !isPublic(p));
   const urls = await signedUrls(priv, "design-uploads", 3600);
-  for (const r of reviews) r.photos = r.photos.map((p) => urls[p] ?? (/^https?:\/\//.test(p) || p.startsWith("/") ? p : "")).filter(Boolean);
+  for (const r of reviews) {
+    r.photos = r.photos.map((p) => urls[p] ?? (isPublic(p) ? p : "")).filter(Boolean);
+    if (r.avatar_url) r.avatar_url = urls[r.avatar_url] ?? (isPublic(r.avatar_url) ? r.avatar_url : null);
+  }
 }
 
 export async function getStoreReviews(opts: { filter?: "photos" | "5" | "4"; limit: number }): Promise<{ reviews: PublicReview[]; stats: ReviewStats }> {
-  const empty = { reviews: [], stats: { count: 0, average: 0, with_photos: 0, by_rating: {} } };
+  const empty = { reviews: [], stats: { count: 0, average: 0, satisfaction: 0, with_photos: 0, by_rating: {} } };
   if (!isSupabaseConfigured()) return empty;
   const supabase = await createClient();
   let q = supabase
     .from("reviews")
-    .select("id, rating, body, author_name, author_city, photos, source, is_verified, is_featured, created_at, product:products(slug, name_ar, name_en)")
+    .select("id, rating, body, author_name, author_city, photos, source, is_verified, is_featured, created_at, avatar_url, label, product:products(slug, name_ar, name_en, category:categories(name_ar, name_en))")
     .eq("is_approved", true)
     .order("is_featured", { ascending: false })
     .order("created_at", { ascending: false })

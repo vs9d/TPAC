@@ -13,6 +13,7 @@ const schema = z.object({
   body: z.string().trim().min(10, "min").max(1500, "max"),
   product_id: z.union([z.uuid(), z.literal("")]).optional(),
   photo_ids: z.array(z.uuid()).max(4).default([]),
+  avatar_id: z.uuid().optional(),
   order_number: z.string().trim().toUpperCase().max(20).optional(),
   phone: z.string().trim().max(30).optional(),
 });
@@ -44,9 +45,13 @@ export async function submitStoreReview(input: unknown): Promise<StoreReviewResu
   }
 
   let photos: string[] = [];
-  if (d.photo_ids.length) {
-    const { data: art } = await db.from("uploaded_artwork").select("id, storage_path").in("id", d.photo_ids).like("storage_path", "uploads/review/%");
-    photos = (art ?? []).map((a) => a.storage_path as string);
+  let avatar: string | null = null;
+  const ids = [...d.photo_ids, ...(d.avatar_id ? [d.avatar_id] : [])];
+  if (ids.length) {
+    const { data: art } = await db.from("uploaded_artwork").select("id, storage_path").in("id", ids).like("storage_path", "uploads/review/%");
+    const byId = new Map((art ?? []).map((a) => [a.id as string, a.storage_path as string]));
+    photos = d.photo_ids.map((id) => byId.get(id)).filter(Boolean) as string[];
+    avatar = d.avatar_id ? byId.get(d.avatar_id) ?? null : null;
   }
 
   const { error } = await db.from("reviews").insert({
@@ -57,6 +62,7 @@ export async function submitStoreReview(input: unknown): Promise<StoreReviewResu
     rating: d.rating,
     body: d.body,
     photos,
+    avatar_url: avatar,
     source: "site",
     is_verified: !!orderId,
     order_id: orderId,

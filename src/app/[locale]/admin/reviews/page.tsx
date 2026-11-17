@@ -11,7 +11,7 @@ import { MediaUrlInput } from "@/components/admin/media-upload";
 import { moderateReview, addTestimonial } from "@/lib/actions/admin/catalog";
 import { formatDate } from "@/lib/format";
 
-type Row = { id: string; rating: number; body: string | null; author_name: string | null; author_city: string | null; photos: string[]; source: string; is_verified: boolean; is_featured: boolean; is_approved: boolean; created_at: string; product: { id: string; name_ar: string; name_en: string } | null };
+type Row = { id: string; avatar_url: string | null; label: string | null; rating: number; body: string | null; author_name: string | null; author_city: string | null; photos: string[]; source: string; is_verified: boolean; is_featured: boolean; is_approved: boolean; created_at: string; product: { id: string; name_ar: string; name_en: string } | null };
 
 export default async function AdminReviews({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ status?: string }> }) {
   const { locale } = await params;
@@ -21,7 +21,7 @@ export default async function AdminReviews({ params, searchParams }: { params: P
   const supabase = await createClient();
   let q = supabase
     .from("reviews")
-    .select("id, rating, body, author_name, author_city, photos, source, is_verified, is_featured, is_approved, created_at, product:products(id, name_ar, name_en)")
+    .select("id, avatar_url, label, rating, body, author_name, author_city, photos, source, is_verified, is_featured, is_approved, created_at, product:products(id, name_ar, name_en)")
     .order("is_approved")
     .order("created_at", { ascending: false })
     .limit(200);
@@ -57,8 +57,11 @@ export default async function AdminReviews({ params, searchParams }: { params: P
           <Input name="author_city" label={t("المدينة", "City")} />
           <Select name="rating" label={t("التقييم", "Rating")} defaultValue="5" options={[5, 4, 3, 2, 1].map((n) => ({ value: String(n), label: "★".repeat(n) }))} />
           <Select name="source" label={t("المصدر", "Source")} defaultValue="instagram" options={[{ value: "instagram", label: "Instagram" }, { value: "whatsapp", label: "WhatsApp" }, { value: "tiktok", label: "TikTok" }, { value: "site", label: t("الموقع", "Website") }, { value: "other", label: t("أخرى", "Other") }]} />
+          <div className="sm:col-span-2"><MediaUrlInput name="avatar_url" label={t("صورة الزبون الشخصية (دائرية)", "Customer profile photo (round)")} /></div>
+          <Input name="label" label={t("التصنيف", "Category label")} placeholder={t("تيشيرتات / هوديات / طلبات خاصة", "T-shirts / Hoodies / Custom orders")} list="review-labels" className="sm:col-span-2" />
+          <datalist id="review-labels"><option value="تيشيرتات" /><option value="هوديات" /><option value="سويتشيرتات" /><option value="طلبات خاصة" /><option value="طلبات الجملة" /></datalist>
           <Textarea name="body" label={t("النص (اختياري إذا أضفت صورة)", "Text (optional with a photo)")} rows={3} className="sm:col-span-2" />
-          <div className="sm:col-span-2"><MediaUrlInput name="photo" label={t("صورة / لقطة شاشة", "Photo / screenshot")} /></div>
+          <div className="sm:col-span-2"><MediaUrlInput name="photo" label={t("صورة إضافية / لقطة شاشة (اختياري)", "Extra photo / screenshot (optional)")} /></div>
           <Select name="product_id" label={t("المنتج (اختياري)", "Product (optional)")} options={[{ value: "", label: "—" }, ...(products ?? []).map((p) => ({ value: p.id, label: locale === "ar" ? p.name_ar : p.name_en }))]} className="sm:col-span-2" />
           <Checkbox name="is_featured" label={t("تثبيت بالأعلى", "Pin to top")} className="self-end pb-2" />
           <Submit className="self-end">{t("إضافة ونشر", "Add & publish")}</Submit>
@@ -80,6 +83,10 @@ export default async function AdminReviews({ params, searchParams }: { params: P
                 </div>
               )}
               <div className="space-y-2 p-4 text-sm">
+                {r.avatar_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={r.avatar_url} alt="" className="size-10 rounded-full object-cover" />
+                )}
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-amber-deep">{"★".repeat(r.rating)}</span>
                   {r.is_approved ? <Pill tone="good">{t("منشور", "Published")}</Pill> : <Pill tone="warn">{t("بانتظار", "Pending")}</Pill>}
@@ -89,7 +96,7 @@ export default async function AdminReviews({ params, searchParams }: { params: P
                 </div>
                 {r.body && <p className="whitespace-pre-line">{r.body}</p>}
                 <p className="text-xs text-mute">
-                  {r.author_name}{r.author_city && ` · ${r.author_city}`} · {formatDate(r.created_at, locale)}
+                  {r.author_name}{r.label && ` · ${r.label}`}{r.author_city && ` · ${r.author_city}`} · {formatDate(r.created_at, locale)}
                   {r.product && <> · <Link href={`/${locale}/admin/products/${r.product.id}`} className="underline">{locale === "ar" ? r.product.name_ar : r.product.name_en}</Link></>}
                 </p>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line pt-2">

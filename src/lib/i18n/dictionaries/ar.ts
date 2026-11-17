@@ -306,6 +306,10 @@ const ar = {
   reviews: {
     title: "آراء زبائننا",
     subtitle: "تجارب حقيقية من زبائن TPAC في كل العراق — صور وكلام من القلب.",
+    heroTitle: "شنو يكولون زبائننا",
+    avgLabel: "معدل النجوم",
+    satisfaction: "نسبة رضا الزبائن",
+    tagline: "FROM BAGHDAD TO THE STREET",
     navLabel: "آراء الزبائن",
     basedOn: "من {n} رأي",
     withPhotos: "مع صور",
@@ -324,6 +328,7 @@ const ar = {
     bodyHint: "شنو عجبك؟ الخامة، الطباعة، المقاس، التوصيل…",
     product: "المنتج الذي اشتريته (اختياري)",
     generalStore: "رأي عام عن المتجر",
+    avatar: "صورتك الشخصية (اختياري)",
     photos: "أضف صوراً (اختياري)",
     photosHint: "حتى ٤ صور — صورتك وانت لابس القطعة تفرق كلش!",
     verifyTitle: "توثيق الشراء (اختياري)",

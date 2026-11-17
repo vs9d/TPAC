@@ -13,6 +13,7 @@ export function StoreReviewForm({ products }: { products: { id: string; name_ar:
   const [hover, setHover] = useState(0);
   const [photos, setPhotos] = useState<{ id: string; preview: string }[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [avatar, setAvatar] = useState<{ id: string; preview: string } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [done, setDone] = useState<{ verified: boolean } | null>(null);
@@ -41,6 +42,19 @@ export function StoreReviewForm({ products }: { products: { id: string; name_ar:
     setUploading(false);
   };
 
+  const addAvatar = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const r = await uploadArtwork(file, "review");
+      setAvatar({ id: r.id, preview: URL.createObjectURL(file) });
+    } catch (e) {
+      const k = e instanceof Error ? e.message : "";
+      setFormError(k === "fileType" ? dict.validation.fileType : k === "fileSize" ? dict.validation.fileSize : dict.common.somethingWrong);
+    }
+    setUploading(false);
+  };
+
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -58,6 +72,7 @@ export function StoreReviewForm({ products }: { products: { id: string; name_ar:
         body: fd.get("body"),
         product_id: fd.get("product_id") || "",
         photo_ids: photos.map((p) => p.id),
+        avatar_id: avatar?.id,
         order_number: fd.get("order_number") || undefined,
         phone: fd.get("phone") || undefined,
       });
@@ -83,6 +98,18 @@ export function StoreReviewForm({ products }: { products: { id: string; name_ar:
             </button>
           ))}
         </div>
+      </div>
+      <div className="flex items-center gap-4 sm:col-span-2">
+        <label className={cn("relative grid size-16 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-full border border-dashed border-paper/30 text-paper/60 hover:border-amber", uploading && "pointer-events-none opacity-50")}>
+          {avatar ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={avatar.preview} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <ImagePlus className="size-5" />
+          )}
+          <input type="file" accept={ACCEPT_REVIEW} className="sr-only" onChange={(e) => { void addAvatar(e.target.files?.[0]); e.target.value = ""; }} />
+        </label>
+        <p className="text-sm text-paper/70">{t.avatar}</p>
       </div>
       <div>
         <label htmlFor="r-name" className="label text-paper/80">{t.name}</label>

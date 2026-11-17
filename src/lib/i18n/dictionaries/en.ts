@@ -308,6 +308,10 @@ const en: Dict = {
   reviews: {
     title: "Customer reviews",
     subtitle: "Real experiences from TPAC customers across Iraq — photos and honest words.",
+    heroTitle: "What our customers say",
+    avgLabel: "Average rating",
+    satisfaction: "Customer satisfaction",
+    tagline: "FROM BAGHDAD TO THE STREET",
     navLabel: "Reviews",
     basedOn: "from {n} reviews",
     withPhotos: "With photos",
@@ -326,6 +330,7 @@ const en: Dict = {
     bodyHint: "What did you like? Fabric, print, fit, delivery…",
     product: "Product you bought (optional)",
     generalStore: "General review of the store",
+    avatar: "Your profile photo (optional)",
     photos: "Add photos (optional)",
     photosHint: "Up to 4 photos — a photo of you wearing it makes all the difference!",
     verifyTitle: "Verify your purchase (optional)",
