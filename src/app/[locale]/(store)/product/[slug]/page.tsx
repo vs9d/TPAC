@@ -57,7 +57,9 @@ export default async function ProductPage({ params }: Props) {
     const { data } = await supabase.from("favorites").select("product_id").eq("user_id", session.userId).eq("product_id", product.id).maybeSingle();
     favorite = !!data;
   }
-  const garment = GARMENT_BY_CATEGORY[product.category?.slug ?? ""] ?? "tshirt";
+  // Category decides the garment; for mixed categories (e.g. custom printed) the product tags do.
+  const tagGarment = ["hoodie", "sweatshirt", "oversized", "longsleeve"].find((g) => product.tags.map((t) => t.toLowerCase()).includes(g));
+  const garment = GARMENT_BY_CATEGORY[product.category?.slug ?? ""] ?? tagGarment ?? "tshirt";
   const name = locale === "ar" ? product.name_ar : product.name_en;
   const prices = product.product_variants.map((v) => v.price_override ?? product.base_price);
   const inStock = product.product_variants.some((v) => (v.inventory?.quantity ?? 0) > 0);

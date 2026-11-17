@@ -5,7 +5,8 @@
 
 export type GarmentType = "tshirt" | "oversized" | "hoodie" | "sweatshirt" | "longsleeve";
 export type GarmentView = "front" | "back";
-export type PrintLocation = "front" | "back" | "left_chest" | "sleeve";
+/** "sleeve" = wearer's right sleeve (viewer's left on the front view); "sleeve_left" = wearer's left sleeve. */
+export type PrintLocation = "front" | "back" | "left_chest" | "sleeve" | "sleeve_left";
 
 export const ARTBOARD = { width: 600, height: 700 } as const;
 
@@ -44,7 +45,10 @@ const sweatBody = (neckDepth: number) =>
 
 const hoodieBody = `M210 96 Q300 118 390 96 L478 112 L548 312 L572 548 L520 562 L484 338 L478 308 L480 640 L476 668 Q300 680 124 668 L120 640 L122 308 L116 338 L80 562 L28 548 L52 312 L122 112 Z`;
 
-const standardAreas: Record<PrintLocation, PrintArea> = {
+const mirror = (a: PrintArea): PrintArea => ({ ...a, x: 600 - a.x - a.width });
+const withLeftSleeve = (areas: Omit<Record<PrintLocation, PrintArea>, "sleeve_left">): Record<PrintLocation, PrintArea> => ({ ...areas, sleeve_left: mirror(areas.sleeve) });
+
+const standardAreas: Omit<Record<PrintLocation, PrintArea>, "sleeve_left"> = {
   front: { x: 198, y: 150, width: 204, height: 280, cm: { width: 30, height: 40 } },
   back: { x: 192, y: 130, width: 216, height: 320, cm: { width: 32, height: 45 } },
   left_chest: { x: 352, y: 140, width: 70, height: 70, cm: { width: 10, height: 10 } },
@@ -62,7 +66,7 @@ export const GARMENTS: Record<GarmentType, GarmentShape> = {
       front: "M130 220 L130 232 M470 220 L470 232 M134 640 Q300 655 466 640 M94 254 L130 220 M506 254 L470 220",
       back: "M134 640 Q300 655 466 640 M94 254 L130 220 M506 254 L470 220",
     },
-    printAreas: standardAreas,
+    printAreas: withLeftSleeve(standardAreas),
   },
   oversized: {
     body: { front: oversizedBody(44), back: oversizedBody(12) },
@@ -74,13 +78,13 @@ export const GARMENTS: Record<GarmentType, GarmentShape> = {
       front: "M118 272 Q160 200 108 92 M482 272 Q440 200 492 92 M118 652 Q300 668 482 652",
       back: "M118 272 Q160 200 108 92 M482 272 Q440 200 492 92 M118 652 Q300 668 482 652",
     },
-    printAreas: {
+    printAreas: withLeftSleeve({
       ...standardAreas,
       front: { x: 192, y: 150, width: 216, height: 300, cm: { width: 32, height: 42 } },
       back: { x: 184, y: 128, width: 232, height: 340, cm: { width: 34, height: 48 } },
       left_chest: { x: 352, y: 140, width: 72, height: 72, cm: { width: 10, height: 10 } },
       sleeve: { x: 40, y: 200, width: 56, height: 56, cm: { width: 8, height: 8 } },
-    },
+    }),
   },
   longsleeve: {
     body: { front: longsleeveBody(42), back: longsleeveBody(12) },
@@ -92,7 +96,7 @@ export const GARMENTS: Record<GarmentType, GarmentShape> = {
       front: "M38 522 L86 534 M562 522 L514 534 M134 640 Q300 655 466 640",
       back: "M38 522 L86 534 M562 522 L514 534 M134 640 Q300 655 466 640",
     },
-    printAreas: { ...standardAreas, sleeve: { x: 76, y: 170, width: 46, height: 46, cm: { width: 8, height: 8 } } },
+    printAreas: withLeftSleeve({ ...standardAreas, sleeve: { x: 76, y: 170, width: 46, height: 46, cm: { width: 8, height: 8 } } }),
   },
   sweatshirt: {
     body: { front: sweatBody(44), back: sweatBody(14) },
@@ -104,7 +108,7 @@ export const GARMENTS: Record<GarmentType, GarmentShape> = {
       front: "M120 640 Q300 652 480 640 M32 528 L82 540 M568 528 L518 540",
       back: "M120 640 Q300 652 480 640 M32 528 L82 540 M568 528 L518 540",
     },
-    printAreas: { ...standardAreas, sleeve: { x: 76, y: 176, width: 46, height: 46, cm: { width: 8, height: 8 } } },
+    printAreas: withLeftSleeve({ ...standardAreas, sleeve: { x: 76, y: 176, width: 46, height: 46, cm: { width: 8, height: 8 } } }),
   },
   hoodie: {
     body: { front: hoodieBody, back: hoodieBody },
@@ -119,13 +123,13 @@ export const GARMENTS: Record<GarmentType, GarmentShape> = {
       front: "M196 440 L404 440 L432 566 L168 566 Z M266 146 L262 250 M334 146 L338 250 M120 640 Q300 652 480 640 M32 528 L82 540 M568 528 L518 540",
       back: "M300 22 L300 208 M120 640 Q300 652 480 640 M32 528 L82 540 M568 528 L518 540",
     },
-    printAreas: {
+    printAreas: withLeftSleeve({
       ...standardAreas,
       front: { x: 204, y: 190, width: 192, height: 220, cm: { width: 28, height: 30 } },
       back: { x: 190, y: 236, width: 220, height: 290, cm: { width: 32, height: 40 } },
       left_chest: { x: 350, y: 176, width: 64, height: 64, cm: { width: 10, height: 10 } },
       sleeve: { x: 80, y: 190, width: 46, height: 46, cm: { width: 8, height: 8 } },
-    },
+    }),
   },
 };
 
@@ -133,6 +137,7 @@ export const LOCATION_VIEW: Record<PrintLocation, GarmentView> = {
   front: "front",
   left_chest: "front",
   sleeve: "front",
+  sleeve_left: "front",
   back: "back",
 };
 

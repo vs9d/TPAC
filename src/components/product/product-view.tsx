@@ -47,6 +47,8 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
     return list.length ? list : product.product_images;
   }, [product, colorId]);
   const color = colors.find((c) => c.id === colorId);
+  // Print-on-demand items carry no ready stock: the only way to buy them is through the designer.
+  const designOnly = product.is_customizable && product.product_variants.every((v) => (v.inventory?.quantity ?? 0) <= 0);
 
   const addToCart = (buyNow: boolean) => {
     if (!variant) {
@@ -154,6 +156,15 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
             </div>
           </div>
 
+          {designOnly ? (
+            <div className="mt-8 space-y-3">
+              <p className="text-sm leading-relaxed text-mute">{dict.product.designOnlyNote}</p>
+              <Link href={`/${locale}/design?garment=${garment}${color ? `&color=${color.code}` : ""}`} className="btn btn-primary h-14 w-full text-base">
+                <Paintbrush className="size-5" /> {dict.product.customizeThis}
+              </Link>
+            </div>
+          ) : (
+            <>
           <div className="mt-8">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-semibold">{dict.product.selectSize}</p>
@@ -213,9 +224,11 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
             {dict.product.buyNow}
           </button>
           {product.is_customizable && (
-            <Link href={`/${locale}/design?garment=${garment}`} className="btn btn-accent mt-3 h-12 w-full">
+            <Link href={`/${locale}/design?garment=${garment}${color ? `&color=${color.code}` : ""}`} className="btn btn-accent mt-3 h-12 w-full">
               <Paintbrush className="size-4" /> {dict.product.customizeThis}
             </Link>
+          )}
+            </>
           )}
           {variant && <p className="mt-4 text-xs text-mute">{dict.product.sku}: <span dir="ltr">{variant.sku}</span></p>}
 

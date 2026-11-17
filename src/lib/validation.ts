@@ -144,7 +144,7 @@ export const bulkRequestSchema = z.object({
 
 const designObject = z.object({
   type: z.enum(["image", "text"]),
-  location: z.enum(["front", "back", "left_chest", "sleeve"]),
+  location: z.enum(["front", "back", "left_chest", "sleeve", "sleeve_left"]),
   left: z.number().finite(),
   top: z.number().finite(),
   // tiny artwork may be scaled up a lot; what matters is the rendered size (checked below)

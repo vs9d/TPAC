@@ -134,7 +134,7 @@ export async function saveGarmentType(_prev: ActionState, form: FormData): Promi
     name_en: str(form.get("name_en")).trim() || undefined,
     color_ids: form.getAll("color_ids").map(String),
     sizes: form.getAll("sizes").map(String).filter((s) => /^[A-Z0-9]{1,6}$/.test(s)),
-    print_locations: form.getAll("print_locations").map(String).filter((s) => ["front", "back", "left_chest", "sleeve"].includes(s)),
+    print_locations: form.getAll("print_locations").map(String).filter((s) => ["front", "back", "left_chest", "sleeve", "sleeve_left"].includes(s)),
     is_active: bool(form.get("is_active")),
   }).eq("code", code);
   if (error) return dbError(error);

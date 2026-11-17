@@ -17,7 +17,7 @@ export interface DesignerFont { label: string; family: string }
 
 const TEXT_COLORS = ["#111111", "#FFFFFF", "#E3963C", "#376352", "#C0392B", "#1C2541", "#E9E2D3", "#F2C94C"];
 
-export function Designer({ garments, locations, colors, fonts, initialGarment }: { garments: GarmentTypeRow[]; locations: PrintLocationRow[]; colors: Color[]; fonts: DesignerFont[]; initialGarment?: string }) {
+export function Designer({ garments, locations, colors, fonts, initialGarment, initialColor }: { garments: GarmentTypeRow[]; locations: PrintLocationRow[]; colors: Color[]; fonts: DesignerFont[]; initialGarment?: string; initialColor?: string }) {
   const { locale, dict } = useI18n();
   const addToCart = useCart((s) => s.add);
   const openDrawer = useCart((s) => s.openDrawer);
@@ -26,7 +26,7 @@ export function Designer({ garments, locations, colors, fonts, initialGarment }:
   const [garmentCode, setGarmentCode] = useState<GarmentTypeRow["code"]>(first.code);
   const garment = garments.find((g) => g.code === garmentCode)!;
   const garmentColors = useMemo(() => colors.filter((c) => garment.color_ids.includes(c.id)), [colors, garment]);
-  const [colorId, setColorId] = useState<string>(garmentColors[0]?.id ?? "");
+  const [colorId, setColorId] = useState<string>(garmentColors.find((c) => c.code === initialColor)?.id ?? garmentColors[0]?.id ?? "");
   const color = colors.find((c) => c.id === colorId) ?? garmentColors[0];
   const [size, setSize] = useState(garment.sizes.includes("L") ? "L" : garment.sizes[0]!);
   const availableLocations = locations.filter((l) => garment.print_locations.includes(l.code));

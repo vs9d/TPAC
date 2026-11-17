@@ -21,11 +21,11 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return { title: t.designer.title, description: t.designer.subtitle, alternates: { canonical: `/${locale}/design`, languages: { ar: "/ar/design", en: "/en/design" } } };
 }
 
-export default async function DesignPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ garment?: string }> }) {
+export default async function DesignPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ garment?: string; color?: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const dict = getDictionary(locale);
-  const { garment } = await searchParams;
+  const { garment, color } = await searchParams;
   let garments: GarmentTypeRow[] = [];
   let locations: PrintLocationRow[] = [];
   if (isSupabaseConfigured()) {
@@ -56,7 +56,7 @@ export default async function DesignPage({ params, searchParams }: { params: Pro
       {garments.length === 0 ? (
         <p className="py-20 text-center text-mute">{dict.common.serviceUnavailable}</p>
       ) : (
-        <Designer garments={garments} locations={locations} colors={colors} fonts={fonts} initialGarment={garment} />
+        <Designer garments={garments} locations={locations} colors={colors} fonts={fonts} initialGarment={garment} initialColor={color} />
       )}
     </div>
   );

@@ -17,7 +17,7 @@ export function ProductCard({ product, locale, dict, priority = false, sizes = "
         )}
         {b && <Image src={b.url} alt="" fill sizes={sizes} className="object-cover opacity-0 transition-opacity duration-700 group-hover:opacity-100" />}
         <div className="absolute start-2 top-2 flex flex-col items-start gap-1">
-          {!product.in_stock && <span className="bg-paper px-2 py-1 text-[10px] font-bold uppercase">{dict.shop.soldOut}</span>}
+          {!product.in_stock && !product.is_customizable && <span className="bg-paper px-2 py-1 text-[10px] font-bold uppercase">{dict.shop.soldOut}</span>}
           {product.is_limited && <span className="bg-amber px-2 py-1 text-[10px] font-bold uppercase text-ink">{dict.shop.limited}</span>}
           {product.is_new_arrival && <span className="bg-ink px-2 py-1 text-[10px] font-bold uppercase text-paper">{dict.shop.new}</span>}
           {onSale && <span className="bg-pine px-2 py-1 text-[10px] font-bold uppercase text-paper">{dict.shop.sale}</span>}
