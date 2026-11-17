@@ -455,3 +455,27 @@ describe("rate limiting", () => {
     await expect(as(anon, (c) => c.query("select check_rate_limit('x', 1, 60)"))).rejects.toThrow(/permission denied/);
   });
 });
+
+describe("customer reviews page", () => {
+  it("guest reviews are stored unapproved, hidden from the public and alert admins", async () => {
+    const [r] = await q<{ id: string }>("insert into reviews (author_name, author_city, rating, body) values ('سجاد', 'كربلاء', 5, 'خامة ممتازة والتوصيل سريع') returning id");
+    const visible = await as(anon, async (c) => (await c.query("select id from reviews where id = $1", [r!.id])).rowCount);
+    expect(visible).toBe(0);
+    const [n] = await q<{ n: number }>("select count(*)::int n from notifications where event = 'review.created'");
+    expect(n!.n).toBeGreaterThan(0);
+    await as(user(staff), (c) => c.query("update reviews set is_approved = true where id = $1", [r!.id]), true);
+    const after = await as(anon, async (c) => (await c.query("select author_city from reviews where id = $1", [r!.id])).rows);
+    expect(after).toEqual([{ author_city: "كربلاء" }]);
+    const stats = await as(anon, async (c) => (await c.query("select review_stats() s")).rows[0].s);
+    expect(stats.count).toBeGreaterThanOrEqual(1);
+    expect(stats.by_rating["5"]).toBeGreaterThanOrEqual(1);
+  });
+
+  it("customers cannot publish their own reviews; staff can add testimonials", async () => {
+    await expect(as(user(alice), (c) => c.query("insert into reviews (user_id, rating, body, is_approved) values ($1, 5, 'x', true)", [alice]))).rejects.toThrow(/row-level security/);
+    await expect(as(anon, (c) => c.query("insert into reviews (rating, body) values (5, 'spam')"))).rejects.toThrow(/row-level security|permission denied/);
+    const ok = await as(user(staff), async (c) => (await c.query("insert into reviews (author_name, rating, photos, source, is_approved) values ('Instagram', 5, '{https://x.supabase.co/a.jpg}', 'instagram', true) returning id")).rowCount);
+    expect(ok).toBe(1);
+    await expect(q("insert into reviews (rating, photos) values (5, '{1,2,3,4,5,6,7}')")).rejects.toThrow(/reviews_photos_max/);
+  });
+});

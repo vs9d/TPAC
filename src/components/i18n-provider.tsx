@@ -15,7 +15,4 @@ export function useI18n() {
   return v;
 }
 
-/** "باقي {n} فقط" + {n: 3} */
-export function fmt(template: string, vars: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
-}
+export { fmt } from "@/lib/i18n/fmt";

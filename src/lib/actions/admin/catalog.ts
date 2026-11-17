@@ -116,7 +116,8 @@ export async function moderateReview(_prev: ActionState, form: FormData): Promis
   const supabase = await createClient();
   const id = str(form.get("id"));
   const op = str(form.get("op"));
-  const { error } = op === "delete" ? await supabase.from("reviews").delete().eq("id", id) : await supabase.from("reviews").update({ is_approved: op === "approve" }).eq("id", id);
+  const patch = op === "feature" ? { is_featured: true, is_approved: true } : op === "unfeature" ? { is_featured: false } : { is_approved: op === "approve" };
+  const { error } = op === "delete" ? await supabase.from("reviews").delete().eq("id", id) : await supabase.from("reviews").update(patch).eq("id", id);
   if (error) return dbError(error);
   refresh();
   return { ok: true };
@@ -150,5 +151,35 @@ export async function savePrintLocation(_prev: ActionState, form: FormData): Pro
   const { error } = await supabase.from("print_locations").update({ price, is_active: bool(form.get("is_active")) }).eq("code", str(form.get("code")));
   if (error) return dbError(error);
   await logActivity("designer.location_updated", "print_location", str(form.get("code")), { price });
+  return { ok: true };
+}
+
+/** Staff-added testimonial (e.g. an Instagram/WhatsApp message screenshot). Published immediately. */
+export async function addTestimonial(_prev: ActionState, form: FormData): Promise<ActionState> {
+  await assertStaff();
+  const author = str(form.get("author_name")).trim().slice(0, 60);
+  const body = str(form.get("body")).trim().slice(0, 1500);
+  const rating = Number(form.get("rating"));
+  const source = str(form.get("source"));
+  const photo = str(form.get("photo")).trim();
+  if (!author) return { ok: false, error: "validation", fields: { author_name: "required" } };
+  if (!body && !photo) return { ok: false, error: "validation", fields: { body: "required" } };
+  if (!(rating >= 1 && rating <= 5)) return { ok: false, error: "validation", fields: { rating: "required" } };
+  if (photo && !/^https:\/\//.test(photo) && !photo.startsWith("/")) return { ok: false, error: "validation", fields: { photo: "url" } };
+  const supabase = await createClient();
+  const { error } = await supabase.from("reviews").insert({
+    author_name: author,
+    author_city: str(form.get("author_city")).trim().slice(0, 80) || null,
+    rating,
+    body: body || null,
+    photos: photo ? [photo] : [],
+    source: ["site", "instagram", "whatsapp", "tiktok", "other"].includes(source) ? source : "other",
+    product_id: str(form.get("product_id")) || null,
+    is_featured: bool(form.get("is_featured")),
+    is_approved: true,
+  });
+  if (error) return dbError(error);
+  await logActivity("review.testimonial_added", "review", null, { author, source });
+  revalidatePath("/[locale]/reviews", "page");
   return { ok: true };
 }

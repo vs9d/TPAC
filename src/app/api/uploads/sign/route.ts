@@ -6,7 +6,7 @@ import { UPLOAD_LIMITS, EXT } from "@/lib/storage";
 import { isSupabaseConfigured } from "@/lib/env";
 
 const schema = z.object({
-  purpose: z.enum(["design", "bulk"]),
+  purpose: z.enum(["design", "bulk", "review"]),
   type: z.enum(UPLOAD_LIMITS.artworkTypes),
   size: z.number().int().positive().max(UPLOAD_LIMITS.maxBytes),
 });
@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_file" }, { status: 400 });
   if (parsed.data.purpose === "design" && parsed.data.type === "application/pdf") return NextResponse.json({ error: "invalid_file" }, { status: 400 });
+  if (parsed.data.purpose === "review" && !["image/png", "image/jpeg", "image/webp"].includes(parsed.data.type)) return NextResponse.json({ error: "invalid_file" }, { status: 400 });
   if (!(await rateLimit("upload"))) return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   const month = new Date().toISOString().slice(0, 7);
   const path = `uploads/${parsed.data.purpose}/${month}/${crypto.randomUUID()}.${EXT[parsed.data.type]}`;

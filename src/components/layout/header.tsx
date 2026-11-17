@@ -139,6 +139,7 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
                 <Link href={L(signedIn ? "/account" : "/account/login")} className="flex items-center gap-3 py-2">
                   <User className="size-4" /> {signedIn ? dict.nav.account : dict.nav.login}
                 </Link>
+                <Link href={L("/reviews")} className="block py-2">{dict.reviews.navLabel}</Link>
                 <Link href={L("/track")} className="block py-2">{dict.nav.track}</Link>
                 {isStaff && <Link href={L("/admin")} className="block py-2 text-pine">{dict.nav.admin}</Link>}
                 <Suspense fallback={null}>

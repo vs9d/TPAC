@@ -6,7 +6,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { UPLOAD_LIMITS, sniffMime, isSafeSvg } from "@/lib/storage";
 
 const schema = z.object({
-  path: z.string().regex(/^uploads\/(design|bulk)\/\d{4}-\d{2}\/[0-9a-f-]{36}\.(png|jpg|webp|svg|pdf)$/),
+  path: z.string().regex(/^uploads\/(design|bulk|review)\/\d{4}-\d{2}\/[0-9a-f-]{36}\.(png|jpg|webp|svg|pdf)$/),
   original_name: z.string().max(200).optional(),
 });
 
@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
   };
   if (!mime || !(UPLOAD_LIMITS.artworkTypes as readonly string[]).includes(mime) || buf.length > UPLOAD_LIMITS.maxBytes) return reject();
   if (purpose === "design" && mime === "application/pdf") return reject();
+  if (purpose === "review" && !["image/png", "image/jpeg", "image/webp"].includes(mime)) return reject();
   if (mime === "image/svg+xml" && !isSafeSvg(buf.toString("utf8"))) return reject();
   const session = await getSession();
   const dim = await dimensions(buf, mime);
