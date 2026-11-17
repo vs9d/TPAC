@@ -60,8 +60,7 @@ export default async function AdminReviews({ params, searchParams }: { params: P
           <div className="sm:col-span-2"><MediaUrlInput name="avatar_url" label={t("صورة الزبون الشخصية (دائرية)", "Customer profile photo (round)")} /></div>
           <Input name="label" label={t("التصنيف", "Category label")} placeholder={t("تيشيرتات / هوديات / طلبات خاصة", "T-shirts / Hoodies / Custom orders")} list="review-labels" className="sm:col-span-2" />
           <datalist id="review-labels"><option value="تيشيرتات" /><option value="هوديات" /><option value="سويتشيرتات" /><option value="طلبات خاصة" /><option value="طلبات الجملة" /></datalist>
-          <Textarea name="body" label={t("النص (اختياري إذا أضفت صورة)", "Text (optional with a photo)")} rows={3} className="sm:col-span-2" />
-          <div className="sm:col-span-2"><MediaUrlInput name="photo" label={t("صورة إضافية / لقطة شاشة (اختياري)", "Extra photo / screenshot (optional)")} /></div>
+          <Textarea name="body" label={t("كلام الزبون", "Review text")} rows={3} className="sm:col-span-2" />
           <Select name="product_id" label={t("المنتج (اختياري)", "Product (optional)")} options={[{ value: "", label: "—" }, ...(products ?? []).map((p) => ({ value: p.id, label: locale === "ar" ? p.name_ar : p.name_en }))]} className="sm:col-span-2" />
           <Checkbox name="is_featured" label={t("تثبيت بالأعلى", "Pin to top")} className="self-end pb-2" />
           <Submit className="self-end">{t("إضافة ونشر", "Add & publish")}</Submit>

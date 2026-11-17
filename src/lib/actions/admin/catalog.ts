@@ -165,7 +165,7 @@ export async function addTestimonial(_prev: ActionState, form: FormData): Promis
   const avatar = str(form.get("avatar_url")).trim();
   if (avatar && !/^https:\/\//.test(avatar) && !avatar.startsWith("/")) return { ok: false, error: "validation", fields: { avatar_url: "url" } };
   if (!author) return { ok: false, error: "validation", fields: { author_name: "required" } };
-  if (!body && !photo) return { ok: false, error: "validation", fields: { body: "required" } };
+  if (!body) return { ok: false, error: "validation", fields: { body: "required" } };
   if (!(rating >= 1 && rating <= 5)) return { ok: false, error: "validation", fields: { rating: "required" } };
   if (photo && !/^https:\/\//.test(photo) && !photo.startsWith("/")) return { ok: false, error: "validation", fields: { photo: "url" } };
   const supabase = await createClient();

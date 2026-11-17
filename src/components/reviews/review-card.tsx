@@ -5,7 +5,6 @@ import type { Dict } from "@/lib/i18n/dictionaries/ar";
 import type { PublicReview } from "@/lib/data/reviews";
 import { cn } from "@/lib/format";
 import { Stars } from "./stars";
-import { ReviewPhotos } from "./review-photos";
 
 export function QuoteMark({ className }: { className?: string }) {
   return (
@@ -19,7 +18,7 @@ export function ReviewCard({ review: r, locale, dict }: { review: PublicReview; 
   const name = r.author_name?.trim() || (locale === "ar" ? "زبون TPAC" : "TPAC customer");
   const category = r.label || (r.product?.category ? (locale === "ar" ? r.product.category.name_ar : r.product.category.name_en) : null);
   return (
-    <article className={cn("mb-3 break-inside-avoid rounded-3xl border bg-paper p-4 sm:mb-4 sm:p-6", r.is_featured ? "border-pine/50" : "border-line")}>
+    <article className={cn("rounded-3xl border bg-paper p-4 transition-shadow duration-300 hover:shadow-[0_12px_30px_-12px_rgba(55,99,82,0.35)] sm:p-6", r.is_featured ? "border-pine/50" : "border-line")}>
       <header className="flex items-center gap-3">
         {r.avatar_url ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -43,7 +42,6 @@ export function ReviewCard({ review: r, locale, dict }: { review: PublicReview; 
         <QuoteMark className="pointer-events-none absolute -top-1 end-0 h-7 w-9 text-pine/15 sm:h-9 sm:w-12" />
         {r.body && <p className="relative whitespace-pre-line text-[0.95rem] leading-relaxed sm:text-lg">{r.body}</p>}
       </div>
-      {r.photos.length > 0 && <div className="mt-4 overflow-hidden rounded-2xl"><ReviewPhotos photos={r.photos} alt={`${dict.reviews.title} — ${name}`} /></div>}
       {(r.is_verified || r.product) && (
         <footer className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
           {r.is_verified && <span className="inline-flex items-center gap-1 font-semibold text-pine"><BadgeCheck className="size-3.5" /> {dict.reviews.verified}</span>}

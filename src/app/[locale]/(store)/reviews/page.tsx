@@ -13,6 +13,7 @@ import { StoreReviewForm } from "@/components/reviews/review-form";
 import { Stars } from "@/components/reviews/stars";
 import { JsonLd } from "@/components/seo/json-ld";
 import { fmt } from "@/lib/i18n/fmt";
+import { RevealCard, CountUp, FadeUp } from "@/components/reviews/motion";
 
 type Props = { params: Promise<{ locale: string }>; searchParams: Promise<{ page?: string }> };
 const PAGE = 30;
@@ -32,7 +33,7 @@ function Waves() {
   });
   return (
     <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 1440 640" preserveAspectRatio="xMidYMid slice" aria-hidden>
-      <g fill="none" stroke="currentColor" strokeWidth="2.5" className="text-pine/30">
+      <g fill="none" stroke="currentColor" strokeWidth="2.5" className="animate-[waves_18s_ease-in-out_infinite_alternate] text-pine/30">
         {paths.map((d, i) => <path key={i} d={d} transform={`rotate(-14 720 320) translate(0 ${i % 2 ? 8 : 0})`} />)}
       </g>
     </svg>
@@ -56,7 +57,6 @@ export default async function ReviewsPage({ params, searchParams }: Props) {
     })(),
   ]);
   const highlight = reviews.find((r) => r.is_featured && r.body && r.body.length <= 120) ?? reviews.find((r) => r.body && r.body.length <= 90 && r.rating === 5);
-  const nf = new Intl.NumberFormat("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
   return (
     <div>
@@ -68,24 +68,26 @@ export default async function ReviewsPage({ params, searchParams }: Props) {
       <section className="relative overflow-hidden">
         <Waves />
         <div className="container-x relative flex flex-col items-center py-16 text-center md:py-24">
-          <Image src="/brand/tpac-logo-pine.png" alt="TPAC" width={1512} height={806} priority className="h-auto w-64 md:w-96" />
-          <p className="mt-5 text-xs font-semibold tracking-[0.45em] text-pine md:text-sm" dir="ltr">{t.tagline}</p>
-          <h1 className="mt-8 font-[family-name:var(--font-display)] text-2xl font-bold text-ink/60 md:text-4xl">{t.heroTitle}</h1>
-          <div className="mt-8 grid w-full max-w-xl grid-cols-2 gap-3 md:gap-5">
+          <FadeUp className="flex flex-col items-center">
+            <Image src="/brand/tpac-logo-pine.png" alt="TPAC" width={1512} height={806} priority className="h-auto w-64 md:w-96" />
+            <p className="mt-5 text-xs font-semibold tracking-[0.45em] text-pine md:text-sm" dir="ltr">{t.tagline}</p>
+          </FadeUp>
+          <FadeUp delay={0.15}><h1 className="mt-8 font-[family-name:var(--font-display)] text-2xl font-bold text-ink/60 md:text-4xl">{t.heroTitle}</h1></FadeUp>
+          <FadeUp delay={0.25} className="mt-8 grid w-full max-w-xl grid-cols-2 gap-3 md:gap-5">
             <div className="flex flex-col items-center justify-center rounded-3xl bg-pine px-3 py-6 text-paper md:py-8">
               <p className="font-[family-name:var(--font-display)] text-5xl font-extrabold tabular-nums md:text-6xl" dir="ltr">
-                {stats.satisfaction ?? 0}<span className="text-xl">%</span>
+                <CountUp value={stats.satisfaction ?? 0} /><span className="text-xl">%</span>
               </p>
               <p className="mt-3 text-sm text-paper/85">{t.satisfaction}</p>
             </div>
             <div className="rounded-3xl border border-line bg-paper/90 px-3 py-6 backdrop-blur md:py-8">
               <p className="font-[family-name:var(--font-display)] text-5xl font-extrabold tabular-nums md:text-6xl" dir="ltr">
-                {nf.format(stats.average || 0)}<span className="text-xl text-ink/60">/5</span>
+                <CountUp value={stats.average || 0} decimals={1} /><span className="text-xl text-ink/60">/5</span>
               </p>
               <div className="mt-3 flex justify-center"><Stars value={stats.average || 0} tone="pine" className="size-5" /></div>
               <p className="mt-2 text-sm text-mute">{t.avgLabel}</p>
             </div>
-          </div>
+          </FadeUp>
           {stats.count > 0 && <p className="mt-4 text-xs text-mute">{fmt(t.basedOn, { n: stats.count })}</p>}
         </div>
       </section>
@@ -100,7 +102,7 @@ export default async function ReviewsPage({ params, searchParams }: Props) {
         ) : (
           <>
             <div className="columns-2 gap-3 sm:gap-4 lg:columns-3">
-              {reviews.map((r) => <ReviewCard key={r.id} review={r} locale={locale} dict={dict} />)}
+              {reviews.map((r, i) => <RevealCard key={r.id} index={i}><ReviewCard review={r} locale={locale} dict={dict} /></RevealCard>)}
             </div>
             {reviews.length >= PAGE * page && (
               <div className="mt-8 text-center"><Link href={`/${locale}/reviews?page=${page + 1}`} scroll={false} className="btn btn-outline min-w-48 rounded-full">{t.loadMore}</Link></div>
@@ -112,8 +114,10 @@ export default async function ReviewsPage({ params, searchParams }: Props) {
       {/* Highlighted quote */}
       {highlight?.body && (
         <section className="container-x py-12 text-center md:py-20">
-          <QuoteMark className="mx-auto h-8 w-11 text-pine" />
-          <blockquote className="mx-auto mt-6 max-w-3xl font-[family-name:var(--font-display)] text-3xl font-extrabold leading-snug md:text-5xl">{highlight.body}</blockquote>
+          <FadeUp>
+            <QuoteMark className="mx-auto h-8 w-11 text-pine" />
+            <blockquote className="mx-auto mt-6 max-w-3xl font-[family-name:var(--font-display)] text-3xl font-extrabold leading-snug md:text-5xl">{highlight.body}</blockquote>
+          </FadeUp>
         </section>
       )}
 

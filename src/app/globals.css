@@ -24,6 +24,10 @@
   --animate-marquee-rtl: marquee-rtl 40s linear infinite;
 }
 
+@keyframes waves {
+  from { transform: translateX(-40px) translateY(0); }
+  to { transform: translateX(40px) translateY(-12px); }
+}
 @keyframes marquee {
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }

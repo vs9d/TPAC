@@ -71,7 +71,6 @@ export function StoreReviewForm({ products }: { products: { id: string; name_ar:
         rating,
         body: fd.get("body"),
         product_id: fd.get("product_id") || "",
-        photo_ids: photos.map((p) => p.id),
         avatar_id: avatar?.id,
         order_number: fd.get("order_number") || undefined,
         phone: fd.get("phone") || undefined,
@@ -131,25 +130,6 @@ export function StoreReviewForm({ products }: { products: { id: string; name_ar:
           <option value="">{t.generalStore}</option>
           {products.map((p) => <option key={p.id} value={p.id}>{locale === "ar" ? p.name_ar : p.name_en}</option>)}
         </select>
-      </div>
-      <div className="sm:col-span-2">
-        <p className="label text-paper/80">{t.photos}</p>
-        <div className="flex flex-wrap gap-3">
-          {photos.map((p) => (
-            <div key={p.id} className="relative size-20 overflow-hidden bg-paper/10">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.preview} alt="" className="h-full w-full object-cover" />
-              <button type="button" onClick={() => setPhotos((x) => x.filter((y) => y.id !== p.id))} className="absolute end-1 top-1 grid size-6 place-items-center rounded-full bg-ink/80 text-paper" aria-label={dict.common.delete}><X className="size-3.5" /></button>
-            </div>
-          ))}
-          {photos.length < 4 && (
-            <label className={cn("grid size-20 cursor-pointer place-items-center border border-dashed border-paper/30 text-paper/60 hover:border-amber hover:text-amber", uploading && "pointer-events-none opacity-50")}>
-              {uploading ? <Loader2 className="size-5 animate-spin" /> : <ImagePlus className="size-6" />}
-              <input type="file" accept={ACCEPT_REVIEW} multiple className="sr-only" onChange={(e) => { void addPhotos(e.target.files); e.target.value = ""; }} />
-            </label>
-          )}
-        </div>
-        <p className="mt-2 text-xs text-paper/50">{t.photosHint}</p>
       </div>
       <details className="border border-paper/15 p-4 sm:col-span-2">
         <summary className="cursor-pointer text-sm font-semibold text-paper/80">{t.verifyTitle}</summary>
