@@ -1,0 +1,252 @@
+// Starter catalog for TPAC. Used to generate supabase/seed.sql and the
+// starter product imagery in public/products. Once live, the catalog is
+// managed entirely from the admin dashboard — this is only initial data.
+
+export const sizes = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
+
+export const colors = [
+  { code: "black", ar: "أسود", en: "Black", hex: "#111111" },
+  { code: "white", ar: "أبيض", en: "White", hex: "#F7F7F5" },
+  { code: "bone", ar: "عظمي", en: "Bone", hex: "#E9E2D3" },
+  { code: "heather", ar: "رمادي", en: "Heather grey", hex: "#A7A9AC" },
+  { code: "pine", ar: "أخضر TPAC", en: "TPAC pine", hex: "#376352" },
+  { code: "amber", ar: "برتقالي TPAC", en: "TPAC amber", hex: "#E3963C" },
+  { code: "navy", ar: "كحلي", en: "Navy", hex: "#1C2541" },
+  { code: "sand", ar: "رملي", en: "Sand", hex: "#C8B48F" },
+];
+
+export const categories = [
+  { slug: "t-shirts", ar: "تيشيرتات", en: "T-shirts", garment: "tshirt" },
+  { slug: "oversized-t-shirts", ar: "تيشيرتات أوفرسايز", en: "Oversized T-shirts", garment: "oversized" },
+  { slug: "half-sleeve", ar: "نص ردن", en: "Half-sleeve T-shirts", garment: "tshirt" },
+  { slug: "long-sleeve", ar: "أكمام طويلة", en: "Long-sleeve T-shirts", garment: "longsleeve" },
+  { slug: "hoodies", ar: "هوديات", en: "Hoodies", garment: "hoodie" },
+  { slug: "sweatshirts", ar: "سويتشيرتات", en: "Sweatshirts", garment: "sweatshirt" },
+  { slug: "custom-printed", ar: "طباعة حسب الطلب", en: "Custom printed", garment: "tshirt" },
+];
+
+export const collections = [
+  {
+    slug: "baghdad-nights",
+    ar: "ليالي بغداد",
+    en: "Baghdad Nights",
+    descAr: "مجموعة ستريت وير عربية مستوحاة من شوارع بغداد بعد الغروب — خط عربي، رموز عراقية، وقصّات واسعة.",
+    descEn: "Arabic streetwear inspired by Baghdad's streets after dark — Arabic lettering, Iraqi symbols and relaxed cuts.",
+    featured: true,
+  },
+  {
+    slug: "winter-26",
+    ar: "شتاء ٢٠٢٦",
+    en: "Winter '26",
+    descAr: "هوديات وسويتشيرتات بقطن ثقيل لموسم الشتاء.",
+    descEn: "Heavyweight hoodies and sweatshirts for the winter season.",
+  },
+  {
+    slug: "limited-drop-01",
+    ar: "إصدار محدود ٠١",
+    en: "Limited Drop 01",
+    descAr: "كميات محدودة لن تتكرر.",
+    descEn: "Limited quantities. Never restocked.",
+  },
+  {
+    slug: "essentials",
+    ar: "الأساسيات",
+    en: "Essentials",
+    descAr: "قطع يومية بخامات ممتازة وألوان أساسية.",
+    descEn: "Everyday pieces in premium fabrics and core colours.",
+  },
+];
+
+const HEAVY_AR = "قطن ١٠٠٪ ثقيل بوزن ٢٤٠ غرام، ياقة مضلّعة سميكة، ومعالج ضد الانكماش.";
+const HEAVY_EN = "100% heavyweight cotton, 240 GSM, thick ribbed collar, pre-shrunk.";
+const FLEECE_AR = "قطن ٨٠٪ وبوليستر ٢٠٪ فليس من الداخل بوزن ٣٢٠ غرام.";
+const FLEECE_EN = "80% cotton / 20% polyester brushed fleece, 320 GSM.";
+const DTF_AR = "طباعة DTF عالية الدقة تتحمل الغسيل المتكرر دون تشقق.";
+const DTF_EN = "High-definition DTF print that withstands repeated washing without cracking.";
+const SCREEN_AR = "طباعة سلك سكرين بأحبار مائية ناعمة الملمس.";
+const SCREEN_EN = "Screen printed with soft-hand water-based inks.";
+
+export const products = [
+  {
+    slug: "baghdad-oversized-tee", category: "oversized-t-shirts", garment: "oversized",
+    ar: "تيشيرت بغداد أوفرسايز", en: "Baghdad Oversized Tee", price: 30000,
+    colors: ["black", "bone"], collections: ["baghdad-nights"], isNew: true, featured: true, sales: 140,
+    descAr: "كلمة «بغداد» بخط عربي عريض على الصدر، وعلى الظهر إحداثيات المدينة. قصّة أوفرسايز بأكتاف منسدلة.",
+    descEn: "“Baghdad” in bold Arabic lettering on the chest and the city's coordinates on the back. Oversized fit with dropped shoulders.",
+    mat: [HEAVY_AR, HEAVY_EN], print: [SCREEN_AR, SCREEN_EN],
+    art: { front: { text: "بغداد", font: "Aref Ruqaa", size: 120, sub: "BAGHDAD · EST. 762" }, back: { text: "33.3152° N\n44.3661° E", font: "Alexandria", size: 34, sub: "TPAC — FROM BAGHDAD TO THE STREET" } },
+    tags: ["baghdad", "arabic", "بغداد"],
+  },
+  {
+    slug: "tigris-tee", category: "t-shirts", garment: "tshirt",
+    ar: "تيشيرت دجلة", en: "Tigris Tee", price: 22000,
+    colors: ["white", "black", "pine"], collections: ["baghdad-nights", "essentials"], isNew: true, sales: 95,
+    descAr: "موجة دجلة مرسومة بخطوط بسيطة مع اسم النهر بالخط الكوفي.",
+    descEn: "A minimalist line drawing of the Tigris with the river's name in Kufic lettering.",
+    mat: [HEAVY_AR, HEAVY_EN], print: [DTF_AR, DTF_EN],
+    art: { front: { text: "دجلة", font: "Reem Kufi", size: 96, sub: "TIGRIS" }, back: null },
+    tags: ["tigris", "دجلة"],
+  },
+  {
+    slug: "baghdad-nights-hoodie", category: "hoodies", garment: "hoodie",
+    ar: "هودي ليالي بغداد", en: "Baghdad Nights Hoodie", price: 55000, compare: 62000,
+    colors: ["black", "pine"], collections: ["baghdad-nights", "winter-26"], featured: true, sales: 120,
+    descAr: "هودي ثقيل بطباعة «ليالي بغداد» على الظهر وشعار TPAC على الصدر. جيب كنغر وقبعة مبطنة.",
+    descEn: "Heavyweight hoodie with “Baghdad Nights” printed on the back and the TPAC mark on the chest. Kangaroo pocket and lined hood.",
+    mat: [FLEECE_AR, FLEECE_EN], print: [SCREEN_AR, SCREEN_EN],
+    art: { front: { text: "TPAC", font: "Alexandria", size: 54, sub: "" }, back: { text: "ليالي\nبغداد", font: "Aref Ruqaa", size: 92, sub: "BAGHDAD NIGHTS" } },
+    tags: ["hoodie", "baghdad"],
+  },
+  {
+    slug: "tpac-classic-sweatshirt", category: "sweatshirts", garment: "sweatshirt",
+    ar: "سويتشيرت TPAC كلاسيك", en: "TPAC Classic Sweatshirt", price: 45000,
+    colors: ["heather", "black", "navy"], collections: ["winter-26", "essentials"], sales: 60,
+    descAr: "سويتشيرت كلاسيكي بياقة دائرية وشعار TPAC مطرّز على الصدر.",
+    descEn: "Classic crewneck sweatshirt with an embroidered-look TPAC mark on the chest.",
+    mat: [FLEECE_AR, FLEECE_EN], print: [DTF_AR, DTF_EN],
+    art: { front: { text: "TPAC", font: "Alexandria", size: 72, sub: "STREETWEAR · IRAQ" }, back: null },
+    tags: ["sweatshirt", "classic"],
+  },
+  {
+    slug: "heavyweight-essential-tee", category: "t-shirts", garment: "tshirt",
+    ar: "تيشيرت أساسي ثقيل", en: "Heavyweight Essential Tee", price: 18000,
+    colors: ["black", "white", "bone", "heather"], collections: ["essentials"], sales: 210,
+    descAr: "التيشيرت الذي تحتاجه كل يوم: قطن ثقيل، قصّة مستقيمة، وشعار صغير على الصدر.",
+    descEn: "The tee you'll reach for every day: heavyweight cotton, straight fit and a small chest logo.",
+    mat: [HEAVY_AR, HEAVY_EN], print: [DTF_AR, DTF_EN],
+    art: { front: { text: "TPAC", font: "Alexandria", size: 22, sub: "", chest: true }, back: null },
+    tags: ["basic", "essential"],
+  },
+  {
+    slug: "mutanabbi-street-tee", category: "half-sleeve", garment: "tshirt",
+    ar: "تيشيرت شارع المتنبي", en: "Mutanabbi Street Tee", price: 24000,
+    colors: ["bone", "black"], collections: ["baghdad-nights"], isNew: true, sales: 48,
+    descAr: "تحية لشارع الكتب في بغداد: «القاهرة تكتب، بيروت تطبع، وبغداد تقرأ».",
+    descEn: "A tribute to Baghdad's book street: “Cairo writes, Beirut prints, Baghdad reads.”",
+    mat: [HEAVY_AR, HEAVY_EN], print: [SCREEN_AR, SCREEN_EN],
+    art: { front: { text: "بغداد تقرأ", font: "Aref Ruqaa", size: 74, sub: "MUTANABBI ST." }, back: null },
+    tags: ["mutanabbi", "books"],
+  },
+  {
+    slug: "khatt-long-sleeve", category: "long-sleeve", garment: "longsleeve",
+    ar: "تيشيرت خط بأكمام طويلة", en: "Khatt Long Sleeve", price: 32000,
+    colors: ["black", "white"], collections: ["baghdad-nights"], sales: 30,
+    descAr: "حروف عربية متداخلة بأسلوب الخط الحر على الصدر والكم.",
+    descEn: "Interlocking Arabic letterforms in freestyle calligraphy on the chest and sleeve.",
+    mat: [HEAVY_AR, HEAVY_EN], print: [DTF_AR, DTF_EN],
+    art: { front: { text: "خط", font: "Aref Ruqaa", size: 130, sub: "KHATT" }, back: null },
+    tags: ["calligraphy", "خط"],
+  },
+  {
+    slug: "essential-hoodie", category: "hoodies", garment: "hoodie",
+    ar: "هودي أساسي", en: "Essential Hoodie", price: 48000,
+    colors: ["black", "heather", "bone", "pine"], collections: ["essentials", "winter-26"], sales: 85,
+    descAr: "هودي يومي بخامة فليس ناعمة وشعار صغير. يناسب كل الإطلالات.",
+    descEn: "An everyday hoodie in soft fleece with a small logo. Goes with everything.",
+    mat: [FLEECE_AR, FLEECE_EN], print: [DTF_AR, DTF_EN],
+    art: { front: { text: "TPAC", font: "Alexandria", size: 22, sub: "", chest: true }, back: null },
+    tags: ["hoodie", "basic"],
+  },
+  {
+    slug: "iraqi-oversized-tee", category: "oversized-t-shirts", garment: "oversized",
+    ar: "تيشيرت عراقي أوفرسايز", en: "Iraqi Oversized Tee", price: 30000,
+    colors: ["white", "black", "sand"], collections: ["baghdad-nights"], isNew: true, sales: 77,
+    descAr: "«عراقي» بخط ثلث عريض على الظهر، قصّة واسعة وقماش ثقيل.",
+    descEn: "“Iraqi” in bold Thuluth-style lettering across the back. Boxy fit, heavy fabric.",
+    mat: [HEAVY_AR, HEAVY_EN], print: [SCREEN_AR, SCREEN_EN],
+    art: { front: { text: "TPAC", font: "Alexandria", size: 22, sub: "", chest: true }, back: { text: "عراقي", font: "Aref Ruqaa", size: 130, sub: "IRAQI — MADE IN BAGHDAD" } },
+    tags: ["iraq", "عراقي"],
+  },
+  {
+    slug: "1921-tee", category: "t-shirts", garment: "tshirt",
+    ar: "تيشيرت ١٩٢١", en: "1921 Tee", price: 35000, compare: 40000,
+    colors: ["black", "amber"], collections: ["limited-drop-01"], limited: true, sales: 22,
+    descAr: "إصدار محدود احتفاءً بتاريخ العراق الحديث. مرقّم ولن يُعاد إنتاجه.",
+    descEn: "A limited edition celebrating modern Iraqi history. Numbered and never restocked.",
+    mat: [HEAVY_AR, HEAVY_EN], print: [SCREEN_AR, SCREEN_EN],
+    art: { front: { text: "١٩٢١", font: "Alexandria", size: 110, sub: "LIMITED DROP 01" }, back: null },
+    tags: ["limited"],
+  },
+  {
+    slug: "ziggurat-hoodie", category: "hoodies", garment: "hoodie",
+    ar: "هودي زقورة", en: "Ziggurat Hoodie", price: 65000,
+    colors: ["sand", "black"], collections: ["limited-drop-01", "winter-26"], limited: true, isNew: true, sales: 18,
+    descAr: "زقورة أور بخطوط هندسية على الظهر. إصدار محدود بكمية صغيرة.",
+    descEn: "The Ziggurat of Ur in geometric lines on the back. Small-batch limited release.",
+    mat: [FLEECE_AR, FLEECE_EN], print: [SCREEN_AR, SCREEN_EN],
+    art: { front: { text: "أور", font: "Reem Kufi", size: 60, sub: "UR" }, back: { text: "زقورة", font: "Reem Kufi", size: 100, sub: "ZIGGURAT OF UR · 2100 BC", ziggurat: true } },
+    tags: ["limited", "ur", "ziggurat"],
+  },
+  {
+    slug: "palm-sweatshirt", category: "sweatshirts", garment: "sweatshirt",
+    ar: "سويتشيرت نخلة", en: "Palm Sweatshirt", price: 45000,
+    colors: ["bone", "pine"], collections: ["winter-26"], sales: 26,
+    descAr: "النخلة العراقية بتصميم بسيط على الصدر.",
+    descEn: "The Iraqi palm in a minimal chest graphic.",
+    mat: [FLEECE_AR, FLEECE_EN], print: [DTF_AR, DTF_EN],
+    art: { front: { text: "نخلة", font: "Aref Ruqaa", size: 90, sub: "PALM · IRAQ", palm: true }, back: null },
+    tags: ["palm", "نخلة"],
+  },
+  {
+    slug: "sabr-oversized-tee", category: "oversized-t-shirts", garment: "oversized",
+    ar: "تيشيرت صبر أوفرسايز", en: "Sabr Oversized Tee", price: 30000,
+    colors: ["black", "white"], collections: ["baghdad-nights"], sales: 64,
+    descAr: "«صبر» — كلمة واحدة تختصر الكثير. خط عريض على الصدر.",
+    descEn: "“Sabr” — patience. One word that says a lot, bold across the chest.",
+    mat: [HEAVY_AR, HEAVY_EN], print: [SCREEN_AR, SCREEN_EN],
+    art: { front: { text: "صبر", font: "Aref Ruqaa", size: 140, sub: "PATIENCE" }, back: null },
+    tags: ["sabr", "صبر"],
+  },
+  {
+    slug: "essential-long-sleeve", category: "long-sleeve", garment: "longsleeve",
+    ar: "تيشيرت أساسي بأكمام طويلة", en: "Essential Long Sleeve", price: 26000,
+    colors: ["black", "white", "navy"], collections: ["essentials"], sales: 40,
+    descAr: "أكمام طويلة بقطن ثقيل، مثالي للطبقات في الشتاء.",
+    descEn: "Heavyweight long sleeve, perfect for layering in winter.",
+    mat: [HEAVY_AR, HEAVY_EN], print: [DTF_AR, DTF_EN],
+    art: { front: { text: "TPAC", font: "Alexandria", size: 22, sub: "", chest: true }, back: null },
+    tags: ["basic"],
+  },
+  {
+    slug: "custom-print-tee", category: "custom-printed", garment: "tshirt",
+    ar: "تيشيرت للطباعة حسب الطلب", en: "Custom Print Tee", price: 20000,
+    colors: ["white", "black", "bone", "heather", "pine"], collections: [], customizable: true, sales: 150,
+    descAr: "قطعة سادة جاهزة لتصميمك. استخدم أداة التصميم لرفع صورتك أو كتابة عبارتك.",
+    descEn: "A blank ready for your idea. Use the designer to upload your image or write your words.",
+    mat: [HEAVY_AR, HEAVY_EN], print: [DTF_AR, DTF_EN],
+    art: { front: { text: "صمّم", font: "Aref Ruqaa", size: 70, sub: "YOUR DESIGN HERE", dashed: true }, back: null },
+    tags: ["custom"],
+  },
+  {
+    slug: "class-of-2026-tee", category: "custom-printed", garment: "tshirt",
+    ar: "تيشيرت تخرّج ٢٠٢٦", en: "Class of 2026 Tee", price: 25000,
+    colors: ["black", "white", "navy"], collections: [], customizable: true, isNew: true, sales: 90,
+    descAr: "تيشيرت التخرّج بتصميم قابل للتعديل باسم قسمك أو جامعتك. اطلبه بالجملة لدفعتك كاملة.",
+    descEn: "A graduation tee you can personalise with your department or university. Order in bulk for your whole class.",
+    mat: [HEAVY_AR, HEAVY_EN], print: [DTF_AR, DTF_EN],
+    art: { front: { text: "دفعة\n٢٠٢٦", font: "Aref Ruqaa", size: 80, sub: "CLASS OF 2026" }, back: null },
+    tags: ["graduation", "university", "تخرج"],
+  },
+];
+
+export const deliveryZones = [
+  ["baghdad", "بغداد", "Baghdad", 5000, 10000, true, 1, 2],
+  ["basra", "البصرة", "Basra", 7000, null, false, 2, 4],
+  ["nineveh", "نينوى", "Nineveh", 7000, null, false, 2, 4],
+  ["erbil", "أربيل", "Erbil", 8000, null, false, 2, 5],
+  ["sulaymaniyah", "السليمانية", "Sulaymaniyah", 8000, null, false, 2, 5],
+  ["duhok", "دهوك", "Duhok", 8000, null, false, 3, 5],
+  ["halabja", "حلبجة", "Halabja", 8000, null, false, 3, 5],
+  ["kirkuk", "كركوك", "Kirkuk", 7000, null, false, 2, 4],
+  ["diyala", "ديالى", "Diyala", 6000, null, false, 2, 3],
+  ["anbar", "الأنبار", "Anbar", 7000, null, false, 2, 4],
+  ["babil", "بابل", "Babil", 6000, null, false, 2, 3],
+  ["karbala", "كربلاء", "Karbala", 6000, null, false, 2, 3],
+  ["najaf", "النجف", "Najaf", 6000, null, false, 2, 3],
+  ["wasit", "واسط", "Wasit", 6000, null, false, 2, 3],
+  ["salahuddin", "صلاح الدين", "Salah al-Din", 7000, null, false, 2, 4],
+  ["qadisiyah", "الديوانية", "Al-Qadisiyah", 6000, null, false, 2, 4],
+  ["maysan", "ميسان", "Maysan", 7000, null, false, 2, 4],
+  ["dhi_qar", "ذي قار", "Dhi Qar", 7000, null, false, 2, 4],
+  ["muthanna", "المثنى", "Muthanna", 7000, null, false, 3, 5],
+];
