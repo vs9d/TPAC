@@ -31,7 +31,7 @@ export function CartDrawer() {
     <AnimatePresence>
       {open && (
         <motion.div className="fixed inset-0 z-[80]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <div className="absolute inset-0 bg-ink/40" onClick={() => setOpen(false)} />
+          <div className="absolute inset-0 bg-night/60 backdrop-blur-sm" onClick={() => setOpen(false)} />
           <motion.aside
             role="dialog"
             aria-modal="true"
@@ -40,7 +40,7 @@ export function CartDrawer() {
             animate={{ x: 0 }}
             exit={{ x: locale === "ar" ? "-100%" : "100%" }}
             transition={{ type: "tween", duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute inset-y-0 end-0 flex w-full max-w-md flex-col bg-paper"
+            className="absolute inset-y-0 end-0 flex w-full max-w-md flex-col rounded-s-[2rem] bg-paper"
           >
             <div className="flex h-16 items-center justify-between border-b border-line px-5">
               <h2 className="display text-xl">

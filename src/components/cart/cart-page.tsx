@@ -37,7 +37,7 @@ export function CartPageClient() {
           <Link href={`/${locale}/shop`} className="mt-6 inline-block text-sm font-semibold underline">{dict.cart.continueShopping}</Link>
         </div>
         <aside className="lg:col-span-4">
-          <div className="space-y-6 bg-bone p-6 lg:sticky lg:top-28">
+          <div className="space-y-6 rounded-[1.75rem] bg-bone p-6 lg:sticky lg:top-28">
             <DiscountInput quote={quote} />
             <OrderSummary quote={quote} showDelivery={false} loading={loading} />
             <Link href={`/${locale}/checkout`} aria-disabled={blocking} className={`btn btn-primary w-full ${blocking ? "pointer-events-none opacity-40" : ""}`}>{dict.cart.checkout}</Link>

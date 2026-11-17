@@ -358,21 +358,21 @@ export function Designer({ garments, locations, colors, fonts, initialGarment, i
   const selText = selected?.tpacKind === "text" ? (selected as unknown as FabricIText) : null;
 
   return (
-    <div className="grid gap-8 lg:grid-cols-12 lg:gap-10">
+    <div className="grid gap-8 pb-24 md:pb-0 lg:grid-cols-12 lg:gap-10">
       {/* Canvas */}
       <div className="lg:col-span-7">
         <div className="sticky top-20 z-10 bg-paper pb-2 lg:top-28">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="flex border border-line" role="tablist" aria-label={dict.designer.view}>
+            <div className="flex rounded-full border border-line p-1" role="tablist" aria-label={dict.designer.view}>
               {(["front", "back"] as GarmentView[]).map((v) => (
-                <button key={v} role="tab" aria-selected={view === v} onClick={() => setLocation(v === "front" ? (garment.print_locations.includes("front") ? "front" : "left_chest") : "back")} className={cn("px-4 py-2 text-sm font-semibold", view === v ? "bg-ink text-paper" : "")}>
+                <button key={v} role="tab" aria-selected={view === v} onClick={() => setLocation(v === "front" ? (garment.print_locations.includes("front") ? "front" : "left_chest") : "back")} className={cn("rounded-full px-5 py-2 text-sm font-bold transition-colors", view === v ? "bg-pine text-white dark:text-night" : "hover:bg-bone")}>
                   {v === "front" ? dict.designer.front : dict.designer.back}
                 </button>
               ))}
             </div>
             <p className="text-xs text-mute">{dict.designer.selectLocationHint}</p>
           </div>
-          <div ref={wrapRef} className="relative mx-auto w-full max-w-[680px] bg-[radial-gradient(ellipse_at_50%_40%,#F6F4F0_0%,#E9E5DD_75%)]" style={{ aspectRatio: `${ARTBOARD.width} / ${ARTBOARD.height}` }}>
+          <div ref={wrapRef} className="relative mx-auto w-full max-w-[680px] overflow-hidden rounded-[1.75rem] bg-[radial-gradient(ellipse_at_50%_40%,#F6F4F0_0%,#E9E5DD_75%)]" style={{ aspectRatio: `${ARTBOARD.width} / ${ARTBOARD.height}` }}>
             <canvas ref={elRef} aria-label={dict.designer.title} />
             {!ready && <div className="absolute inset-0 grid place-items-center"><Loader2 className="size-6 animate-spin text-mute" /></div>}
             {saving && (
@@ -402,7 +402,7 @@ export function Designer({ garments, locations, colors, fonts, initialGarment, i
           <h2 className="label">{dict.designer.color}: <span className="font-normal text-mute">{color ? (locale === "ar" ? color.name_ar : color.name_en) : ""}</span></h2>
           <div className="flex flex-wrap gap-3" role="radiogroup" aria-label={dict.designer.color}>
             {garmentColors.map((c) => (
-              <button key={c.id} role="radio" aria-checked={c.id === colorId} aria-label={locale === "ar" ? c.name_ar : c.name_en} onClick={() => setColorId(c.id)} className={cn("size-10 rounded-full border transition", c.id === colorId ? "border-ink ring-2 ring-ink ring-offset-2" : "border-black/15")} style={{ background: c.hex }} />
+              <button key={c.id} role="radio" aria-checked={c.id === colorId} aria-label={locale === "ar" ? c.name_ar : c.name_en} onClick={() => setColorId(c.id)} className={cn("size-10 rounded-full border transition", c.id === colorId ? "border-ink ring-2 ring-ink ring-offset-2" : "border-ink/25")} style={{ background: c.hex }} />
             ))}
           </div>
         </section>
@@ -471,7 +471,7 @@ export function Designer({ garments, locations, colors, fonts, initialGarment, i
                   <p className="label">{dict.designer.textColor}</p>
                   <div className="flex flex-wrap gap-2">
                     {TEXT_COLORS.map((hex) => (
-                      <button key={hex} aria-label={hex} aria-pressed={String(selText.fill).toUpperCase() === hex} onClick={() => updateSelected({ fill: hex })} className={cn("size-8 rounded-full border", String(selText.fill).toUpperCase() === hex ? "ring-2 ring-ink ring-offset-2" : "border-black/20")} style={{ background: hex }} />
+                      <button key={hex} aria-label={hex} aria-pressed={String(selText.fill).toUpperCase() === hex} onClick={() => updateSelected({ fill: hex })} className={cn("size-8 rounded-full border", String(selText.fill).toUpperCase() === hex ? "ring-2 ring-ink ring-offset-2" : "border-ink/25")} style={{ background: hex }} />
                     ))}
                     <input type="color" aria-label={dict.designer.textColor} value={String(selText.fill).startsWith("#") ? String(selText.fill) : "#111111"} onChange={(e) => updateSelected({ fill: e.target.value.toUpperCase() })} className="size-8 cursor-pointer border border-line" />
                   </div>
@@ -491,7 +491,7 @@ export function Designer({ garments, locations, colors, fonts, initialGarment, i
           <textarea id="d-notes" rows={2} maxLength={1000} className="field" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </section>
 
-        <section className="space-y-4 bg-bone p-5">
+        <section className="space-y-4 rounded-[1.75rem] bg-bone p-5">
           <p className="eyebrow text-mute">{dict.designer.estimatedPrice}</p>
           <div className="space-y-1.5 text-sm">
             <div className="flex justify-between"><span>{dict.designer.base} — {locale === "ar" ? garment.name_ar : garment.name_en}</span><span className="tabular-nums">{formatIQD(garment.base_price, locale)}</span></div>
@@ -500,17 +500,30 @@ export function Designer({ garments, locations, colors, fonts, initialGarment, i
             ))}
           </div>
           <div className="flex items-end justify-between border-t border-line pt-3">
-            <div className="flex items-center border border-line bg-paper" role="group" aria-label={dict.designer.quantity}>
+            <div className="flex items-center rounded-full border border-line bg-paper" role="group" aria-label={dict.designer.quantity}>
               <button className="grid size-10 place-items-center" onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="-"><Minus className="size-4" /></button>
               <span className="w-8 text-center font-semibold tabular-nums">{qty}</span>
               <button className="grid size-10 place-items-center" onClick={() => setQty((q) => Math.min(99, q + 1))} aria-label="+"><Plus className="size-4" /></button>
             </div>
             <p className="display text-2xl tabular-nums">{formatIQD(price * qty, locale)}</p>
           </div>
-          <button onClick={save} disabled={saving || uploading || !ready} className="btn btn-primary h-14 w-full">
+          <button onClick={save} disabled={saving || uploading || !ready} className="btn btn-brand hidden h-14 w-full text-base md:inline-flex">
             {saving ? <><Loader2 className="size-4 animate-spin" /> {dict.designer.saving}</> : dict.designer.addToCart}
           </button>
         </section>
+      </div>
+
+      {/* Mobile: price + action always within thumb reach */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/90 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl md:hidden">
+        <div className="mx-auto flex max-w-md items-center gap-3">
+          <div className="shrink-0">
+            <p className="text-[11px] text-mute">{dict.designer.estimatedPrice}</p>
+            <p className="display text-xl tabular-nums">{formatIQD(price * qty, locale)}</p>
+          </div>
+          <button onClick={save} disabled={saving || uploading || !ready} className="btn btn-brand h-12 flex-1">
+            {saving ? <Loader2 className="size-4 animate-spin" /> : dict.designer.addToCart}
+          </button>
+        </div>
       </div>
     </div>
   );

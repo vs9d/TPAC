@@ -89,7 +89,7 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
   };
 
   return (
-    <div className="grid gap-8 lg:grid-cols-12 lg:gap-14">
+    <div className="grid gap-8 pb-24 md:pb-0 lg:grid-cols-12 lg:gap-14">
       {/* Gallery */}
       <div className="lg:col-span-7">
         <div className="-mx-4 flex snap-x snap-mandatory overflow-x-auto md:mx-0 md:grid md:grid-cols-2 md:gap-2 md:overflow-visible [&::-webkit-scrollbar]:hidden" onScroll={(e) => {
@@ -100,7 +100,7 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
             <button
               key={img.id}
               onClick={() => setZoom(i)}
-              className={cn("group relative aspect-[4/5] w-full shrink-0 snap-center cursor-zoom-in overflow-hidden bg-bone", i === 0 && images.length % 2 === 1 && "md:col-span-2")}
+              className={cn("group relative aspect-[4/5] w-full shrink-0 snap-center cursor-zoom-in overflow-hidden bg-[#ebe7de] md:rounded-[1.75rem]", i === 0 && images.length % 2 === 1 && "md:col-span-2")}
               aria-label={`${dict.product.zoom} ${i + 1}`}
             >
               <Image src={img.url} alt={(locale === "ar" ? img.alt_ar : img.alt_en) ?? name} fill priority={i === 0} sizes="(min-width:1024px) 30vw, 100vw" className="object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
@@ -134,7 +134,7 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
             {product.compare_at_price && product.compare_at_price > price && <s className="text-base text-mute">{formatIQD(product.compare_at_price, locale)}</s>}
           </p>
 
-          <div className="mt-8">
+          <div className="mt-8" id="options">
             <p className="mb-3 text-sm font-semibold">
               {dict.common.color}: <span className="font-normal text-mute">{color ? (locale === "ar" ? color.name_ar : color.name_en) : ""}</span>
             </p>
@@ -149,7 +149,7 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
                     setColorId(c.id);
                     setActive(0);
                   }}
-                  className={cn("size-10 rounded-full border transition", c.id === colorId ? "border-ink ring-2 ring-ink ring-offset-2" : "border-black/15 hover:border-ink")}
+                  className={cn("size-10 rounded-full border transition", c.id === colorId ? "border-ink ring-2 ring-ink ring-offset-2" : "border-ink/25 hover:border-ink")}
                   style={{ background: c.hex }}
                 />
               ))}
@@ -268,6 +268,28 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Mobile purchase bar */}
+      {!designOnly && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/90 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl md:hidden">
+          <div className="mx-auto flex max-w-md items-center gap-3">
+            <div className="shrink-0">
+              <p className="max-w-[9rem] truncate text-[11px] text-mute">{name}</p>
+              <p className="font-[family-name:var(--font-display)] text-xl font-extrabold tabular-nums text-pine">{formatIQD(price, locale)}</p>
+            </div>
+            <button
+              onClick={() => {
+                if (!variant) document.getElementById("options")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                addToCart(false);
+              }}
+              disabled={!!variant && stock <= 0}
+              className="btn btn-brand h-12 flex-1"
+            >
+              {dict.product.addToCart}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Zoom lightbox */}
       <AnimatePresence>

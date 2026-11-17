@@ -75,7 +75,7 @@ export function AdminShell({ children, role, name, badges }: { children: React.R
     </nav>
   );
   return (
-    <div className="min-h-dvh bg-[#f6f6f4] print:block print:bg-paper lg:grid lg:grid-cols-[250px_1fr]">
+    <div data-theme="light" className="min-h-dvh bg-[#f6f6f4] text-ink print:block print:bg-paper lg:grid lg:grid-cols-[250px_1fr]">
       <aside className="no-print hidden bg-ink text-paper lg:sticky lg:top-0 lg:block lg:h-dvh lg:overflow-y-auto">
         <div className="flex h-16 items-center gap-3 border-b border-paper/10 px-6">
           <Image src="/brand/tpac-logo-orange.png" alt="TPAC" width={1512} height={806} className="h-7 w-auto" />

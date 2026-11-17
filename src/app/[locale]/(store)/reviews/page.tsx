@@ -69,7 +69,8 @@ export default async function ReviewsPage({ params, searchParams }: Props) {
         <Waves />
         <div className="container-x relative flex flex-col items-center py-16 text-center md:py-24">
           <FadeUp className="flex flex-col items-center">
-            <Image src="/brand/tpac-logo-pine.png" alt="TPAC" width={1512} height={806} priority className="h-auto w-64 md:w-96" />
+            <Image src="/brand/tpac-logo-pine.png" alt="TPAC" width={1512} height={806} priority className="h-auto w-64 dark:hidden md:w-96" />
+            <Image src="/brand/tpac-logo-white.png" alt="" aria-hidden width={1512} height={806} priority className="hidden h-auto w-64 dark:block md:w-96" />
             <p className="mt-5 text-xs font-semibold tracking-[0.45em] text-pine md:text-sm" dir="ltr">{t.tagline}</p>
           </FadeUp>
           <FadeUp delay={0.15}><h1 className="mt-8 font-[family-name:var(--font-display)] text-2xl font-bold text-ink/60 md:text-4xl">{t.heroTitle}</h1></FadeUp>

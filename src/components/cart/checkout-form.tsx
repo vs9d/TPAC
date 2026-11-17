@@ -154,7 +154,7 @@ export function CheckoutForm({ zones, addresses, prefill, signedIn, onlinePaymen
                     type="button"
                     key={a.id}
                     onClick={() => setF((s) => ({ ...s, customer_name: a.full_name, phone: formatIraqiPhone(a.phone), governorate: a.governorate, city: a.city, address_line: a.address_line, delivery_notes: a.notes ?? "", save_address: false }))}
-                    className={cn("border px-3 py-2 text-start text-xs", f.address_line === a.address_line ? "border-ink" : "border-line")}
+                    className={cn("rounded-2xl border px-3 py-2 text-start text-xs", f.address_line === a.address_line ? "border-ink" : "border-line")}
                   >
                     <span className="font-semibold">{a.label || a.city}</span>
                     <span className="block text-mute">{a.address_line.slice(0, 40)}</span>
@@ -193,7 +193,7 @@ export function CheckoutForm({ zones, addresses, prefill, signedIn, onlinePaymen
           <h2 className="display mb-5 text-2xl">{dict.checkout.deliveryMethod}</h2>
           <div className="space-y-2" role="radiogroup" aria-label={dict.checkout.deliveryMethod}>
             {methods.map((m) => (
-              <label key={m.id} className={cn("flex cursor-pointer items-center justify-between gap-4 border p-4 transition", f.delivery_method === m.id ? "border-ink" : "border-line", !m.available && "cursor-not-allowed opacity-40")}>
+              <label key={m.id} className={cn("flex cursor-pointer items-center justify-between gap-4 rounded-2xl border p-4 transition", f.delivery_method === m.id ? "border-ink" : "border-line", !m.available && "cursor-not-allowed opacity-40")}>
                 <span className="flex items-center gap-3">
                   <input type="radio" name="delivery_method" className="size-4 accent-ink" checked={f.delivery_method === m.id} disabled={!m.available} onChange={() => set("delivery_method", m.id)} />
                   <span>
@@ -210,7 +210,7 @@ export function CheckoutForm({ zones, addresses, prefill, signedIn, onlinePaymen
         <section>
           <h2 className="display mb-5 text-2xl">{dict.checkout.payment}</h2>
           <div className="space-y-2">
-            <label className={cn("flex cursor-pointer items-start gap-3 border p-4", f.payment_method === "cod" ? "border-ink" : "border-line")}>
+            <label className={cn("flex cursor-pointer items-start gap-3 rounded-2xl border p-4", f.payment_method === "cod" ? "border-ink" : "border-line")}>
               <input type="radio" name="payment_method" className="mt-1 size-4 accent-ink" checked={f.payment_method === "cod"} onChange={() => set("payment_method", "cod")} />
               <span>
                 <span className="block text-sm font-semibold">{dict.checkout.cod}</span>
@@ -218,7 +218,7 @@ export function CheckoutForm({ zones, addresses, prefill, signedIn, onlinePaymen
               </span>
             </label>
             {onlinePayment && (
-              <label className={cn("flex cursor-pointer items-start gap-3 border p-4", f.payment_method === "online" ? "border-ink" : "border-line")}>
+              <label className={cn("flex cursor-pointer items-start gap-3 rounded-2xl border p-4", f.payment_method === "online" ? "border-ink" : "border-line")}>
                 <input type="radio" name="payment_method" className="mt-1 size-4 accent-ink" checked={f.payment_method === "online"} onChange={() => set("payment_method", "online")} />
                 <span className="text-sm font-semibold">{dict.checkout.online}</span>
               </label>
@@ -228,7 +228,7 @@ export function CheckoutForm({ zones, addresses, prefill, signedIn, onlinePaymen
       </div>
 
       <aside className="lg:col-span-5">
-        <div className="space-y-6 bg-bone p-6 lg:sticky lg:top-28">
+        <div className="space-y-6 rounded-[1.75rem] bg-bone p-6 lg:sticky lg:top-28">
           <h2 className="display text-2xl">{dict.checkout.review}</h2>
           <ul className="max-h-72 space-y-4 overflow-y-auto">
             {lines.map((l) => {

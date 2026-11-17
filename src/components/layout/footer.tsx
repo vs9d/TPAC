@@ -12,27 +12,27 @@ export function Footer({ locale, dict, settings, categories }: { locale: Locale;
   const s = settings.social;
   const wa = settings.contact.whatsapp;
   return (
-    <footer className="mt-24 bg-ink text-paper">
+    <footer className="mt-20 rounded-t-[2.5rem] bg-night text-snow md:mt-28 md:rounded-t-[3.5rem]">
       <div className="container-x grid grid-cols-1 gap-12 py-16 md:grid-cols-12">
         <div className="md:col-span-4">
           <Image src="/brand/tpac-logo-white.png" alt="TPAC" width={1512} height={806} className="h-12 w-auto" />
-          <p className="mt-5 max-w-xs text-sm leading-relaxed text-paper/60">{locale === "ar" ? settings.brand.tagline_ar : settings.brand.tagline_en}</p>
+          <p className="mt-5 max-w-xs text-sm leading-relaxed text-snow/60">{locale === "ar" ? settings.brand.tagline_ar : settings.brand.tagline_en}</p>
           <div className="mt-8 max-w-sm">
             <p className="eyebrow mb-3 text-amber">{dict.home.newsletterTitle}</p>
             <NewsletterForm dark />
           </div>
         </div>
         <nav className="md:col-span-2" aria-label={dict.footer.shop}>
-          <p className="eyebrow mb-4 text-paper/50">{dict.footer.shop}</p>
+          <p className="eyebrow mb-4 text-snow/50">{dict.footer.shop}</p>
           <ul className="space-y-2.5 text-sm">
             {categories.slice(0, 7).map((c) => (
-              <li key={c.slug}><Link href={L(`/shop?category=${c.slug}`)} className="text-paper/80 hover:text-amber">{locale === "ar" ? c.name_ar : c.name_en}</Link></li>
+              <li key={c.slug}><Link href={L(`/shop?category=${c.slug}`)} className="text-snow/80 hover:text-amber">{locale === "ar" ? c.name_ar : c.name_en}</Link></li>
             ))}
           </ul>
         </nav>
         <nav className="md:col-span-2" aria-label={dict.footer.help}>
-          <p className="eyebrow mb-4 text-paper/50">{dict.footer.help}</p>
-          <ul className="space-y-2.5 text-sm text-paper/80">
+          <p className="eyebrow mb-4 text-snow/50">{dict.footer.help}</p>
+          <ul className="space-y-2.5 text-sm text-snow/80">
             <li><Link href={L("/track")} className="hover:text-amber">{dict.nav.track}</Link></li>
             <li><Link href={L("/pages/shipping")} className="hover:text-amber">{dict.footer.shipping}</Link></li>
             <li><Link href={L("/pages/returns")} className="hover:text-amber">{dict.footer.returns}</Link></li>
@@ -42,8 +42,8 @@ export function Footer({ locale, dict, settings, categories }: { locale: Locale;
           </ul>
         </nav>
         <nav className="md:col-span-2" aria-label={dict.footer.company}>
-          <p className="eyebrow mb-4 text-paper/50">{dict.footer.company}</p>
-          <ul className="space-y-2.5 text-sm text-paper/80">
+          <p className="eyebrow mb-4 text-snow/50">{dict.footer.company}</p>
+          <ul className="space-y-2.5 text-sm text-snow/80">
             <li><Link href={L("/pages/about")} className="hover:text-amber">{dict.nav.about}</Link></li>
             <li><Link href={L("/reviews")} className="hover:text-amber">{dict.reviews.navLabel}</Link></li>
             <li><Link href={L("/design")} className="hover:text-amber">{dict.nav.customDesign}</Link></li>
@@ -53,22 +53,22 @@ export function Footer({ locale, dict, settings, categories }: { locale: Locale;
           </ul>
         </nav>
         <div className="md:col-span-2">
-          <p className="eyebrow mb-4 text-paper/50">{dict.nav.contact}</p>
-          <ul className="space-y-2.5 text-sm text-paper/80">
+          <p className="eyebrow mb-4 text-snow/50">{dict.nav.contact}</p>
+          <ul className="space-y-2.5 text-sm text-snow/80">
             {settings.contact.phone && <li dir="ltr" className="text-start">+{settings.contact.phone}</li>}
             {settings.contact.email && <li><a href={`mailto:${settings.contact.email}`} className="hover:text-amber">{settings.contact.email}</a></li>}
             <li>{locale === "ar" ? settings.contact.address_ar : settings.contact.address_en}</li>
           </ul>
           <div className="mt-5 flex gap-3">
-            {s.instagram && <a href={s.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="grid size-10 place-items-center border border-paper/20 hover:border-amber hover:text-amber"><InstagramIcon /></a>}
-            {s.tiktok && <a href={s.tiktok} target="_blank" rel="noopener noreferrer" aria-label="TikTok" className="grid size-10 place-items-center border border-paper/20 hover:border-amber hover:text-amber"><TikTokIcon /></a>}
-            {s.facebook && <a href={s.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="grid size-10 place-items-center border border-paper/20 hover:border-amber hover:text-amber"><FacebookIcon /></a>}
-            {wa && <a href={`https://wa.me/${wa}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className="grid size-10 place-items-center border border-paper/20 hover:border-amber hover:text-amber"><WhatsAppIcon /></a>}
+            {s.instagram && <a href={s.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="grid size-11 place-items-center rounded-full border border-snow/20 hover:border-amber hover:text-amber"><InstagramIcon /></a>}
+            {s.tiktok && <a href={s.tiktok} target="_blank" rel="noopener noreferrer" aria-label="TikTok" className="grid size-11 place-items-center rounded-full border border-snow/20 hover:border-amber hover:text-amber"><TikTokIcon /></a>}
+            {s.facebook && <a href={s.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="grid size-11 place-items-center rounded-full border border-snow/20 hover:border-amber hover:text-amber"><FacebookIcon /></a>}
+            {wa && <a href={`https://wa.me/${wa}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className="grid size-11 place-items-center rounded-full border border-snow/20 hover:border-amber hover:text-amber"><WhatsAppIcon /></a>}
           </div>
         </div>
       </div>
-      <div className="border-t border-paper/10">
-        <div className="container-x flex flex-col items-center justify-between gap-3 py-6 text-xs text-paper/50 md:flex-row">
+      <div className="border-t border-snow/10">
+        <div className="container-x flex flex-col items-center justify-between gap-3 py-6 text-xs text-snow/50 md:flex-row">
           <p>© {new Date().getFullYear()} TPAC — {dict.footer.rights}</p>
           <p className="flex items-center gap-4"><span>{dict.footer.cod}</span><span className="text-amber">{dict.footer.madeIn}</span></p>
         </div>

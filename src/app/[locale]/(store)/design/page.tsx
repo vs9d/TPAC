@@ -52,6 +52,13 @@ export default async function DesignPage({ params, searchParams }: { params: Pro
         <p className="eyebrow mb-2 text-amber-deep">TPAC Studio</p>
         <h1 className="display text-4xl md:text-6xl">{dict.designer.title}</h1>
         <p className="mt-3 text-mute">{dict.designer.subtitle}</p>
+        <ol className="mt-5 flex flex-wrap gap-2">
+          {dict.home.customSteps.map((step, i) => (
+            <li key={step} className="inline-flex items-center gap-2 rounded-full border border-line py-1.5 pe-4 ps-1.5 text-sm font-semibold">
+              <span className="grid size-7 place-items-center rounded-full bg-pine-soft text-xs font-extrabold tabular-nums text-pine">0{i + 1}</span> {step}
+            </li>
+          ))}
+        </ol>
       </div>
       {garments.length === 0 ? (
         <p className="py-20 text-center text-mute">{dict.common.serviceUnavailable}</p>

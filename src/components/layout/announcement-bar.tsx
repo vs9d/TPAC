@@ -19,7 +19,7 @@ export function AnnouncementBar({ items }: { items: Announcement[] }) {
   const text = locale === "ar" ? item.text_ar : item.text_en;
   const href = item.link ? (item.link.startsWith("/") ? `/${locale}${item.link}` : item.link) : null;
   return (
-    <div className="bg-ink text-paper">
+    <div className="bg-night text-snow">
       <div className="container-x flex h-9 items-center justify-center overflow-hidden text-center text-[0.78rem] font-medium">
         <AnimatePresence mode="wait">
           <motion.div key={item.id} initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -12, opacity: 0 }} transition={{ duration: 0.35 }}>

@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
-import Image from "next/image";
 import { Suspense, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Menu, Search, ShoppingBag, User, X, Heart } from "lucide-react";
+import { ArrowLeft, ArrowRight, Menu, Search, ShoppingBag, User, X, Heart, Paintbrush, Building2, Star, PackageSearch, LayoutDashboard } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { useCart, cartCount } from "@/components/cart/store";
+import { Logo } from "@/components/ui/logo";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { LocaleSwitch } from "./locale-switch";
 import { SearchOverlay } from "./search-overlay";
 import { cn } from "@/lib/format";
@@ -24,6 +25,7 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
   const [scrolled, setScrolled] = useState(false);
   const count = hydrated ? cartCount(lines) : 0;
   const L = (p: string) => `/${locale}${p}`;
+  const Arrow = locale === "ar" ? ArrowLeft : ArrowRight;
 
   useEffect(() => setMenu(false), [pathname]);
   useEffect(() => {
@@ -37,60 +39,68 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
   }, [menu]);
 
   const primary = [
-    { href: L("/shop?new=1"), label: dict.nav.newArrivals },
-    { href: L("/shop"), label: dict.nav.shop },
-    { href: L("/collections"), label: dict.nav.collections },
-    { href: L("/design"), label: dict.nav.customDesign, accent: true },
-    { href: L("/bulk"), label: dict.nav.bulk },
+    { href: L("/shop?new=1"), label: dict.nav.newArrivals, match: "new=1" },
+    { href: L("/shop"), label: dict.nav.shop, match: "/shop" },
+    { href: L("/collections"), label: dict.nav.collections, match: "/collections" },
+    { href: L("/design"), label: dict.nav.customDesign, match: "/design", brand: true },
+    { href: L("/bulk"), label: dict.nav.bulk, match: "/bulk" },
+    { href: L("/reviews"), label: dict.reviews.navLabel, match: "/reviews" },
   ];
+  const active = (m: string) => (m === "new=1" ? false : pathname.includes(m));
+
+  const iconBtn = "grid size-11 place-items-center rounded-full border border-line text-ink transition-colors hover:bg-bone";
 
   return (
     <>
-      <header className={cn("sticky top-0 z-50 border-b bg-paper/95 backdrop-blur transition-colors", scrolled ? "border-line" : "border-transparent")}>
-        <div className="container-x grid h-16 grid-cols-[1fr_auto_1fr] items-center md:h-[72px]">
-          <div className="flex items-center gap-1">
-            <button className="btn-ghost -ms-2 grid size-10 place-items-center lg:hidden" onClick={() => setMenu(true)} aria-label={dict.common.menu} aria-expanded={menu}>
-              <Menu className="size-5" />
-            </button>
-            <nav className="hidden items-center gap-6 lg:flex" aria-label="primary">
-              {primary.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn("relative py-2 text-[0.85rem] font-semibold transition-colors hover:text-amber-deep", item.accent && "text-pine")}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-          </div>
+      <header className={cn("sticky top-0 z-50 bg-paper/85 backdrop-blur-xl transition-[border-color,box-shadow]", scrolled ? "border-b border-line shadow-[0_8px_24px_-18px_rgba(0,0,0,.35)]" : "border-b border-transparent")}>
+        <div className="container-x flex h-[68px] items-center gap-3 md:h-[76px]">
+          <button className={cn(iconBtn, "lg:hidden")} onClick={() => setMenu(true)} aria-label={dict.common.menu} aria-expanded={menu}>
+            <Menu className="size-5" />
+          </button>
+          <Logo href={L("")} priority className="h-8 w-auto md:h-9" />
 
-          <Link href={L("")} aria-label="TPAC" className="justify-self-center">
-            <Image src="/brand/tpac-logo-black.png" alt="TPAC" width={1512} height={806} priority className="h-8 w-auto md:h-9" />
-          </Link>
+          <nav className="ms-6 hidden items-center gap-1 lg:flex" aria-label="primary">
+            {primary.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active(item.match) ? "page" : undefined}
+                className={cn(
+                  "rounded-full px-3.5 py-2 text-[0.85rem] font-semibold transition-colors",
+                  item.brand ? "bg-pine-soft text-pine hover:bg-pine hover:text-white dark:hover:text-night" : "hover:bg-bone",
+                  active(item.match) && !item.brand && "bg-bone",
+                )}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
 
-          <div className="flex items-center justify-end gap-0.5">
+          <div className="ms-auto flex items-center gap-2">
             <Suspense fallback={null}>
-              <LocaleSwitch className="hidden px-2 text-[0.8rem] font-semibold hover:text-amber-deep sm:inline" />
+              <LocaleSwitch className="hidden h-11 items-center rounded-full border border-line px-4 text-[0.82rem] font-bold transition-colors hover:bg-bone sm:inline-flex" />
             </Suspense>
-            <button onClick={() => setSearch(true)} className="grid size-10 place-items-center hover:text-amber-deep" aria-label={dict.common.search}>
+            <ThemeToggle className="hidden sm:grid" />
+            <button onClick={() => setSearch(true)} className={iconBtn} aria-label={dict.common.search}>
               <Search className="size-5" />
             </button>
             {signedIn && (
-              <Link href={L("/account/favorites")} className="hidden size-10 place-items-center hover:text-amber-deep sm:grid" aria-label={dict.nav.favorites}>
+              <Link href={L("/account/favorites")} className={cn(iconBtn, "hidden md:grid")} aria-label={dict.nav.favorites}>
                 <Heart className="size-5" />
               </Link>
             )}
-            <Link href={L(signedIn ? "/account" : "/account/login")} className="hidden size-10 place-items-center hover:text-amber-deep sm:grid" aria-label={dict.nav.account}>
+            <Link href={L(signedIn ? "/account" : "/account/login")} className={cn(iconBtn, "hidden md:grid")} aria-label={dict.nav.account}>
               <User className="size-5" />
             </Link>
-            <button onClick={() => openDrawer(true)} className="relative grid size-10 place-items-center hover:text-amber-deep" aria-label={`${dict.nav.cart} (${count})`}>
+            <button onClick={() => openDrawer(true)} className="relative inline-flex h-11 min-w-11 items-center justify-center gap-2 rounded-full bg-pine px-3.5 text-white transition-transform hover:scale-105 active:scale-95 dark:text-night" aria-label={`${dict.nav.cart} (${count})`}>
               <ShoppingBag className="size-5" />
-              {count > 0 && (
-                <span className="absolute end-0.5 top-0.5 grid min-w-[18px] place-items-center rounded-full bg-amber px-1 text-[10px] font-bold leading-[18px] text-ink">
-                  {count}
-                </span>
-              )}
+              <AnimatePresence initial={false}>
+                {count > 0 && (
+                  <motion.span key={count} initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-sm font-extrabold tabular-nums">
+                    {count}
+                  </motion.span>
+                )}
+              </AnimatePresence>
             </button>
           </div>
         </div>
@@ -99,52 +109,65 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
       <AnimatePresence>
         {menu && (
           <motion.div className="fixed inset-0 z-[60] lg:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="absolute inset-0 bg-ink/40" onClick={() => setMenu(false)} />
+            <div className="absolute inset-0 bg-night/60 backdrop-blur-sm" onClick={() => setMenu(false)} />
             <motion.nav
               initial={{ x: locale === "ar" ? "100%" : "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: locale === "ar" ? "100%" : "-100%" }}
-              transition={{ type: "tween", duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="absolute inset-y-0 start-0 flex w-[86%] max-w-sm flex-col bg-paper"
+              transition={{ type: "tween", duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+              className="absolute inset-y-0 start-0 flex w-[88%] max-w-sm flex-col rounded-e-[2rem] bg-paper"
               aria-label={dict.common.menu}
             >
-              <div className="flex h-16 items-center justify-between border-b border-line px-4">
-                <Image src="/brand/tpac-logo-black.png" alt="TPAC" width={1512} height={806} className="h-7 w-auto" />
-                <button onClick={() => setMenu(false)} className="grid size-10 place-items-center" aria-label={dict.common.close}>
+              <div className="flex h-[68px] items-center justify-between px-4">
+                <Logo className="h-8 w-auto" />
+                <button onClick={() => setMenu(false)} className={iconBtn} aria-label={dict.common.close}>
                   <X className="size-5" />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto px-4 py-6">
-                <ul className="space-y-1">
-                  {primary.map((item) => (
+              <div className="flex-1 space-y-6 overflow-y-auto px-4 pb-6 pt-2">
+                <ul className="space-y-2">
+                  {[
+                    { href: L("/shop"), label: dict.nav.shop, icon: ShoppingBag },
+                    { href: L("/design"), label: dict.nav.customDesign, icon: Paintbrush, brand: true },
+                    { href: L("/bulk"), label: dict.nav.bulk, icon: Building2 },
+                    { href: L("/reviews"), label: dict.reviews.navLabel, icon: Star },
+                    { href: L("/track"), label: dict.nav.track, icon: PackageSearch },
+                  ].map((item) => (
                     <li key={item.href}>
-                      <Link href={item.href} className={cn("display block py-2 text-2xl", item.accent && "text-pine")}>
-                        {item.label}
+                      <Link href={item.href} className={cn("flex items-center gap-3 rounded-2xl px-4 py-3.5 font-[family-name:var(--font-display)] text-lg font-bold", item.brand ? "bg-pine text-white dark:text-night" : "bg-bone")}>
+                        <item.icon className="size-5" /> <span className="flex-1">{item.label}</span> <Arrow className="size-4 opacity-60" />
                       </Link>
                     </li>
                   ))}
                 </ul>
-                <p className="eyebrow mt-8 mb-3 text-mute">{dict.shop.category}</p>
-                <ul className="grid grid-cols-2 gap-2">
-                  {categories.map((c) => (
-                    <li key={c.slug}>
-                      <Link href={L(`/shop?category=${c.slug}`)} className="block border border-line px-3 py-3 text-sm font-medium hover:border-ink">
-                        {locale === "ar" ? c.name_ar : c.name_en}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+                <div>
+                  <p className="eyebrow mb-3 text-mute">{dict.shop.category}</p>
+                  <ul className="flex flex-wrap gap-2">
+                    {categories.map((c) => (
+                      <li key={c.slug}>
+                        <Link href={L(`/shop?category=${c.slug}`)} className="inline-flex h-10 items-center rounded-full border border-line px-4 text-sm font-semibold hover:border-ink">
+                          {locale === "ar" ? c.name_ar : c.name_en}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-              <div className="space-y-1 border-t border-line px-4 py-4 text-sm font-medium">
-                <Link href={L(signedIn ? "/account" : "/account/login")} className="flex items-center gap-3 py-2">
-                  <User className="size-4" /> {signedIn ? dict.nav.account : dict.nav.login}
-                </Link>
-                <Link href={L("/reviews")} className="block py-2">{dict.reviews.navLabel}</Link>
-                <Link href={L("/track")} className="block py-2">{dict.nav.track}</Link>
-                {isStaff && <Link href={L("/admin")} className="block py-2 text-pine">{dict.nav.admin}</Link>}
-                <Suspense fallback={null}>
-                  <LocaleSwitch className="block py-2 font-semibold" />
-                </Suspense>
+              <div className="space-y-2 border-t border-line p-4">
+                <div className="flex items-center gap-2">
+                  <ThemeToggle />
+                  <Suspense fallback={null}>
+                    <LocaleSwitch className="inline-flex h-11 flex-1 items-center justify-center rounded-full border border-line text-sm font-bold hover:bg-bone" />
+                  </Suspense>
+                  <Link href={L(signedIn ? "/account" : "/account/login")} className="inline-flex h-11 flex-[1.4] items-center justify-center gap-2 rounded-full bg-ink text-sm font-bold text-paper">
+                    <User className="size-4" /> {signedIn ? dict.nav.account : dict.nav.login}
+                  </Link>
+                </div>
+                {isStaff && (
+                  <Link href={L("/admin")} className="flex h-11 items-center justify-center gap-2 rounded-full bg-amber text-sm font-bold text-[#1a1208]">
+                    <LayoutDashboard className="size-4" /> {dict.nav.admin}
+                  </Link>
+                )}
               </div>
             </motion.nav>
           </motion.div>

@@ -105,7 +105,7 @@ export function CatalogFilters({
           {colors.map((c) => {
             const active = params.getAll("color").includes(c.value);
             return (
-              <button key={c.value} onClick={() => toggleMulti("color", c.value)} aria-pressed={active} title={label(c)} aria-label={label(c)} className={cn("grid size-8 place-items-center rounded-full border transition", active ? "border-ink ring-2 ring-ink ring-offset-2" : "border-black/15")} style={{ background: c.hex }} />
+              <button key={c.value} onClick={() => toggleMulti("color", c.value)} aria-pressed={active} title={label(c)} aria-label={label(c)} className={cn("grid size-8 place-items-center rounded-full border transition", active ? "border-ink ring-2 ring-ink ring-offset-2" : "border-ink/25")} style={{ background: c.hex }} />
             );
           })}
         </div>

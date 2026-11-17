@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
-import { Alexandria, IBM_Plex_Sans_Arabic } from "next/font/google";
+import { Cairo, Readex_Pro } from "next/font/google";
 import "../globals.css";
 import { LOCALES, dir, isLocale, type Locale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n";
@@ -8,8 +8,11 @@ import { I18nProvider } from "@/components/i18n-provider";
 import { Toaster } from "@/components/ui/toast";
 import { publicEnv } from "@/lib/env";
 
-const alexandria = Alexandria({ subsets: ["arabic", "latin"], weight: ["400", "500", "600", "700", "800", "900"], variable: "--font-alexandria", display: "swap" });
-const plex = IBM_Plex_Sans_Arabic({ subsets: ["arabic", "latin"], weight: ["400", "500", "600", "700"], variable: "--font-plex-arabic", display: "swap" });
+const cairo = Cairo({ subsets: ["arabic", "latin"], variable: "--font-cairo", display: "swap" });
+const readex = Readex_Pro({ subsets: ["arabic", "latin"], variable: "--font-readex", display: "swap" });
+
+/** Runs before first paint: saved choice, else the device's colour scheme. Prevents a light→dark flash. */
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("tpac-theme");if(t!=="light"&&t!=="dark"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t);var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",t==="dark"?"#0f1513":"#fbfaf7")}catch(e){document.documentElement.setAttribute("data-theme","light")}})();`;
 
 export function generateStaticParams() {
   return LOCALES.map((locale) => ({ locale }));
@@ -39,7 +42,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 }
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a0a",
+  themeColor: [{ media: "(prefers-color-scheme: light)", color: "#fbfaf7" }, { media: "(prefers-color-scheme: dark)", color: "#0f1513" }],
   width: "device-width",
   initialScale: 1,
 };
@@ -49,7 +52,10 @@ export default async function LocaleLayout({ children, params }: { children: Rea
   if (!isLocale(locale)) notFound();
   const dict = getDictionary(locale);
   return (
-    <html lang={locale} dir={dir(locale)} className={`${alexandria.variable} ${plex.variable}`}>
+    <html lang={locale} dir={dir(locale)} className={`${cairo.variable} ${readex.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="min-h-dvh antialiased">
         <I18nProvider locale={locale} dict={dict}>
           {children}
