@@ -166,8 +166,8 @@ export const designSchema = z.object({
   size_code: z.string().regex(/^[A-Z0-9]{1,6}$/),
   objects: z.array(designObject).min(1, "required").max(30),
   notes: trimmed(1000).optional(),
-  preview_front: z.string().startsWith("data:image/png;base64,").max(4_000_000),
-  preview_back: z.string().startsWith("data:image/png;base64,").max(4_000_000),
+  preview_front: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000),
+  preview_back: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000),
 });
 export type DesignInput = z.infer<typeof designSchema>;
 
