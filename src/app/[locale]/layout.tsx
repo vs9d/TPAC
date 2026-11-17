@@ -5,7 +5,10 @@ import "../globals.css";
 import { LOCALES, dir, isLocale, type Locale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n";
 import { I18nProvider } from "@/components/i18n-provider";
+import { Suspense } from "react";
 import { Toaster } from "@/components/ui/toast";
+import { PressFeedback } from "@/components/ui/press-feedback";
+import { NavProgress } from "@/components/ui/nav-progress";
 import { publicEnv } from "@/lib/env";
 
 const cairo = Cairo({ subsets: ["arabic", "latin"], variable: "--font-cairo", display: "swap" });
@@ -59,6 +62,8 @@ export default async function LocaleLayout({ children, params }: { children: Rea
       <body className="min-h-dvh antialiased">
         <I18nProvider locale={locale} dict={dict}>
           {children}
+          <Suspense fallback={null}><NavProgress /></Suspense>
+          <PressFeedback />
           <Toaster />
         </I18nProvider>
       </body>

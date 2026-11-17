@@ -84,7 +84,10 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
     }
     startFav(async () => {
       const r = await toggleFavorite(product.id);
-      if (r.ok) setFav(!!r.favorite);
+      if (r.ok) {
+        setFav(!!r.favorite);
+        toast.success(r.favorite ? dict.common.favAdded : dict.common.favRemoved);
+      } else toast.error(dict.common.somethingWrong);
     });
   };
 
@@ -125,8 +128,8 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
               )}
               <h1 className="display text-3xl md:text-4xl">{name}</h1>
             </div>
-            <button onClick={onFav} disabled={favPending} className="grid size-11 shrink-0 place-items-center border border-line hover:border-ink" aria-pressed={fav} aria-label={fav ? dict.product.unfavorite : signedIn ? dict.product.favorite : dict.product.loginToFavorite}>
-              <Heart className={cn("size-5", fav && "fill-ink")} />
+            <button onClick={onFav} disabled={favPending} className={cn("grid size-11 shrink-0 place-items-center rounded-full border border-line transition-colors hover:border-ink", fav && "border-danger/40 bg-danger/10", favPending && "animate-[bump_.5s_ease-out]")} aria-pressed={fav} aria-label={fav ? dict.product.unfavorite : signedIn ? dict.product.favorite : dict.product.loginToFavorite}>
+              <Heart className={cn("size-5 transition-transform", fav && "scale-110 fill-danger text-danger")} />
             </button>
           </div>
           <p className="mt-4 flex items-baseline gap-3 text-xl tabular-nums">

@@ -60,7 +60,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
     const section = byKey.get(key);
     switch (key) {
       case "hero":
-        return <Hero key={key} {...ctx} section={section} banner={heroBanners[0] ?? null} stats={reviewStats} />;
+        return <Hero key={key} {...ctx} section={section} banners={heroBanners.filter((b) => b.is_active)} stats={reviewStats} />;
       case "categories":
         return <CategoriesSection key={key} {...ctx} section={section} categories={categories} />;
       case "new_arrivals":

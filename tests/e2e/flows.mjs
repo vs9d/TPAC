@@ -320,6 +320,77 @@ await flow("admin: dashboard, order workflow, stock, product, settings, quotatio
   await page.getByText("order.status_changed").first().waitFor();
 });
 
+await flow("feedback: tap ripple, top toasts, hero slideshow with admin-uploaded video", async (page, ctx) => {
+  // --- tap ripple + toast placement (customer) ---
+  await page.goto(`${BASE}/ar/product/essential-hoodie`);
+  const size = page.locator('[role=radiogroup][aria-label="اختر المقاس"] [role=radio]:not([data-disabled=true])').first();
+  await size.click();
+  const add = page.getByRole("button", { name: "أضف إلى السلة" }).first();
+  const box = await add.boundingBox();
+  await page.mouse.move(box.x + 20, box.y + 20);
+  await page.mouse.down();
+  assert.ok((await add.locator(".ripple-dot").count()) > 0, "ripple appears on press");
+  await page.mouse.up();
+  const toast = page.locator("[role=status] >> text=أُضيف إلى السلة");
+  await toast.waitFor();
+  const tb = await toast.boundingBox();
+  assert.ok(tb.y < 120, `toast is at the top of the screen (y=${Math.round(tb.y)})`);
+
+  // --- admin creates a video hero slide (real upload through storage) ---
+  const email = `hero${Date.now()}@thetpac.com`;
+  const adminPage = await ctx.newPage();
+  await adminPage.goto(`${BASE}/ar/account/register`);
+  await adminPage.fill("#full_name", "Hero Admin");
+  await adminPage.fill("#email", email);
+  await adminPage.fill("#phone", "07700000077");
+  await adminPage.fill("#password", "admin-pass-2026");
+  await adminPage.fill("#confirm", "admin-pass-2026");
+  await adminPage.getByRole("button", { name: "إنشاء الحساب" }).click();
+  await adminPage.waitForURL(/account$/);
+  await db.query("update customer_profiles set role = 'admin' where email = $1", [email]);
+  const mp4 = `${SHOTS}/slide.mp4`;
+  const { execFileSync } = await import("node:child_process");
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=360x640:rate=15,format=yuv420p", "-t", "3", "-c:v", "libx264", "-preset", "veryfast", mp4]);
+  await adminPage.goto(`${BASE}/ar/admin/marketing`);
+  const form = adminPage.locator("form:has(select[name=placement]):has(button:text-is('إضافة'))").last();
+  await form.locator("select[name=placement]").selectOption("hero");
+  await form.locator("input[name=title_ar]").fill("سلايد الفيديو");
+  await form.locator("input[name=title_en]").fill("Video slide");
+  await form.locator("input[name=link]").fill("/shop");
+  await form.locator("input[name=sort_order]").fill("0");
+  await form.locator("input[type=file][accept*=video]").setInputFiles(mp4);
+  await form.locator("input[name=video_url]").evaluate((el) => new Promise((res) => { const t = setInterval(() => el.value.startsWith("http") && (clearInterval(t), res()), 100); }));
+  await form.getByRole("button", { name: "إضافة", exact: true }).click();
+  await adminPage.getByText("تم الحفظ").first().waitFor();
+  const banner = await one("select video_url, placement from promo_banners where title_ar = 'سلايد الفيديو'");
+  assert.equal(banner.placement, "hero");
+  assert.match(banner.video_url, /\/storage\/v1\/object\/public\/site-media\/media\/.+\.mp4$/);
+  // an oversize / wrong-type file is refused by the bucket rules
+  const bad = await adminPage.request.post(`http://localhost:54321/storage/v1/object/site-media/media/x.exe`, { headers: { "content-type": "application/x-msdownload" }, data: "MZ" });
+  assert.notEqual(bad.status(), 200);
+
+  // --- storefront shows it: autoplaying muted video in the hero ---
+  await page.goto(`${BASE}/ar`);
+  const tabs = page.getByRole("tab");
+  await tabs.first().waitFor({ timeout: 15000 }); // page content streams in after the shell
+  let n = 0;
+  for (let i = 0; i < 40 && n < 2; i++) { n = await tabs.count(); if (n < 2) await page.waitForTimeout(250); }
+  assert.ok(n >= 2, "hero has several slides (seed slide + the new one)");
+  let playing = false;
+  for (let i = 0; i < n && !playing; i++) {
+    await tabs.nth(i).click();
+    await page.waitForTimeout(700);
+    const v = page.locator("video[src*='site-media']");
+    if (await v.count()) {
+      await page.waitForFunction(() => { const el = document.querySelector("video"); return el && !el.paused && el.currentTime > 0; }, null, { timeout: 8000 });
+      playing = true;
+    }
+  }
+  assert.ok(playing, "the uploaded video plays in the hero");
+  assert.equal(await page.locator("h1").innerText(), "سلايد الفيديو");
+  await adminPage.close();
+});
+
 console.log(results.join("\n"));
 await browser.close();
 await db.end();

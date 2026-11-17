@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Menu, Search, ShoppingBag, User, X, Heart, Paintbrush, Building2, Star, PackageSearch, LayoutDashboard } from "lucide-react";
@@ -24,6 +24,18 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
   const [search, setSearch] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const count = hydrated ? cartCount(lines) : 0;
+  // wiggle the cart whenever something is added
+  const [bump, setBump] = useState(false);
+  const prevCount = useRef(count);
+  useEffect(() => {
+    if (count > prevCount.current) {
+      setBump(true);
+      const t = setTimeout(() => setBump(false), 600);
+      prevCount.current = count;
+      return () => clearTimeout(t);
+    }
+    prevCount.current = count;
+  }, [count]);
   const L = (p: string) => `/${locale}${p}`;
   const Arrow = locale === "ar" ? ArrowLeft : ArrowRight;
 
@@ -48,13 +60,13 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
   ];
   const active = (m: string) => (m === "new=1" ? false : pathname.includes(m));
 
-  const iconBtn = "grid size-11 place-items-center rounded-full border border-line text-ink transition-colors hover:bg-bone";
+  const iconBtn = "grid size-11 place-items-center rounded-full border border-line text-ink transition-colors hover:bg-bone active:bg-stone";
 
   return (
     <>
       <header className={cn("sticky top-0 z-50 bg-paper/85 backdrop-blur-xl transition-[border-color,box-shadow]", scrolled ? "border-b border-line shadow-[0_8px_24px_-18px_rgba(0,0,0,.35)]" : "border-b border-transparent")}>
         <div className="container-x flex h-[68px] items-center gap-3 md:h-[76px]">
-          <button className={cn(iconBtn, "lg:hidden")} onClick={() => setMenu(true)} aria-label={dict.common.menu} aria-expanded={menu}>
+          <button data-ripple className={cn(iconBtn, "lg:hidden")} onClick={() => setMenu(true)} aria-label={dict.common.menu} aria-expanded={menu}>
             <Menu className="size-5" />
           </button>
           <Logo href={L("")} priority className="h-8 w-auto md:h-9" />
@@ -81,18 +93,18 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
               <LocaleSwitch className="hidden h-11 items-center rounded-full border border-line px-4 text-[0.82rem] font-bold transition-colors hover:bg-bone sm:inline-flex" />
             </Suspense>
             <ThemeToggle className="hidden sm:grid" />
-            <button onClick={() => setSearch(true)} className={iconBtn} aria-label={dict.common.search}>
+            <button data-ripple onClick={() => setSearch(true)} className={iconBtn} aria-label={dict.common.search}>
               <Search className="size-5" />
             </button>
             {signedIn && (
-              <Link href={L("/account/favorites")} className={cn(iconBtn, "hidden md:grid")} aria-label={dict.nav.favorites}>
+              <Link data-ripple href={L("/account/favorites")} className={cn(iconBtn, "hidden md:grid")} aria-label={dict.nav.favorites}>
                 <Heart className="size-5" />
               </Link>
             )}
-            <Link href={L(signedIn ? "/account" : "/account/login")} className={cn(iconBtn, "hidden md:grid")} aria-label={dict.nav.account}>
+            <Link data-ripple href={L(signedIn ? "/account" : "/account/login")} className={cn(iconBtn, "hidden md:grid")} aria-label={dict.nav.account}>
               <User className="size-5" />
             </Link>
-            <button onClick={() => openDrawer(true)} className="relative inline-flex h-11 min-w-11 items-center justify-center gap-2 rounded-full bg-pine px-3.5 text-white transition-transform hover:scale-105 active:scale-95 dark:text-night" aria-label={`${dict.nav.cart} (${count})`}>
+            <button data-ripple onClick={() => openDrawer(true)} className={cn("relative inline-flex h-11 min-w-11 items-center justify-center gap-2 rounded-full bg-pine px-3.5 text-white transition-transform hover:scale-105 active:scale-95 dark:text-night", bump && "animate-[bump_.55s_ease-out]")} aria-label={`${dict.nav.cart} (${count})`}>
               <ShoppingBag className="size-5" />
               <AnimatePresence initial={false}>
                 {count > 0 && (

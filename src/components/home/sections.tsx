@@ -10,6 +10,7 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import { Reveal } from "@/components/ui/reveal";
 import { InstagramIcon } from "@/components/ui/social-icons";
 import { NewsletterForm } from "./newsletter-form";
+import { HeroSlider, type HeroSlide } from "./hero-slider";
 
 type Ctx = { locale: Locale; dict: Dict; section?: HomepageSection };
 const pick = (s: HomepageSection | undefined, f: "title" | "subtitle" | "body" | "cta_label", l: Locale) =>
@@ -21,78 +22,19 @@ const arrowMove = "transition-transform group-hover:-translate-x-1 ltr:group-hov
 /** horizontal snap carousel that becomes a grid on desktop */
 const rail = "-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-3 md:mx-0 md:grid md:gap-5 md:overflow-visible md:px-0 [&::-webkit-scrollbar]:hidden";
 
-export function Hero({ locale, dict, banner, stats }: Ctx & { banner: PromoBanner | null; stats: ReviewStats | null }) {
-  const title = (locale === "ar" ? banner?.title_ar : banner?.title_en) || dict.home.heroTitle;
-  const subtitle = (locale === "ar" ? banner?.subtitle_ar : banner?.subtitle_en) || dict.home.heroSubtitle;
-  const cta = (locale === "ar" ? banner?.cta_label_ar : banner?.cta_label_en) || dict.home.heroCtaPrimary;
-  const image = banner?.image_url || "/products/baghdad-nights-hoodie-black-back.webp";
-  const Arrow = arrowOf(locale);
-  const chips = [Truck, Banknote, Paintbrush];
-  return (
-    <section className="container-x pt-3 md:pt-5">
-      <div className="relative isolate overflow-hidden rounded-[2rem] bg-night text-snow ring-1 ring-black/5 dark:ring-snow/10 md:rounded-[2.75rem]">
-        {/* ambient light */}
-        <div aria-hidden className="absolute -start-24 -top-24 -z-10 size-[26rem] rounded-full bg-pine/50 blur-[90px]" />
-        <div aria-hidden className="absolute -bottom-32 -end-16 -z-10 size-[22rem] rounded-full bg-amber/25 blur-[100px]" />
-        <div aria-hidden className="absolute inset-0 -z-10 opacity-[0.07] [background-image:radial-gradient(circle,#fff_1px,transparent_1px)] [background-size:22px_22px]" />
-
-        <div className="grid items-center gap-8 px-5 pb-8 pt-9 md:grid-cols-12 md:gap-6 md:px-14 md:pb-14 md:pt-14">
-          <div className="relative z-10 md:col-span-7">
-            <Reveal>
-              <p className="inline-flex items-center gap-2 rounded-full border border-snow/20 bg-snow/10 px-3.5 py-1.5 text-xs font-bold backdrop-blur">
-                <span className="size-2 rounded-full bg-amber" /> {dict.home.heroEyebrow}
-              </p>
-              <h1 className="display mt-5 whitespace-pre-line text-[clamp(2.9rem,10.5vw,7.6rem)]">{title}</h1>
-              <p className="mt-5 max-w-md text-[0.98rem] leading-relaxed text-snow/70 md:text-lg">{subtitle}</p>
-              <div className="mt-7 flex flex-wrap gap-3">
-                <Link href={href(locale, banner?.link, "/shop")} className="btn btn-accent group h-14 px-7 text-base">
-                  {cta} <Arrow className={`size-4 ${arrowMove}`} />
-                </Link>
-                <Link href={`/${locale}/design`} className="btn btn-glass h-14 px-7 text-base">
-                  <Paintbrush className="size-4" /> {dict.home.heroCtaSecondary}
-                </Link>
-              </div>
-              <ul className="mt-7 flex flex-wrap gap-2">
-                {dict.home.heroChips.map((c, i) => {
-                  const Icon = chips[i] ?? Truck;
-                  return (
-                    <li key={c} className="inline-flex items-center gap-2 rounded-full border border-snow/15 px-3.5 py-2 text-xs font-semibold text-snow/85">
-                      <Icon className="size-3.5 text-amber" /> {c}
-                    </li>
-                  );
-                })}
-              </ul>
-            </Reveal>
-          </div>
-
-          <div className="relative md:col-span-5">
-            <div className="relative mx-auto aspect-[4/5] max-h-[52svh] w-full max-w-[430px] overflow-hidden rounded-[1.75rem] bg-[#ebe7de] shadow-[0_30px_60px_-30px_rgba(0,0,0,.8)] md:max-h-none md:-rotate-2 md:rtl:rotate-2">
-              <Image src={image} alt="" fill priority sizes="(min-width:768px) 36vw, 90vw" className="object-cover" />
-            </div>
-            {stats && stats.count > 0 && (
-              <Link href={`/${locale}/reviews`} className="absolute -bottom-3 start-4 flex items-center gap-2 rounded-full border border-snow/20 bg-night/80 px-4 py-2.5 text-sm font-bold shadow-xl backdrop-blur-md md:start-0">
-                <Star className="size-4 fill-amber text-amber" />
-                <span className="tabular-nums" dir="ltr">{stats.average.toFixed(1)}</span>
-                <span className="text-xs font-medium text-snow/65">{dict.reviews.navLabel}</span>
-              </Link>
-            )}
-          </div>
-        </div>
-
-        <div className="overflow-hidden border-t border-snow/10 py-3.5" aria-hidden>
-          <div className={`flex w-max gap-10 whitespace-nowrap text-sm font-bold tracking-[0.25em] text-snow/35 ${locale === "ar" ? "animate-marquee-rtl" : "animate-marquee"}`}>
-            {Array.from({ length: 2 }).map((_, k) => (
-              <div key={k} className="flex gap-10">
-                {["STREETWEAR", "بغداد", "CUSTOM PRINT", "TPAC", "عراقي", "HEAVYWEIGHT COTTON", "طباعة حسب الطلب", "MADE IN IRAQ"].map((w, i) => (
-                  <span key={i} className="flex items-center gap-10">{w}<span className="text-amber">✦</span></span>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
+export function Hero({ locale, dict, banners, stats }: Ctx & { banners: PromoBanner[]; stats: ReviewStats | null }) {
+  const slides: HeroSlide[] = banners.length
+    ? banners.map((b) => ({
+        id: b.id,
+        title: (locale === "ar" ? b.title_ar : b.title_en) || dict.home.heroTitle,
+        subtitle: (locale === "ar" ? b.subtitle_ar : b.subtitle_en) || dict.home.heroSubtitle,
+        cta: (locale === "ar" ? b.cta_label_ar : b.cta_label_en) || dict.home.heroCtaPrimary,
+        href: href(locale, b.link, "/shop"),
+        image: b.image_url,
+        video: b.video_url,
+      }))
+    : [{ id: "default", title: dict.home.heroTitle, subtitle: dict.home.heroSubtitle, cta: dict.home.heroCtaPrimary, href: `/${locale}/shop`, image: null, video: null }];
+  return <HeroSlider slides={slides} rating={stats && stats.count > 0 ? { average: stats.average, count: stats.count } : null} />;
 }
 
 export function CategoriesSection({ locale, dict, section, categories }: Ctx & { categories: Category[] }) {

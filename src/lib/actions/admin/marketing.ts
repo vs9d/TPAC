@@ -42,7 +42,7 @@ export async function saveBanner(_prev: ActionState, form: FormData): Promise<Ac
   await assertStaff();
   const parsed = bannerSchema.safeParse({
     placement: form.get("placement"), title_ar: str(form.get("title_ar")), title_en: str(form.get("title_en")), subtitle_ar: str(form.get("subtitle_ar")), subtitle_en: str(form.get("subtitle_en")),
-    cta_label_ar: str(form.get("cta_label_ar")), cta_label_en: str(form.get("cta_label_en")), link: str(form.get("link")), image_url: str(form.get("image_url")),
+    cta_label_ar: str(form.get("cta_label_ar")), cta_label_en: str(form.get("cta_label_en")), link: str(form.get("link")), image_url: str(form.get("image_url")), video_url: str(form.get("video_url")),
     starts_at: str(form.get("starts_at")), ends_at: str(form.get("ends_at")), is_active: bool(form.get("is_active")), sort_order: form.get("sort_order") || 0,
   });
   if (!parsed.success) return { ok: false, error: "validation", fields: fieldErrors(parsed.error) };

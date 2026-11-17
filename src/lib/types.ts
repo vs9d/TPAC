@@ -278,6 +278,7 @@ export interface PromoBanner {
   cta_label_en: string | null;
   link: string | null;
   image_url: string | null;
+  video_url: string | null;
   starts_at: string | null;
   ends_at: string | null;
   is_active: boolean;

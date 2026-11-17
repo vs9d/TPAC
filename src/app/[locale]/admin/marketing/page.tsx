@@ -22,7 +22,7 @@ export default async function AdminMarketing({ params }: { params: Promise<{ loc
     supabase.from("collections").select("id, name_ar, name_en"),
     supabase.from("discount_codes").select("id, code"),
   ]);
-  const placements = [{ value: "announcement", label: t("شريط الإعلانات", "Announcement bar") }, { value: "hero", label: t("الواجهة الرئيسية (Hero)", "Homepage hero") }, { value: "promo", label: t("بانر ترويجي", "Promo banner") }];
+  const placements = [{ value: "announcement", label: t("شريط الإعلانات", "Announcement bar") }, { value: "hero", label: t("سلايد الواجهة الرئيسية", "Homepage hero slide") }, { value: "promo", label: t("بانر ترويجي", "Promo banner") }];
   const bannerFields = (b?: PromoBanner) => (
     <div className="grid gap-3 sm:grid-cols-4">
       {b && <input type="hidden" name="id" value={b.id} />}
@@ -34,17 +34,18 @@ export default async function AdminMarketing({ params }: { params: Promise<{ loc
       <Input name="cta_label_ar" label={t("زر (عربي)", "Button (AR)")} defaultValue={b?.cta_label_ar ?? ""} />
       <Input name="cta_label_en" label={t("زر (إنجليزي)", "Button (EN)")} defaultValue={b?.cta_label_en ?? ""} />
       <Input name="link" label={t("الرابط", "Link")} defaultValue={b?.link ?? ""} dir="ltr" placeholder="/shop?new=1" className="sm:col-span-2" />
-      <div className="sm:col-span-2"><MediaUrlInput name="image_url" label={t("الصورة", "Image")} defaultValue={b?.image_url} /></div>
+      <div className="sm:col-span-2"><MediaUrlInput name="image_url" label={t("الصورة (خلفية السلايد)", "Image (slide background)")} defaultValue={b?.image_url} hint={t("للسلايد: صورة عمودية أو أفقية عالية الجودة", "Slides: a high-quality photo")} /></div>
+      <div className="sm:col-span-2"><MediaUrlInput name="video_url" kind="video" label={t("فيديو (اختياري، يحل محل الصورة)", "Video (optional, replaces the image)")} defaultValue={b?.video_url} hint={t("MP4 أو WEBM حتى ٤٠ ميغابايت، بدون صوت ومدة ٥–١٥ ثانية للأفضل. الصورة تُستخدم كغلاف أثناء التحميل.", "MP4/WEBM up to 40 MB, 5–15 s, silent works best. The image is used as the poster while loading.")} /></div>
       <Input name="starts_at" type="datetime-local" label={t("يبدأ", "Starts")} defaultValue={toBaghdadInput(b?.starts_at)} />
       <Input name="ends_at" type="datetime-local" label={t("ينتهي", "Ends")} defaultValue={toBaghdadInput(b?.ends_at)} />
-      <Input name="sort_order" type="number" label={t("الترتيب", "Order")} defaultValue={b?.sort_order ?? 0} />
+      <Input name="sort_order" type="number" label={t("الترتيب (الأصغر يظهر أولاً)", "Order (lowest first)")} defaultValue={b?.sort_order ?? 0} />
       <Checkbox name="is_active" label={t("فعال", "Active")} defaultChecked={b?.is_active ?? true} className="self-end pb-2" />
     </div>
   );
   return (
     <div className="space-y-8">
       <PageHeader title={t("البانرات والحملات", "Banners & campaigns")} />
-      <Card title={t("البانرات والإعلانات", "Banners & announcements")}>
+      <Card title={t("السلايد شو (الواجهة) والبانرات والإعلانات", "Hero slideshow, banners & announcements")}>
         <div className="space-y-3">
           {((banners as PromoBanner[]) ?? []).map((b) => (
             <details key={b.id} className="border border-line">

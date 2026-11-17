@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Minus, Plus, X } from "lucide-react";
 import { useI18n, fmt } from "@/components/i18n-provider";
 import { formatIQD } from "@/lib/format";
+import { toast } from "@/components/ui/toast";
 import { useCart, lineKey, type CartLine as Line } from "./store";
 import type { QuoteLine } from "@/lib/types";
 
@@ -52,7 +53,7 @@ export function CartLineRow({ line, quoted, compact = false }: { line: Line; quo
               <p className="mt-1 text-xs text-mute">{dict.cart.printLocations}: {locations.map((l) => dict.designer.locations[l] ?? l).join("، ")}</p>
             )}
           </div>
-          <button onClick={() => remove(key)} className="text-mute hover:text-ink" aria-label={dict.cart.remove}>
+          <button data-ripple onClick={() => { remove(key); toast.info(dict.common.itemRemoved); }} className="grid size-9 place-items-center rounded-full text-mute hover:bg-bone hover:text-ink" aria-label={dict.cart.remove}>
             <X className="size-4" />
           </button>
         </div>

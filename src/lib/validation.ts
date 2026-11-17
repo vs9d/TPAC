@@ -295,6 +295,7 @@ export const bannerSchema = z.object({
   cta_label_en: optText(60),
   link: optText(500).refine((v) => !v || v.startsWith("/") || v.startsWith("https://"), "link"),
   image_url: optText(1000),
+  video_url: optText(1000).refine((v) => !v || /^(https?:\/\/|\/)/.test(v), "link"),
   starts_at: optText(40),
   ends_at: optText(40),
   is_active: z.boolean(),

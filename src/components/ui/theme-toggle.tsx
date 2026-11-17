@@ -22,7 +22,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
   };
   const label = theme === "dark" ? (locale === "ar" ? "الوضع الفاتح" : "Light mode") : locale === "ar" ? "الوضع الداكن" : "Dark mode";
   return (
-    <button onClick={toggle} aria-label={label} title={label} className={`grid size-11 place-items-center rounded-full border border-line text-ink transition-colors hover:bg-bone ${className}`}>
+    <button data-ripple onClick={toggle} aria-label={label} title={label} className={`grid size-11 place-items-center rounded-full border border-line text-ink transition-colors hover:bg-bone ${className}`}>
       {theme === "dark" ? <Sun className="size-[1.15rem]" /> : <Moon className="size-[1.15rem]" />}
     </button>
   );
