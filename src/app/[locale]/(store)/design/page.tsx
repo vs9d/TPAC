@@ -104,19 +104,28 @@ export default async function DesignPage({ params, searchParams }: { params: Pro
   }
   const colors = await getColors();
   return (
-    <div className="container-x relative py-6 md:py-10">
+    <div className="container-x relative py-8 md:py-12">
       {/* font classes make sure the @font-face rules are emitted for canvas text */}
       <span aria-hidden className={`${cairo.className} ${tajawal.className} ${almarai.className} ${changa.className} ${lalezar.className} ${reem_kufi.className} ${aref_ruqaa.className} ${amiri.className} ${el_messiri.className} ${marhey.className} ${rakkas.className} ${alexandria.className} ${noto_kufi_arabic.className} ${bebas_neue.className} ${anton.className} ${oswald.className} ${montserrat.className} ${playfair_display.className} ${pacifico.className} ${lobster.className} ${permanent_marker.className} ${bangers.className} ${black_ops_one.className} ${staatliches.className} ${righteous.className} pointer-events-none absolute opacity-0`}>ابجد abc</span>
-      <div className="mb-6 max-w-2xl">
-        <p className="eyebrow mb-2 text-amber-deep">TPAC Studio</p>
-        <h1 className="display text-3xl md:text-5xl">{dict.designer.title}</h1>
-        <p className="mt-2 text-sm text-mute md:text-base">{dict.designer.subtitle}</p>
-        <ul className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
-          {[t("٢٥ خطاً عربياً ولاتينياً", "25 Arabic & Latin fonts"), t("أشكال وقوالب جاهزة", "Shapes & ready layouts"), t("٥ أماكن طباعة", "5 print placements"), t("خصم على الكميات", "Quantity discounts"), t("معاينة أمام وخلف", "Front & back preview")].map((x) => (
-            <li key={x} className="rounded-full border border-line px-3 py-1">{x}</li>
+      <header className="mb-8 max-w-3xl">
+        <p className="mb-4 text-xs font-semibold uppercase tracking-[0.32em] text-mute" dir="ltr">TPAC Studio · Print on demand</p>
+        <h1 className="display text-[2.05rem] leading-[1.2] sm:text-6xl">
+          {t("صمّم قطعتك.", "Design your piece.")}
+          <span className="relative mt-1 block w-fit text-pine">
+            {t("وإحنا نطبعها ونوصلها.", "We print it and deliver it.")}
+            <span className="absolute inset-x-0 -bottom-1 -z-10 h-3 rounded-full bg-pine-soft" aria-hidden />
+          </span>
+        </h1>
+        <p className="mt-5 text-base leading-relaxed text-mute sm:text-lg">{t("ارفع صورتك أو اكتب كلمتك، وشوف شكلها مباشرة على التيشيرت أو الهودي، ونوصلها لباب بيتك بكل محافظات العراق.", "Upload your image or write your words, see them live on the tee or hoodie, and we deliver to your door anywhere in Iraq.")}</p>
+        <ol className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3">
+          {[t("اختر القطعة", "Pick the piece"), t("أضف تصميمك", "Add your design"), t("اطلب وتوصلك", "Order & receive")].map((step, i) => (
+            <li key={step} className="flex items-center gap-3 text-sm font-semibold sm:text-base">
+              <span className="grid size-12 place-items-center rounded-full border border-line text-sm font-bold tabular-nums" dir="ltr">0{i + 1}</span>
+              {step}
+            </li>
           ))}
-        </ul>
-      </div>
+        </ol>
+      </header>
       {garments.length === 0 ? (
         <p className="py-20 text-center text-mute">{dict.common.serviceUnavailable}</p>
       ) : (

@@ -1,21 +1,21 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Canvas as FabricCanvas, FabricObject, IText as FabricIText } from "fabric";
-import { Download, Eye, EyeOff, Loader2, Redo2, Trash2, Undo2 } from "lucide-react";
+import { Download, Eye, EyeOff, Loader2, Move, Redo2, ShoppingBag, Type as TypeIcon, Undo2, Upload } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { useCart } from "@/components/cart/store";
 import { toast } from "@/components/ui/toast";
 import { saveDesign } from "@/lib/actions/design";
-import { uploadArtwork } from "@/lib/upload-client";
+import { ACCEPT_DESIGN, uploadArtwork } from "@/lib/upload-client";
 import { adminT } from "@/lib/admin-i18n";
 import { ARTBOARD, GARMENTS, LOCATION_VIEW, garmentDataUrl, luminance, type GarmentType, type GarmentView, type PrintLocation } from "@/lib/garments";
-import { SHAPES, TEMPLATES, TEXT_PRESETS_UI, shapeById, type DesignerFont } from "@/lib/design-assets";
+import { TEMPLATES, TEXT_PRESETS_UI, shapeById, type DesignerFont } from "@/lib/design-assets";
 import { discountedUnit, resolveOptions, tierPercent, type OptionLite } from "@/lib/design-pricing";
 import { cn, formatIQD } from "@/lib/format";
 import type { Color, DesignerOptionRow, DesignerSettings, DesignerTierRow, GarmentTypeRow, PrintLocationRow } from "@/lib/types";
 import { PROPS, type Choice, type DesignerApi, type LayerInfo, type TabId, type Tagged } from "./types";
 import { Inspector } from "./inspector";
-import { AddTab, LayersTab, OrderTab, ProductTab } from "./tabs";
+import { CreativeSpace, PieceCard } from "./studio";
 import { ReviewDialog } from "./review";
 
 const MAX_HISTORY = 60;
@@ -51,7 +51,11 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const [designName, setDesignName] = useState("");
 
   // ------------------------------------------------------------------ editor state
-  const [tab, setTab] = useState<TabId>("add");
+  const [tab, setTab] = useState<TabId>("image");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const textRef = useRef<HTMLInputElement>(null);
+  const creativeRef = useRef<HTMLDivElement>(null);
+  const pieceRef = useRef<HTMLElement>(null);
   const [location, setLocation] = useState<PrintLocation>("front");
   const view: GarmentView = LOCATION_VIEW[location];
   const [guides, setGuides] = useState(true);
@@ -219,6 +223,42 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     }
   }, [design, renderScene, syncLayers]);
 
+  /** Region of the artboard shown for a placement: the whole garment, or a close-up for chest / sleeves. */
+  const focusOf = (loc: PrintLocation) => {
+    if (loc === "front" || loc === "back") return { x: 0, y: 0, w: ARTBOARD.width };
+    const a = area(loc);
+    const w = Math.min(ARTBOARD.width, Math.max(a.width, a.height) * 6);
+    const h = (w * ARTBOARD.height) / ARTBOARD.width;
+    const x = Math.max(0, Math.min(ARTBOARD.width - w, a.x + a.width / 2 - w / 2));
+    const y = Math.max(0, Math.min(ARTBOARD.height - h, a.y + a.height / 2 - h / 2));
+    return { x, y, w };
+  };
+  const cameraAnim = useRef<number | null>(null);
+  /** Moves the viewport to the current placement (animated when the placement changes). */
+  const applyCamera = (animate: boolean) => {
+    const c = canvasRef.current;
+    if (!c || exportingRef.current) return;
+    const f = focusOf(stateRef.current.location);
+    const k = c.getWidth() / f.w;
+    const target = [k, 0, 0, k, -f.x * k, -f.y * k];
+    if (cameraAnim.current) cancelAnimationFrame(cameraAnim.current);
+    const from = [...(c.viewportTransform ?? [1, 0, 0, 1, 0, 0])];
+    if (!animate || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      c.setViewportTransform(target as [number, number, number, number, number, number]);
+      c.requestRenderAll();
+      return;
+    }
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / 320);
+      const e = 1 - Math.pow(1 - p, 3);
+      c.setViewportTransform(from.map((v, i) => v + (target[i]! - v) * e) as [number, number, number, number, number, number]);
+      c.requestRenderAll();
+      if (p < 1) cameraAnim.current = requestAnimationFrame(step);
+    };
+    cameraAnim.current = requestAnimationFrame(step);
+  };
+
   // ------------------------------------------------------------------ Fabric bootstrap
   useEffect(() => {
     let disposed = false;
@@ -231,10 +271,9 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       canvasRef.current = c;
       const fit = () => {
         if (exportingRef.current) return;
-        const w = Math.min(wrapRef.current?.clientWidth ?? 600, 680);
+        const w = Math.min(wrapRef.current?.clientWidth ?? 600, 720);
         c.setDimensions({ width: w, height: (w * ARTBOARD.height) / ARTBOARD.width });
-        c.setZoom(w / ARTBOARD.width);
-        c.requestRenderAll();
+        applyCamera(false);
       };
       fit();
       ro = new ResizeObserver(fit);
@@ -276,15 +315,15 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
         const a = area(loc);
         const ctx = c.getContext();
         const r = c.getRetinaScaling();
-        const z = c.getZoom();
+        const vt = c.viewportTransform;
         ctx.save();
-        ctx.setTransform(r, 0, 0, r, 0, 0);
+        ctx.setTransform(r * vt[0], 0, 0, r * vt[3], r * vt[4], r * vt[5]);
         ctx.strokeStyle = "#E3963C";
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1 / vt[0];
+        ctx.setLineDash([4 / vt[0], 4 / vt[0]]);
         ctx.beginPath();
-        if (x) { ctx.moveTo((a.x + a.width / 2) * z, a.y * z); ctx.lineTo((a.x + a.width / 2) * z, (a.y + a.height) * z); }
-        if (y) { ctx.moveTo(a.x * z, (a.y + a.height / 2) * z); ctx.lineTo((a.x + a.width) * z, (a.y + a.height / 2) * z); }
+        if (x) { ctx.moveTo(a.x + a.width / 2, a.y); ctx.lineTo(a.x + a.width / 2, a.y + a.height); }
+        if (y) { ctx.moveTo(a.x, a.y + a.height / 2); ctx.lineTo(a.x + a.width, a.y + a.height / 2); }
         ctx.stroke();
         ctx.restore();
       });
@@ -333,6 +372,10 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   useEffect(() => {
     void renderScene();
   }, [garmentCode, colorId, location, guides, renderScene]);
+  useEffect(() => {
+    applyCamera(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location, garmentCode]);
 
   // ------------------------------------------------------------------ adding things
   const placeNew = useCallback((o: Tagged, kind: "image" | "text" | "shape", loc: PrintLocation = stateRef.current.location, dy = 0) => {
@@ -389,9 +432,9 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   }, [fonts, locale, dict.designer.textPlaceholder, autoFill]);
 
   const api: DesignerApi = {
-    addText: async (presetId) => {
+    addText: async (presetId, text) => {
       if (!fabricRef.current) return;
-      const txt = await makeText(presetId);
+      const txt = await makeText(presetId, text?.trim() ? { text: text.trim().slice(0, 200) } : undefined);
       placeNew(txt, "text");
       await finishAdd(txt);
     },
@@ -433,7 +476,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       if (lastObj) {
         await finishAdd(lastObj);
         toast.success(t("تمت إضافة القالب — عدّل النصوص كما تريد", "Template added — edit the text as you like"));
-        setTab("layers");
+        setTab("ideas");
       }
     },
     upload: (file) => void onUpload(file),
@@ -514,7 +557,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       img.tpacLabel = file.name.replace(/\.[a-z0-9]+$/i, "").slice(0, 28);
       placeNew(img, "image");
       await finishAdd(img);
-      setTab("add");
+      setTab("image");
     } catch (e) {
       const key = e instanceof Error ? e.message : "";
       toast.error(key === "fileType" ? dict.validation.fileType : key === "fileSize" ? dict.validation.fileSize : key === "rate_limited" ? dict.checkout.errors.rate_limited! : dict.common.somethingWrong);
@@ -630,20 +673,20 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const exportView = async (v: GarmentView, format: "jpeg" | "png" = "jpeg"): Promise<string> => {
     const c = canvasRef.current!;
     exportingRef.current = true;
-    const prev = { w: c.getWidth(), h: c.getHeight(), z: c.getZoom() };
+    const prev = { w: c.getWidth(), h: c.getHeight(), vpt: [...c.viewportTransform] as [number, number, number, number, number, number] };
     try {
       await renderScene({ view: v, location: v === "front" ? "front" : "back" });
       for (const o of c.getObjects() as Tagged[]) if (o.tpacKind === "guide") o.visible = false;
       c.discardActiveObject();
       c.setDimensions({ width: 900, height: 1050 });
-      c.setZoom(900 / ARTBOARD.width);
+      c.setViewportTransform([900 / ARTBOARD.width, 0, 0, 900 / ARTBOARD.width, 0, 0]);
       c.backgroundColor = format === "jpeg" ? "#F3F1EC" : "";
       c.renderAll();
       return c.toDataURL({ format, quality: 0.9, multiplier: 1 });
     } finally {
       c.backgroundColor = "";
       c.setDimensions({ width: prev.w, height: prev.h });
-      c.setZoom(prev.z);
+      c.setViewportTransform(prev.vpt);
       exportingRef.current = false;
       await renderScene();
     }
@@ -658,7 +701,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     }
     if (totalQty < 1) {
       toast.error(t("اختر مقاساً واحداً على الأقل", "Pick at least one size"));
-      setTab("order");
+      pieceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     setPreparing(true);
@@ -796,73 +839,86 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   }, [layers, tick, settings.min_dpi, locale]);
 
   const availableLocations = locations.filter((l) => garment.print_locations.includes(l.code));
+  const hereCount = layers.filter((l) => l.location === location && !l.hidden).length;
+  const anyContent = layers.some((l) => !l.hidden);
+  const locLabel = dict.designer.locations[location] ?? location;
+  const closeUp = location !== "front" && location !== "back";
+  const openUpload = () => fileRef.current?.click();
+  const writeWord = () => {
+    setTab("text");
+    creativeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => textRef.current?.focus({ preventScroll: true }), 450);
+  };
 
   return (
-    <div className="pb-28 md:pb-0">
-      <div className="grid gap-6 lg:grid-cols-12 lg:gap-10">
-        {/* ------------------------------ canvas column */}
-        {/* the grid item itself is sticky (and self-start) so the garment stays in view while the panels below scroll */}
-        <div className="sticky top-[68px] z-20 -mx-4 self-start bg-paper px-4 pb-2 pt-1 lg:top-28 lg:col-span-7 lg:mx-0 lg:px-0">
-          <div>
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex rounded-full border border-line p-1" role="tablist" aria-label={dict.designer.view}>
-                {(["front", "back"] as GarmentView[]).map((v) => (
-                  <button key={v} role="tab" aria-selected={view === v} onClick={() => setLocation(v === "front" ? (garment.print_locations.includes("front") ? "front" : "left_chest") : "back")} className={cn("rounded-full px-4 py-1.5 text-sm font-bold transition-colors", view === v ? "bg-pine text-white dark:text-night" : "hover:bg-bone")}>
-                    {v === "front" ? dict.designer.front : dict.designer.back}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-1" role="toolbar" aria-label={t("أدوات", "Tools")}>
-                <IconBtn label={t("تراجع", "Undo")} disabled={!hist.undo} onClick={api.undo}><Undo2 className="size-4" /></IconBtn>
-                <IconBtn label={t("إعادة", "Redo")} disabled={!hist.redo} onClick={api.redo}><Redo2 className="size-4" /></IconBtn>
-                <IconBtn label={guides ? t("إخفاء حدود الطباعة", "Hide print areas") : t("إظهار حدود الطباعة", "Show print areas")} onClick={() => setGuides((g) => !g)} active={guides}>{guides ? <Eye className="size-4" /> : <EyeOff className="size-4" />}</IconBtn>
-                <IconBtn label={t("تنزيل المعاينة", "Download preview")} disabled={!ready || preparing} onClick={download}><Download className="size-4" /></IconBtn>
-                <IconBtn label={t("مسح التصميم", "Clear design")} disabled={!layers.length} onClick={() => { if (confirm(t("مسح كل عناصر التصميم؟", "Remove every element of the design?"))) api.clearAll(); }}><Trash2 className="size-4" /></IconBtn>
-              </div>
+    <div className="pb-32">
+      <input ref={fileRef} type="file" accept={ACCEPT_DESIGN} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onUpload(f); }} />
+      <div className="grid gap-5 lg:grid-cols-12 lg:gap-8">
+        {/* ------------------------------ live preview */}
+        <section className="studio-card self-start overflow-hidden lg:sticky lg:top-24 lg:col-span-7" aria-label={dict.designer.title}>
+          <div className="flex items-center justify-between px-5 pt-5 sm:px-7">
+            <p className="flex min-w-0 items-center gap-2 truncate text-[13px] font-semibold text-pine sm:text-sm">
+              <span className="size-2.5 shrink-0 rounded-full bg-pine/60" aria-hidden /> {locLabel} · {closeUp ? t("معاينة مقرّبة", "close-up preview") : t("معاينة مباشرة", "live preview")}
+            </p>
+            <div className="flex items-center gap-1" role="toolbar" aria-label={t("أدوات", "Tools")}>
+              <IconBtn label={t("تراجع", "Undo")} disabled={!hist.undo} onClick={api.undo}><Undo2 className="size-5" /></IconBtn>
+              <IconBtn label={t("إعادة", "Redo")} disabled={!hist.redo} onClick={api.redo}><Redo2 className="size-5" /></IconBtn>
+              <IconBtn label={guides ? t("إخفاء حدود الطباعة", "Hide print areas") : t("إظهار حدود الطباعة", "Show print areas")} onClick={() => setGuides((g) => !g)} active={!guides}>{guides ? <Eye className="size-5" /> : <EyeOff className="size-5" />}</IconBtn>
+              <IconBtn label={t("تنزيل المعاينة", "Download preview")} disabled={!ready || preparing} onClick={download}><Download className="size-5" /></IconBtn>
             </div>
+          </div>
+
+          <div className="px-3 pb-2 pt-3 sm:px-6">
             <div
               ref={wrapRef}
               onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
               onDrop={onDrop}
-              className={cn("relative mx-auto w-full max-w-[min(680px,calc(34dvh*600/700))] overflow-hidden rounded-[1.75rem] bg-[radial-gradient(ellipse_at_50%_40%,#F6F4F0_0%,#E9E5DD_75%)] sm:max-w-[min(680px,calc(52dvh*600/700))] lg:max-w-[680px]", dragging && "ring-4 ring-amber")}
+              className={cn("relative mx-auto w-full max-w-[720px] overflow-hidden rounded-[1.25rem] transition", dragging && "ring-4 ring-pine/40")}
               style={{ aspectRatio: `${ARTBOARD.width} / ${ARTBOARD.height}` }}
             >
               <canvas ref={elRef} aria-label={dict.designer.title} />
-              {!ready && <div className="absolute inset-0 grid place-items-center"><Loader2 className="size-6 animate-spin text-mute" /></div>}
-              {dragging && <div className="absolute inset-0 grid place-items-center bg-amber/20 text-sm font-bold">{t("أفلت الصورة هنا", "Drop the image here")}</div>}
+              {!ready && <div className="absolute inset-0 grid place-items-center"><Loader2 className="size-7 animate-spin text-mute" /></div>}
+              {ready && hereCount === 0 && !selected && !dragging && (
+                <div className={cn("pointer-events-none absolute inset-x-0 flex flex-col items-center gap-3 px-6", closeUp ? "bottom-[5%]" : "bottom-[17%]")}>
+                  <button type="button" onClick={openUpload} disabled={uploading} className="pointer-events-auto flex w-full max-w-sm items-center justify-center gap-3 rounded-2xl bg-pine px-5 py-4 text-[15px] font-bold leading-tight text-white shadow-[0_14px_30px_-12px_rgba(0,0,0,.5)] transition active:scale-[.98] dark:text-night">
+                    {uploading ? <Loader2 className="size-5 animate-spin" /> : <Upload className="size-5" />} {t(`ارفع تصميمك على ${locLabel}`, `Upload your design for the ${locLabel.toLowerCase()}`)}
+                  </button>
+                  <button type="button" onClick={writeWord} className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-ink/10 bg-paper/95 px-6 py-2.5 text-sm font-semibold text-ink shadow-md backdrop-blur transition active:scale-[.98]">
+                    <TypeIcon className="size-5" /> {t("أو اكتب كلمة", "or write a word")}
+                  </button>
+                </div>
+              )}
+              {dragging && <div className="absolute inset-0 grid place-items-center bg-pine/15 text-base font-bold text-pine">{t("أفلت الصورة هنا", "Drop the image here")}</div>}
               {(saving || preparing) && (
                 <div className="absolute inset-0 grid place-items-center bg-paper/70">
                   <p className="flex items-center gap-2 text-sm font-semibold"><Loader2 className="size-4 animate-spin" /> {saving ? dict.designer.saving : t("جاري تجهيز المعاينة…", "Preparing preview…")}</p>
                 </div>
               )}
             </div>
-            <p className="mt-2 text-center text-xs text-mute">
-              {dict.designer.printArea} ({dict.designer.locations[location]}): {area(location).cm.width}×{area(location).cm.height} cm
-              <span className="hidden sm:inline"> · {t("اسحب لتحريك • Delete للحذف • أسهم للتحريك الدقيق", "Drag to move · Delete to remove · arrows to nudge")}</span>
-            </p>
           </div>
-        </div>
 
-        {/* ------------------------------ controls column */}
-        <div className="space-y-5 lg:col-span-5">
-          <div className="-mx-4 overflow-x-auto px-4 py-2 lg:mx-0 lg:px-0" role="tablist" aria-label={t("خطوات التصميم", "Design steps")}>
-            <div className="flex min-w-max gap-1 rounded-full border border-line bg-bone p-1">
-              {([
-                ["product", t("القطعة", "Product"), 1],
-                ["add", t("التصميم", "Design"), 2],
-                ["layers", t("الطبقات", "Layers") + (layers.length ? ` (${layers.length})` : ""), 3],
-                ["order", t("الطلب", "Order"), 4],
-              ] as [TabId, string, number][]).map(([id, label, n]) => (
-                <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={cn("flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition-colors", tab === id ? "bg-pine text-white dark:text-night" : "text-mute hover:text-ink")}>
-                  <span className={cn("grid size-5 place-items-center rounded-full text-[11px] tabular-nums", tab === id ? "bg-white/20" : "bg-paper")}>{n}</span> {label}
+          {/* placements */}
+          <div className="flex justify-center gap-1 overflow-x-auto px-4 pb-1 pt-2" role="tablist" aria-label={dict.designer.location}>
+            {availableLocations.map((l) => {
+              const on = location === l.code;
+              const has = layers.some((x) => x.location === l.code && !x.hidden);
+              return (
+                <button key={l.code} role="tab" aria-selected={on} onClick={() => setLocation(l.code)} className={cn("relative shrink-0 rounded-2xl px-4 py-3 text-sm font-semibold transition sm:px-5", on ? "bg-pine-soft text-pine shadow-sm" : "text-ink/80 hover:bg-bone")}>
+                  {dict.designer.locations[l.code]}
+                  {has && <span className="absolute end-2 top-2 size-1.5 rounded-full bg-amber" aria-hidden />}
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
+          <p className="flex items-center justify-center gap-2 px-5 pb-4 pt-3 text-center text-xs text-mute">
+            <Move className="size-4 shrink-0" /> {t("اسحب التصميم حتى تحرّكه · الزوايا للحجم · الدائرة للتدوير", "Drag to move · corners to resize · the circle to rotate")}
+          </p>
+          {closeUp && <p className="-mt-2 pb-4 text-center text-[11px] text-mute">{t(`منطقة الطباعة ${area(location).cm.width}×${area(location).cm.height} سم`, `Print area ${area(location).cm.width}×${area(location).cm.height} cm`)}</p>}
 
           {selected && selected.tpacKind && selected.tpacKind !== "guide" && (
-            <Inspector
+            <div className="border-t border-line">
+              <Inspector
               key={selected.tpacId}
               o={selected}
               tick={tick}
@@ -887,38 +943,46 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
                 const fill = p.fill === "auto" ? autoFill() : p.fill;
                 setProps({ fontFamily: f.family, fontWeight: wt, fill: fill ?? "rgba(0,0,0,0)", stroke: p.stroke ? (p.stroke === "auto" ? autoFill() : p.stroke) : undefined, strokeWidth: p.strokeWidth ?? 0, charSpacing: /[؀-ۿ]/.test((selected as unknown as FabricIText).text ?? "") ? 0 : p.charSpacing ?? 0 });
               }}
-            />
+              />
+            </div>
           )}
+        </section>
 
-          {tab === "product" && (
-            <ProductTab garments={garments} garmentCode={garmentCode} setGarmentCode={setGarmentCode} colors={garmentColors} colorId={colorId} setColorId={setColorId} locations={availableLocations} location={location} setLocation={setLocation} used={usedLocations} garmentMeta={GARMENTS[garmentCode as GarmentType].printAreas} next={() => setTab("add")} />
-          )}
-          {tab === "add" && (
-            <AddTab api={api} ready={ready} uploading={uploading} fonts={fonts} locationLabel={dict.designer.locations[location]} next={() => setTab("order")} garmentLocations={garment.print_locations} />
-          )}
-          {tab === "layers" && <LayersTab layers={layers} selectedId={selected?.tpacId} api={api} locationLabel={(l) => dict.designer.locations[l]} next={() => setTab("order")} />}
-          {tab === "order" && (
-            <OrderTab
-              garment={garment} sizes={sizes} setSizes={setSizes} options={options} choice={choice} setChoice={setChoice}
-              notes={notes} setNotes={setNotes} designName={designName} setDesignName={setDesignName}
-              tiers={tiers.filter((x) => x.is_active)} totalQty={totalQty} pct={pct} unit={unit} unitAfter={unitAfter}
-              basePrice={garment.base_price} placements={usedLocations.map((l) => ({ code: l, label: dict.designer.locations[l], price: locations.find((x) => x.code === l)?.price ?? 0 }))}
-              picked={resolved.picked.map((o) => options.find((x) => x.id === o.id)!).filter(Boolean)} settings={settings} rush={resolved.choice.addons.includes("rush")}
+        {/* ------------------------------ tools + piece */}
+        <div className="space-y-5 lg:col-span-5">
+          <div ref={creativeRef} className="scroll-mt-24">
+            <CreativeSpace
+              tab={tab} setTab={setTab} api={api} ready={ready} uploading={uploading} openUpload={openUpload} fonts={fonts}
+              location={location} locationLabel={locLabel} layers={layers} selectedId={selected?.tpacId}
+              garmentLocations={garment.print_locations} textRef={textRef}
+              onClear={() => { if (confirm(t("مسح كل عناصر التصميم؟", "Remove every element of the design?"))) api.clearAll(); }}
             />
-          )}
+          </div>
+          <PieceCard
+            garments={garments} garmentCode={garmentCode} setGarmentCode={setGarmentCode} colors={garmentColors} colorId={colorId} setColorId={setColorId}
+            sizes={sizes} setSizes={setSizes} locations={availableLocations} used={usedLocations} options={options} choice={choice} setChoice={setChoice}
+            tiers={tiers.filter((x) => x.is_active)} totalQty={totalQty} pct={pct} unit={unit} unitAfter={unitAfter} settings={settings} rush={resolved.choice.addons.includes("rush")}
+            notes={notes} setNotes={setNotes} designName={designName} setDesignName={setDesignName} sectionRef={pieceRef}
+          />
         </div>
       </div>
 
-      {/* Mobile: price + action always within thumb reach; desktop: shown in a bar under the controls */}
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/90 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl lg:static lg:mt-8 lg:rounded-[1.75rem] lg:border lg:bg-bone lg:p-5 lg:backdrop-blur-0">
-        <div className="mx-auto flex max-w-xl items-center gap-3 lg:max-w-none">
-          <div className="shrink-0">
-            <p className="text-[11px] text-mute">{totalQty} × {t("قطعة", "pcs")}{pct > 0 && <span className="ms-1 rounded-full bg-pine-soft px-1.5 py-0.5 font-bold text-pine">-{pct}%</span>}</p>
-            <p className="display text-xl tabular-nums lg:text-2xl">{formatIQD(unitAfter * totalQty, locale)}</p>
+      {/* price + main action, always within thumb reach */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/92 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
+        <div className="container-x flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs text-mute">{t("السعر مع الطباعة", "Price with printing")}{totalQty > 1 && ` · ${totalQty} ${t("قطع", "pcs")}`}{pct > 0 && <span className="ms-1.5 rounded-full bg-pine-soft px-1.5 py-0.5 font-bold text-pine">-{pct}%</span>}</p>
+            <p className="display text-2xl tabular-nums">{formatIQD(unitAfter * totalQty, locale)}</p>
           </div>
-          <button onClick={openReview} disabled={saving || uploading || preparing || !ready} className="btn btn-brand h-12 flex-1 text-base lg:h-14">
-            {preparing || saving ? <Loader2 className="size-4 animate-spin" /> : t("مراجعة وإضافة للسلة", "Review & add to bag")}
-          </button>
+          {anyContent ? (
+            <button onClick={openReview} disabled={saving || uploading || preparing || !ready} className="btn btn-brand h-14 min-w-[44%] rounded-2xl px-6 text-base sm:min-w-64">
+              {preparing || saving ? <Loader2 className="size-5 animate-spin" /> : <><ShoppingBag className="size-5" /> {t("مراجعة وإضافة للسلة", "Review & add to bag")}</>}
+            </button>
+          ) : (
+            <button onClick={openUpload} disabled={uploading || !ready} className="btn btn-brand h-14 min-w-[44%] rounded-2xl px-6 text-base sm:min-w-64">
+              {uploading ? <Loader2 className="size-5 animate-spin" /> : <><Upload className="size-5" /> {t("ارفع تصميمك", "Upload your design")}</>}
+            </button>
+          )}
         </div>
       </div>
 
@@ -929,7 +993,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
           sizes={sizes} placements={usedLocations.map((l) => dict.designer.locations[l]!)} extras={pickedRows.map(optionName)}
           unit={unitAfter} listUnit={unit} pct={pct} totalQty={totalQty} notice={locale === "ar" ? settings.notice_ar : settings.notice_en}
           onClose={() => setReview(null)} onConfirm={confirmSave}
-          onFix={() => { setReview(null); setTab("layers"); }}
+          onFix={() => { setReview(null); wrapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }}
         />
       )}
     </div>
@@ -938,7 +1002,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
 
 function IconBtn({ children, label, onClick, disabled, active }: { children: React.ReactNode; label: string; onClick: () => void; disabled?: boolean; active?: boolean }) {
   return (
-    <button type="button" title={label} aria-label={label} aria-pressed={active} disabled={disabled} onClick={onClick} className={cn("grid size-9 place-items-center rounded-full border border-line transition hover:bg-bone disabled:opacity-35", active && "bg-bone")}>
+    <button type="button" title={label} aria-label={label} aria-pressed={active} disabled={disabled} onClick={onClick} className={cn("grid size-10 place-items-center rounded-full text-pine transition hover:bg-pine-soft disabled:text-mute disabled:opacity-40", active && "bg-pine-soft")}>
       {children}
     </button>
   );

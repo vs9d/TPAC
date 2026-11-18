@@ -154,7 +154,8 @@ await flow("account: register → order → history → reorder → favourites",
 await flow("designer: text + uploaded artwork → bounded → priced → ordered with files", async (page) => {
   await page.goto(`${BASE}/en/design?garment=hoodie`);
   await page.locator("canvas").first().waitFor();
-  await page.getByRole("button", { name: "Add text", exact: true }).click();
+  await page.getByRole("button", { name: "or write a word" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.locator("textarea[dir=auto]").fill("UNIVERSITY OF BAGHDAD");
   // upload a real PNG (generated)
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4nGP4z8DwnwEIGGAMAEnkB/m4tK6WAAAAAElFTkSuQmCC", "base64");
@@ -202,32 +203,34 @@ await flow("designer pro: template, shape, layers, undo/redo, sizes, options, qu
   const back = (await one("select price from print_locations where code = 'back'")).price;
   await page.goto(`${BASE}/en/design?garment=hoodie`);
   await page.locator("canvas").first().waitFor();
+  await page.getByRole("tab", { name: "Ideas" }).click();
   await page.getByRole("button", { name: /Name & number/ }).click();
-  await page.getByRole("tab", { name: /Layers \(2\)/ }).waitFor();
-  await page.getByText("YOUR NAME", { exact: true }).waitFor();
-  await page.getByRole("tab", { name: /Design$/ }).click();
+  await page.getByText(/Elements on Back · 2/).waitFor();
+  await page.getByRole("tab", { name: "Shapes" }).click();
   await page.getByRole("button", { name: "Stars", exact: true }).click();
   await page.getByRole("button", { name: "Star", exact: true }).click();
-  await page.getByRole("tab", { name: /Layers \(3\)/ }).waitFor();
+  await page.getByText(/Elements on Back · 3/).waitFor();
   // undo / redo
   await page.getByRole("button", { name: "Undo" }).click();
-  await page.getByRole("tab", { name: /Layers \(2\)/ }).waitFor();
+  await page.getByText(/Elements on Back · 2/).waitFor();
   await page.getByRole("button", { name: "Redo" }).click();
-  await page.getByRole("tab", { name: /Layers \(3\)/ }).waitFor();
-  // select the shape from the layers list: its inspector opens and the colour can be changed
-  await page.getByRole("tab", { name: /Layers \(3\)/ }).click();
-  await page.getByRole("button", { name: /^Star/ }).first().click();
+  await page.getByText(/Elements on Back · 3/).waitFor();
+  // select the shape from the elements list: its editor opens and the colour can be changed
+  await page.getByRole("tab", { name: "Image" }).click();
+  await page.getByText(/Elements on Back · 3/).click();
+  await page.getByRole("button", { name: "Star", exact: true }).click();
   await page.getByRole("button", { name: "#E3963C" }).first().click();
   // sizes, options, extras
-  await page.getByRole("tab", { name: /Order$/ }).click();
-  await page.getByRole("button", { name: "+ M" }).click({ clickCount: 1 });
+  await page.getByRole("button", { name: "Need several sizes?" }).click();
+  await page.getByRole("button", { name: "+ M" }).click();
   await page.getByRole("button", { name: "+ M" }).click();
   for (let i = 0; i < 4; i++) await page.getByRole("button", { name: "+ XL" }).click();
-  await page.getByText("7 pcs").first().waitFor();
+  await page.getByText(/· 7 pcs/).first().waitFor();
+  await page.getByText("Printing options").click();
   await page.getByRole("radio", { name: /Heat-press vinyl/ }).click();
   await page.getByRole("radio", { name: /3D puff/ }).click();
   await page.getByRole("checkbox", { name: /Rush production/ }).click();
-  await page.getByText(/Add 5 more piece/).waitFor(); // next tier at 12
+  await page.getByText(/Order 12\+ pieces and save 10%/).waitFor(); // next tier
   await page.screenshot({ path: `${SHOTS}/designer-order.png`, fullPage: true });
   await page.getByRole("button", { name: "Review & add to bag" }).click();
   const dlg = page.getByRole("dialog", { name: "Review your design" });
@@ -634,7 +637,7 @@ await flow("admin print designer: options, tiers, customer designs, production s
   const ctx2 = await page.context().browser().newContext();
   const guest = await ctx2.newPage();
   await guest.goto(`${BASE}/en/design?garment=hoodie`);
-  await guest.getByRole("tab", { name: /Order$/ }).click();
+  await guest.getByText("Printing options").click();
   await guest.getByRole("radio", { name: /Metallic gold/ }).waitFor();
   await ctx2.close();
   // tiers

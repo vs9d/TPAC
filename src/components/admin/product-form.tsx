@@ -40,9 +40,17 @@ export function ProductForm({ product, categories, collections, selectedCollecti
     slugTouched.current = false;
     setNewId(crypto.randomUUID());
     setPickerKey((k) => k + 1);
-    // wait until the form keeper has restored the typed values, then clear what must be unique
-    setTimeout(() => {
+    // clear what must be unique — now, and again whenever the form keeper restores the typed values
+    // (React resets the form after the action; on a slow device that can land after this callback)
+    const clear = () => {
       for (const id of ["name_ar", "name_en", "slug", "seo_title_ar", "seo_title_en"]) setValue(id, "");
+    };
+    const form = document.getElementById("product-form");
+    clear();
+    form?.addEventListener("formkeeper:restored", clear);
+    setTimeout(() => form?.removeEventListener("formkeeper:restored", clear), 2000);
+    setTimeout(() => {
+      clear();
       document.getElementById("name_ar")?.scrollIntoView({ behavior: "smooth", block: "center" });
       document.getElementById("name_ar")?.focus();
     }, 60);

@@ -33,6 +33,7 @@ export function FormKeeper() {
           if (el instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio")) el.checked = checked;
           else el.value = value;
         }
+        form.dispatchEvent(new CustomEvent("formkeeper:restored"));
       }, 0);
     };
     document.addEventListener("submit", onSubmit, true);

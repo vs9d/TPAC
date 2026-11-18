@@ -26,10 +26,10 @@ export interface LayerInfo { id: string; kind: Kind; label: string; location: Pr
 
 export type Choice = OptionChoice & { addons: string[] };
 
-export type TabId = "product" | "add" | "layers" | "order";
+export type TabId = "image" | "text" | "shapes" | "ideas";
 
 export interface DesignerApi {
-  addText: (presetId?: string) => void;
+  addText: (presetId?: string, text?: string) => void;
   addShape: (id: string) => void;
   applyTemplate: (id: string) => void;
   upload: (file: File) => void;
