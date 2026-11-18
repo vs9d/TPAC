@@ -47,8 +47,8 @@ export function ProductForm({ product, categories, collections, selectedCollecti
     };
     const form = document.getElementById("product-form");
     clear();
-    form?.addEventListener("formkeeper:restored", clear);
-    setTimeout(() => form?.removeEventListener("formkeeper:restored", clear), 2000);
+    form?.addEventListener("formkeeper:restored", clear, { once: true });
+    setTimeout(() => form?.removeEventListener("formkeeper:restored", clear), 800);
     setTimeout(() => {
       clear();
       document.getElementById("name_ar")?.scrollIntoView({ behavior: "smooth", block: "center" });
