@@ -554,7 +554,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       img.tpacArtworkId = id;
       img.tpacPx = width ?? img.width ?? 0;
       img.tpacVector = file.type === "image/svg+xml";
-      img.tpacLabel = file.name.replace(/\.[a-z0-9]+$/i, "").slice(0, 28);
+      const base = file.name.replace(/\.[a-z0-9]+$/i, "");
+      img.tpacLabel = /^[0-9a-f-]{16,}$/i.test(base) || /^(image|img_\d+)$/i.test(base) ? t("صورتك", "Your image") : base.slice(0, 28);
       placeNew(img, "image");
       await finishAdd(img);
       setTab("image");
@@ -706,7 +707,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     }
     setPreparing(true);
     try {
-      setReview({ front: await exportView("front"), back: await exportView("back") });
+      setReview({ front: await compact(await exportView("front")), back: await compact(await exportView("back")) });
     } finally {
       setPreparing(false);
     }
@@ -734,7 +735,9 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     const objs = design().filter((o) => !o.tpacHidden);
     startSaving(async () => {
       const thumb = await downscale(review.front, 360);
-      const res = await saveDesign({
+      let res: Awaited<ReturnType<typeof saveDesign>>;
+      try {
+      res = await saveDesign({
         garment_type: garmentCode,
         color_id: colorId,
         sizes,
@@ -780,12 +783,24 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
           };
         }),
       });
+      } catch (e) {
+        console.error("saveDesign failed", e);
+        toast.error(t("تعذّر رفع التصميم — تأكد من الإنترنت وحاول مرة ثانية. إذا الصورة كبيرة جداً جرّب صورة أصغر.", "Couldn't upload the design — check your connection and try again. If the image is very large, try a smaller one."));
+        return;
+      }
       if (!res.ok) {
         const map: Record<string, string> = {
           rate_limited: dict.checkout.errors.rate_limited!,
           option_unavailable: t("أحد الخيارات لم يعد متاحاً — حدّث الصفحة", "One of the options is no longer available — refresh the page"),
           size_unavailable: t("أحد المقاسات غير متاح", "One of the sizes is unavailable"),
           location_unavailable: t("أحد أماكن الطباعة غير متاح لهذه القطعة", "A print placement is unavailable for this garment"),
+          garment_unavailable: t("هذه القطعة غير متاحة حالياً", "This garment is not available right now"),
+          color_unavailable: t("هذا اللون غير متاح لهذه القطعة", "This colour is not available for this garment"),
+          artwork_missing: t("لم تكتمل رفع إحدى الصور — احذفها وارفعها مرة ثانية", "One image didn't finish uploading — remove it and upload it again"),
+          invalid_preview: t("تعذّر تجهيز المعاينة — حاول مرة ثانية", "Couldn't prepare the preview — try again"),
+          validation: t("في عنصر بالتصميم غير صالح — جرّب حذف آخر عنصر أضفته", "Something in the design isn't valid — try removing the last element you added"),
+          storage_failed: t("تعذّر حفظ صور المعاينة — حاول بعد قليل", "Couldn't store the preview images — try again shortly"),
+          save_failed: t("تعذّر حفظ التصميم — حاول بعد قليل", "Couldn't save the design — try again shortly"),
         };
         toast.error(map[res.error] ?? dict.common.somethingWrong);
         return;
@@ -1006,6 +1021,26 @@ function IconBtn({ children, label, onClick, disabled, active }: { children: Rea
       {children}
     </button>
   );
+}
+
+/** Preview images are capped at 900 px wide and ~1.2 MB so the upload stays light on any phone. */
+async function compact(dataUrl: string): Promise<string> {
+  const img = new Image();
+  img.src = dataUrl;
+  await img.decode();
+  if (img.width <= 900 && dataUrl.length < 1_200_000) return dataUrl;
+  const c = document.createElement("canvas");
+  c.width = Math.min(900, img.width);
+  c.height = Math.round((img.height / img.width) * c.width);
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = "#F3F1EC";
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  for (const q of [0.86, 0.78, 0.7, 0.6]) {
+    const out = c.toDataURL("image/jpeg", q);
+    if (out.length < 1_200_000) return out;
+  }
+  return c.toDataURL("image/jpeg", 0.5);
 }
 
 async function downscale(dataUrl: string, width: number): Promise<string> {

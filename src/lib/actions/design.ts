@@ -30,7 +30,10 @@ function decodeImage(dataUrl: string): { buf: Buffer; mime: string } | null {
  */
 export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
   const parsed = designSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "validation", fields: fieldErrors(parsed.error) };
+  if (!parsed.success) {
+    console.warn("saveDesign validation", JSON.stringify(fieldErrors(parsed.error)).slice(0, 500));
+    return { ok: false, error: "validation", fields: fieldErrors(parsed.error) };
+  }
   if (!(await rateLimit("design"))) return { ok: false, error: "rate_limited" };
   const d = parsed.data;
   const db = createAdminClient();
@@ -77,7 +80,10 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
     bucket.upload(frontPath, front.buf, { contentType: front.mime, upsert: false }),
     bucket.upload(backPath, back.buf, { contentType: back.mime, upsert: false }),
   ]);
-  if (u1.error || u2.error) return { ok: false, error: "storage_failed" };
+  if (u1.error || u2.error) {
+    console.error("saveDesign storage failed", u1.error ?? u2.error);
+    return { ok: false, error: "storage_failed" };
+  }
 
   const config = {
     version: 2,
@@ -87,27 +93,30 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
     sizes: d.sizes,
   };
   const rows = sizeEntries.map(([size, quantity]) => ({ id: crypto.randomUUID(), size, quantity }));
-  const { error } = await db.from("custom_designs").insert(
-    rows.map((r) => ({
-      id: r.id,
-      batch_id: batchId,
-      name: d.name ?? null,
-      user_id: session?.userId ?? null,
-      garment_type: d.garment_type,
-      color_id: d.color_id,
-      size_code: r.size,
-      print_locations: used,
-      config,
-      options: chosen.choice,
-      options_price: optionsPrice,
-      preview_front_path: frontPath,
-      preview_back_path: backPath,
-      unit_price: unitPrice,
-      notes: d.notes ?? null,
-    })),
+  const base = (r: (typeof rows)[number]) => ({
+    id: r.id,
+    user_id: session?.userId ?? null,
+    garment_type: d.garment_type,
+    color_id: d.color_id,
+    size_code: r.size,
+    print_locations: used,
+    config,
+    preview_front_path: frontPath,
+    preview_back_path: backPath,
+    unit_price: unitPrice,
+    notes: d.notes ? (d.name ? `${d.name} — ${d.notes}` : d.notes) : (d.name ?? null),
+  });
+  let { error } = await db.from("custom_designs").insert(
+    rows.map((r) => ({ ...base(r), notes: d.notes ?? null, batch_id: batchId, name: d.name ?? null, options: chosen.choice, options_price: optionsPrice })),
   );
+  // A database that has not run add-designer-pro.sql yet lacks the new columns: keep working without them
+  // (the options and sizes are still kept inside `config`).
+  if (error && (error.code === "PGRST204" || error.code === "42703" || /column/i.test(error.message ?? ""))) {
+    console.warn("saveDesign: designer-pro columns missing, run supabase/add-designer-pro.sql", error.message);
+    ({ error } = await db.from("custom_designs").insert(rows.map(base)));
+  }
   if (error) {
-    console.error("saveDesign", error);
+    console.error("saveDesign insert failed", error);
     return { ok: false, error: "save_failed" };
   }
   if (artworkIds.length) await db.from("uploaded_artwork").update({ custom_design_id: rows[0]!.id }).in("id", artworkIds).is("custom_design_id", null);
