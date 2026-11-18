@@ -52,6 +52,7 @@ export function CartLineRow({ line, quoted, compact = false }: { line: Line; quo
             {locations && locations.length > 0 && (
               <p className="mt-1 text-xs text-mute">{dict.cart.printLocations}: {locations.map((l) => dict.designer.locations[l] ?? l).join("، ")}</p>
             )}
+            {snap?.extras && <p className="mt-0.5 text-xs text-mute">{snap.extras}</p>}
           </div>
           <button data-ripple onClick={() => { remove(key); toast.info(dict.common.itemRemoved); }} className="grid size-9 place-items-center rounded-full text-mute hover:bg-bone hover:text-ink" aria-label={dict.cart.remove}>
             <X className="size-4" />

@@ -12,10 +12,15 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SIZE = /^[A-Z0-9]{1,6}$/;
 
 function productInput(form: FormData) {
+  // Only the Arabic name and the price are required in the form: the English name falls back to the
+  // Arabic one and the slug is derived from the English name (or a short random id when it is Arabic-only).
+  const nameAr = str(form.get("name_ar")).trim();
+  const nameEn = str(form.get("name_en")).trim() || nameAr;
+  const slug = str(form.get("slug")).trim() || slugify(nameEn) || `product-${Math.random().toString(36).slice(2, 7)}`;
   return {
-    slug: form.get("slug"),
-    name_ar: form.get("name_ar"),
-    name_en: form.get("name_en"),
+    slug,
+    name_ar: nameAr,
+    name_en: nameEn,
     description_ar: str(form.get("description_ar")),
     description_en: str(form.get("description_en")),
     material_ar: str(form.get("material_ar")),

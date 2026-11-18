@@ -13,6 +13,8 @@ export interface CartSnapshot {
   unit_price?: number;
   slug?: string;
   print_locations?: string[];
+  /** printing options chosen in the designer (method · finish · fabric · add-ons) */
+  extras?: string;
 }
 
 export interface CartLine {

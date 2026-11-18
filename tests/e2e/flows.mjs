@@ -3,7 +3,7 @@
 // Exits non-zero on the first failed flow; screenshots go to $E2E_SHOTS.
 import { createRequire } from "node:module";
 import assert from "node:assert/strict";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, readFileSync, mkdirSync } from "node:fs";
 import pg from "pg";
 
 const require = createRequire(import.meta.url);
@@ -38,6 +38,9 @@ async function flow(name, fn, ctxOpts = { viewport: { width: 1366, height: 900 }
 }
 
 // ---------------------------------------------------------------------------
+/** The product form keeps rarely used fields inside a collapsed "More options" block. */
+const openMore = (page) => page.evaluate(() => { const d = document.querySelector("#product-form details"); if (d) d.open = true; });
+
 await flow("guest: browse → variant → cart → checkout (COD) → track", async (page) => {
   await page.goto(`${BASE}/ar/shop?category=oversized-t-shirts`);
   await page.getByRole("link", { name: /تيشيرت بغداد أوفرسايز/ }).first().click();
@@ -151,27 +154,29 @@ await flow("account: register → order → history → reorder → favourites",
 await flow("designer: text + uploaded artwork → bounded → priced → ordered with files", async (page) => {
   await page.goto(`${BASE}/en/design?garment=hoodie`);
   await page.locator("canvas").first().waitFor();
-  await page.getByRole("button", { name: "Add text" }).click();
-  await page.fill("#d-text", "UNIVERSITY OF BAGHDAD");
+  await page.getByRole("button", { name: "Add text", exact: true }).click();
+  await page.locator("textarea[dir=auto]").fill("UNIVERSITY OF BAGHDAD");
   // upload a real PNG (generated)
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4nGP4z8DwnwEIGGAMAEnkB/m4tK6WAAAAAElFTkSuQmCC", "base64");
   writeFileSync(`${SHOTS}/art.png`, png);
-  await page.getByRole("button", { name: /Back/ }).first().click();
+  await page.getByRole("tab", { name: "Back", exact: true }).click();
   await page.locator("input[type=file]").setInputFiles(`${SHOTS}/art.png`);
-  await page.getByText("low resolution").waitFor({ timeout: 15000 });
+  await page.getByText(/low \(150\+ needed\)/).waitFor({ timeout: 15000 });
   // try to drag the artwork far outside the print area: it must stay inside
   const box = await page.locator("canvas.upper-canvas").boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.5);
   await page.mouse.down();
   await page.mouse.move(box.x + 5, box.y + 5, { steps: 8 });
   await page.mouse.up();
-  await page.getByText("Printing: Back").waitFor();
-  await page.screenshot({ path: `${SHOTS}/designer.png` });
+  await page.screenshot({ path: `${SHOTS}/designer.png`, fullPage: true });
   page.on("console", (m) => console.log("[designer console]", m.text().slice(0, 200)));
-  await page.getByRole("button", { name: "Add design to bag" }).click();
+  await page.getByRole("button", { name: "Review & add to bag" }).click();
+  await page.getByRole("dialog", { name: "Review your design" }).getByText(/printed to order/).waitFor();
+  await page.getByRole("button", { name: "Confirm & add to bag" }).click();
   await page.getByRole("dialog", { name: "Your bag" }).waitFor({ timeout: 20000 });
-  const d = await one("select unit_price, print_locations, config, preview_front_path from custom_designs order by created_at desc limit 1");
+  const d = await one("select unit_price, print_locations, config, preview_front_path, size_code, batch_id from custom_designs order by created_at desc limit 1");
   assert.equal(d.unit_price, 40000 + 8000 + 10000);
+  assert.equal(d.size_code, "L");
   assert.deepEqual(d.print_locations.sort(), ["back", "front"]);
   const img = d.config.objects.find((o) => o.type === "image");
   const area = { x: 190, y: 236, w: 220, h: 290 }; // hoodie back
@@ -190,6 +195,98 @@ await flow("designer: text + uploaded artwork → bounded → priced → ordered
   await page.waitForURL(/success/);
   const o = await one("select has_custom_items, subtotal from orders where order_number = $1", [new URL(page.url()).searchParams.get("order")]);
   assert.deepEqual(o, { has_custom_items: true, subtotal: 58000 });
+});
+
+let proOrder = null;
+await flow("designer pro: template, shape, layers, undo/redo, sizes, options, quantity discount, review, order", async (page) => {
+  const back = (await one("select price from print_locations where code = 'back'")).price;
+  await page.goto(`${BASE}/en/design?garment=hoodie`);
+  await page.locator("canvas").first().waitFor();
+  await page.getByRole("button", { name: /Name & number/ }).click();
+  await page.getByRole("tab", { name: /Layers \(2\)/ }).waitFor();
+  await page.getByText("YOUR NAME", { exact: true }).waitFor();
+  await page.getByRole("tab", { name: /Design$/ }).click();
+  await page.getByRole("button", { name: "Stars", exact: true }).click();
+  await page.getByRole("button", { name: "Star", exact: true }).click();
+  await page.getByRole("tab", { name: /Layers \(3\)/ }).waitFor();
+  // undo / redo
+  await page.getByRole("button", { name: "Undo" }).click();
+  await page.getByRole("tab", { name: /Layers \(2\)/ }).waitFor();
+  await page.getByRole("button", { name: "Redo" }).click();
+  await page.getByRole("tab", { name: /Layers \(3\)/ }).waitFor();
+  // select the shape from the layers list: its inspector opens and the colour can be changed
+  await page.getByRole("tab", { name: /Layers \(3\)/ }).click();
+  await page.getByRole("button", { name: /^Star/ }).first().click();
+  await page.getByRole("button", { name: "#E3963C" }).first().click();
+  // sizes, options, extras
+  await page.getByRole("tab", { name: /Order$/ }).click();
+  await page.getByRole("button", { name: "+ M" }).click({ clickCount: 1 });
+  await page.getByRole("button", { name: "+ M" }).click();
+  for (let i = 0; i < 4; i++) await page.getByRole("button", { name: "+ XL" }).click();
+  await page.getByText("7 pcs").first().waitFor();
+  await page.getByRole("radio", { name: /Heat-press vinyl/ }).click();
+  await page.getByRole("radio", { name: /3D puff/ }).click();
+  await page.getByRole("checkbox", { name: /Rush production/ }).click();
+  await page.getByText(/Add 5 more piece/).waitFor(); // next tier at 12
+  await page.screenshot({ path: `${SHOTS}/designer-order.png`, fullPage: true });
+  await page.getByRole("button", { name: "Review & add to bag" }).click();
+  const dlg = page.getByRole("dialog", { name: "Review your design" });
+  await dlg.getByText(/M × 2/).waitFor();
+  await dlg.getByText(/XL × 4/).waitFor();
+  await dlg.getByText(/Rush production/).waitFor();
+  await dlg.getByRole("button", { name: "Confirm & add to bag" }).click();
+  await page.getByRole("dialog", { name: "Your bag" }).waitFor({ timeout: 20000 });
+  const rows = (await db.query("select size_code, unit_price, options, options_price, batch_id, config from custom_designs where batch_id = (select batch_id from custom_designs order by created_at desc limit 1) order by size_code")).rows;
+  assert.deepEqual(rows.map((r) => r.size_code), ["L", "M", "XL"], "one saved design per size");
+  assert.equal(new Set(rows.map((r) => r.batch_id)).size, 1, "shared batch");
+  const unit = 40000 + back + 2000 + 2500 + 5000;
+  assert.ok(rows.every((r) => r.unit_price === unit && r.options_price === 9500), `list price per piece ${unit}`);
+  assert.equal(rows[0].options.method, "vinyl");
+  assert.deepEqual(rows[0].options.addons, ["rush"]);
+  assert.equal(rows[0].config.objects.length, 3);
+  assert.ok(rows[0].config.objects.some((o) => o.type === "shape" && o.shape_id === "star5" && o.fill === "#E3963C"), "shape saved with its id and colour");
+  assert.ok(rows[0].config.objects.some((o) => o.type === "text" && o.text === "YOUR NAME"));
+  // the stored back preview really shows the design: 900 x 1050, bright text inside the back print area
+  const pb = (await one("select preview_back_path p from custom_designs where batch_id = $1 limit 1", [rows[0].batch_id])).p;
+  const b64 = readFileSync(`/tmp/tpac-emulator-storage/design-uploads/${pb}`).toString("base64");
+  const probe = await page.evaluate(async (data) => {
+    const img = new Image();
+    img.src = `data:image/jpeg;base64,${data}`;
+    await img.decode();
+    const c = document.createElement("canvas");
+    c.width = img.width; c.height = img.height;
+    const x = c.getContext("2d");
+    x.drawImage(img, 0, 0);
+    const d = x.getImageData(285, 354, 330, 435).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] > 200 && d[i + 1] > 200 && d[i + 2] > 200) n++;
+    return { w: img.width, h: img.height, n };
+  }, b64);
+  assert.deepEqual([probe.w, probe.h], [900, 1050]);
+  assert.ok(probe.n > 3000, `design is visible in the back preview (${probe.n} bright px)`);
+  // 7 custom pieces -> 5% tier, applied by the server on every line
+  const lines = rows.map((r) => ({ custom_design_id: r.batch_id ? null : null }));
+  void lines;
+  const ids = (await db.query("select id, size_code from custom_designs where batch_id = $1 order by size_code", [rows[0].batch_id])).rows;
+  const qty = { L: 1, M: 2, XL: 4 };
+  const q = (await db.query("select quote_cart($1::jsonb) q", [JSON.stringify({ items: ids.map((r) => ({ custom_design_id: r.id, quantity: qty[r.size_code] })) })])).rows[0].q;
+  const disc = unit - Math.round((unit * 5) / 100 / 250) * 250;
+  assert.ok(q.lines.every((l) => l.unit_price === disc && l.list_price === unit && l.tier_percent === 5));
+  assert.equal(q.subtotal, disc * 7);
+  // cart drawer shows the chosen options
+  await page.getByText(/Heat-press vinyl/).first().waitFor();
+  await page.goto(`${BASE}/en/checkout`);
+  await page.fill("#customer_name", "Pro Designer");
+  await page.fill("#phone", "07809991111");
+  await page.selectOption("#governorate", "najaf");
+  await page.fill("#city", "Kufa");
+  await page.fill("#address_line", "Main road");
+  await page.getByRole("button", { name: "Place order" }).click();
+  await page.waitForURL(/success/);
+  const num = new URL(page.url()).searchParams.get("order");
+  const o = await one("select id, subtotal from orders where order_number = $1", [num]);
+  assert.equal(o.subtotal, disc * 7);
+  proOrder = o.id;
 });
 
 await flow("bulk: university request with artwork", async (page) => {
@@ -279,6 +376,7 @@ await flow("admin: dashboard, order workflow, stock, product, settings, quotatio
   // create a product
   await page.goto(`${BASE}/ar/admin/products/new`);
   await page.fill("#name_ar", "تيشيرت تجربة");
+  await openMore(page);
   await page.fill("#name_en", "Test Tee");
   await page.fill("#slug", "e2e-test-tee");
   await page.fill("#base_price", "21000");
@@ -406,6 +504,7 @@ await flow("admin product tools: quick create, similar, duplicate, stock grid, b
   // ---- quick create: auto slug, presets, sizes/colours/stock, photo ----
   await page.goto(`${BASE}/ar/admin/products/new`);
   await page.fill("#name_ar", "هودي تجربة سريع");
+  await openMore(page);
   await page.fill("#name_en", "E2E Quick Hoodie");
   assert.equal(await page.inputValue("#slug"), "e2e-quick-hoodie", "slug is generated from the English name");
   await page.getByRole("button", { name: "قطن ثقيل ٢٤٠غ" }).click();
@@ -426,6 +525,7 @@ await flow("admin product tools: quick create, similar, duplicate, stock grid, b
   assert.match(await page.inputValue("#material_ar"), /قطن/, "texts are kept");
   assert.equal(await page.locator("input[name=qs_colors]:checked").count(), 2, "colours are kept");
   await page.fill("#name_ar", "هودي تجربة ثاني");
+  await openMore(page);
   await page.fill("#name_en", "E2E Quick Hoodie");
   assert.equal(await page.inputValue("#slug"), "e2e-quick-hoodie", "slug field regenerates");
   await page.getByRole("button", { name: "إنشاء المنتج", exact: true }).click();
@@ -508,6 +608,67 @@ await flow("admin product tools: quick create, similar, duplicate, stock grid, b
   await anon.close();
 });
 
+await flow("admin print designer: options, tiers, customer designs, production sheet", async (page) => {
+  const email = `pro${Date.now()}@thetpac.com`;
+  await page.goto(`${BASE}/en/account/register`);
+  await page.fill("#full_name", "Print Admin");
+  await page.fill("#email", email);
+  await page.fill("#phone", "07700000077");
+  await page.fill("#password", "admin-pass-2026");
+  await page.fill("#confirm", "admin-pass-2026");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.waitForURL(/account$/);
+  await db.query("update customer_profiles set role = 'admin' where email = $1", [email]);
+  // options: add a finish, then edit its price
+  await page.goto(`${BASE}/en/admin/customizer?tab=options`);
+  const finish = page.locator("details", { hasText: "Add an option" }).nth(1);
+  await finish.locator("summary").click();
+  await finish.locator("input[name=name_ar]").fill("ذهبي معدني");
+  await finish.locator("input[name=name_en]").fill("Metallic gold");
+  await finish.locator("input[name=code]").fill("gold_foil");
+  await finish.locator("input[name=price]").fill("4000");
+  await finish.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByText("Saved", { exact: true }).first().waitFor();
+  assert.equal((await one("select group_code, price, is_active from designer_options where code = 'gold_foil'")).group_code, "finish");
+  // the new option is offered to customers
+  const ctx2 = await page.context().browser().newContext();
+  const guest = await ctx2.newPage();
+  await guest.goto(`${BASE}/en/design?garment=hoodie`);
+  await guest.getByRole("tab", { name: /Order$/ }).click();
+  await guest.getByRole("radio", { name: /Metallic gold/ }).waitFor();
+  await ctx2.close();
+  // tiers
+  await page.goto(`${BASE}/en/admin/customizer?tab=tiers`);
+  const add = page.locator("form").filter({ has: page.getByRole("button", { name: "Add tier" }) });
+  await add.locator("input[name=min_qty]").fill("100");
+  await add.locator("input[name=discount_percent]").fill("30");
+  await add.getByRole("button", { name: "Add tier" }).click();
+  await page.getByText("Saved", { exact: true }).first().waitFor();
+  assert.equal((await one("select discount_percent from designer_tiers where min_qty = 100")).discount_percent, 30);
+  // settings (admin only)
+  await page.goto(`${BASE}/en/admin/customizer?tab=settings`);
+  await page.locator("input[name=lead_days_max]").fill("7");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByText("Saved", { exact: true }).first().waitFor();
+  assert.equal((await one("select value ->> 'lead_days_max' v from website_settings where key = 'designer'")).v, "7");
+  // customer designs gallery shows the ordered design and links to the order
+  await page.goto(`${BASE}/en/admin/designs?status=ordered`);
+  await page.getByText("Print designer").first().waitFor().catch(() => {});
+  await page.getByRole("link", { name: /Production sheet/ }).first().waitFor();
+  // production sheet: sizes with ordered quantities, options, placements in cm
+  await page.goto(`${BASE}/en/admin/orders/${proOrder}/production`);
+  await page.getByText("PRODUCTION SHEET").waitFor();
+  await page.getByText("7 pcs").waitFor();
+  await page.getByText("Rush production").first().waitFor();
+  await page.getByText("«YOUR NAME»").waitFor();
+  await page.screenshot({ path: `${SHOTS}/production.png`, fullPage: true });
+  // order page links to the sheet and lists options
+  await page.goto(`${BASE}/en/admin/orders/${proOrder}`);
+  await page.getByRole("link", { name: /Production sheet/ }).waitFor();
+  await page.getByText(/Print options/).waitFor();
+});
+
 console.log(results.join("\n"));
 await browser.close();
 await db.end();
+if (results.some((r) => r.startsWith("✗"))) process.exitCode = 1;

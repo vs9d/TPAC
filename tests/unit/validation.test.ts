@@ -61,12 +61,29 @@ describe("bulk request validation", () => {
 
 describe("designer payload validation", () => {
   const obj = { type: "text", location: "front", left: 300, top: 200, scaleX: 1, scaleY: 1, angle: 0, width: 100, height: 40, text: "بغداد", fill: "#FFFFFF" };
-  const ok = { garment_type: "tshirt", color_id: V, size_code: "L", objects: [obj], preview_front: "data:image/jpeg;base64,AAAA", preview_back: "data:image/jpeg;base64,AAAA" };
+  const ok = { garment_type: "tshirt", color_id: V, sizes: { L: 2, M: 1 }, objects: [obj], preview_front: "data:image/jpeg;base64,AAAA", preview_back: "data:image/jpeg;base64,AAAA" };
   it("accepts a valid design", () => expect(designSchema.safeParse(ok).success).toBe(true));
   it("accepts tiny artwork scaled up into the print area, rejects absurd rendered sizes", () => {
     const img = { ...obj, type: "image", width: 2, height: 2, scaleX: 110, scaleY: 110, artwork_id: V };
     expect(designSchema.safeParse({ ...ok, objects: [img] }).success).toBe(true);
     expect(designSchema.safeParse({ ...ok, objects: [{ ...img, scaleX: 4000 }] }).success).toBe(false);
+  });
+  it("validates sizes, shapes and options", () => {
+    const r = designSchema.safeParse({ ...ok, sizes: { L: 2, M: 0, XL: 3 } });
+    expect(r.success && r.data.sizes).toEqual({ L: 2, XL: 3 });
+    expect(designSchema.safeParse({ ...ok, sizes: {} }).success).toBe(false);
+    expect(designSchema.safeParse({ ...ok, sizes: { M: 0 } }).success).toBe(false);
+    expect(designSchema.safeParse({ ...ok, sizes: { L: 100 } }).success).toBe(false);
+    expect(designSchema.safeParse({ ...ok, sizes: { "<x>": 1 } }).success).toBe(false);
+    const shape = { ...obj, type: "shape", shape_id: "star5", fill: "#E3963C" };
+    expect(designSchema.safeParse({ ...ok, objects: [shape] }).success).toBe(true);
+    expect(designSchema.safeParse({ ...ok, objects: [{ ...shape, shape_id: "evil" }] }).success).toBe(false);
+    expect(designSchema.safeParse({ ...ok, objects: [{ ...shape, shape_id: undefined }] }).success).toBe(false);
+    expect(designSchema.safeParse({ ...ok, objects: [{ ...obj, flipX: true, opacity: 0.5, scaleX: -1, stroke: "#111111", strokeWidth: 3, charSpacing: 200 }] }).success).toBe(true);
+    expect(designSchema.safeParse({ ...ok, objects: [{ ...obj, opacity: 3 }] }).success).toBe(false);
+    expect(designSchema.safeParse({ ...ok, options: { method: "dtf", addons: ["rush", "gift_note"] } }).success).toBe(true);
+    expect(designSchema.safeParse({ ...ok, options: { method: "DROP TABLE" } }).success).toBe(false);
+    expect(designSchema.safeParse({ ...ok, garment_type: "longsleeve" }).success).toBe(true);
   });
   it("rejects empty designs, unknown placements, script-y previews", () => {
     expect(designSchema.safeParse({ ...ok, objects: [] }).success).toBe(false);

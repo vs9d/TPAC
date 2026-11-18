@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { Copy, Wand2 } from "lucide-react";
+import { ChevronDown, Copy, SlidersHorizontal, Wand2 } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { adminT } from "@/lib/admin-i18n";
 import { AdminForm, Input, Textarea, Select, Checkbox, Submit, Field } from "./form";
@@ -15,6 +15,11 @@ const setValue = (id: string, v: string) => {
   if (el) el.value = v;
 };
 
+/**
+ * Simple by default: name, price, category, photos and (when creating) sizes / colours / stock.
+ * Everything else — English name, slug, descriptions, fabric & printing texts, flags, collections,
+ * tags, SEO — lives in one collapsed "More options" block and has sensible automatic defaults.
+ */
 export function ProductForm({ product, categories, collections, selectedCollections, sizes = [], colors = [] }: { product?: Product; categories: Category[]; collections: Collection[]; selectedCollections: string[]; sizes?: Size[]; colors?: Color[] }) {
   const { locale } = useI18n();
   const t = adminT(locale);
@@ -56,32 +61,80 @@ export function ProductForm({ product, categories, collections, selectedCollecti
           return "handled";
         }
       }}
-      className="grid gap-6 xl:grid-cols-3"
+      className="mx-auto max-w-3xl space-y-5"
     >
       {product && <input type="hidden" name="id" value={product.id} />}
       {creating && <input type="hidden" name="new_id" value={newId} />}
-      <div className="space-y-6 xl:col-span-2">
-        <div className="card-admin space-y-4 p-5">
+
+      {/* 1 — the essentials */}
+      <div className="card-admin space-y-4 p-5">
+        <Input name="name_ar" label={t("اسم المنتج", "Product name")} defaultValue={product?.name_ar} required dir="rtl" autoFocus={creating} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input name="base_price" type="number" min={0} step={250} inputMode="numeric" label={t("السعر (د.ع)", "Price (IQD)")} defaultValue={product?.base_price} required />
+          <Select name="category_id" label={t("الفئة", "Category")} defaultValue={product?.category_id ?? ""} options={[{ value: "", label: "—" }, ...categories.map((c) => ({ value: c.id, label: locale === "ar" ? c.name_ar : c.name_en }))]} />
+        </div>
+      </div>
+
+      {creating && (
+        <>
+          <div className="card-admin space-y-3 p-5">
+            <h2 className="text-sm font-semibold">{t("الصور", "Photos")}</h2>
+            <ImagePicker key={pickerKey} productId={newId} colors={colors} />
+          </div>
+          <div className="card-admin space-y-4 p-5">
+            <div>
+              <h2 className="text-sm font-semibold">{t("المقاسات والألوان والكمية", "Sizes, colours & stock")}</h2>
+              <p className="mt-1 text-xs text-mute">{t("نُنشئ كل التوليفات تلقائياً. تعدّل الكميات لاحقاً من جدول المخزون.", "Every combination is created automatically. Fine-tune quantities later in the stock grid.")}</p>
+            </div>
+            <Field label={t("المقاسات", "Sizes")}>
+              <div className="flex flex-wrap gap-2">
+                {sizes.map((s) => (
+                  <label key={s.code} className="chip cursor-pointer has-[:checked]:border-pine has-[:checked]:bg-pine has-[:checked]:text-white dark:has-[:checked]:text-night">
+                    <input type="checkbox" name="qs_sizes" value={s.code} defaultChecked={["S", "M", "L", "XL", "XXL"].includes(s.code)} className="sr-only" /> {s.code}
+                  </label>
+                ))}
+              </div>
+            </Field>
+            <Field label={t("الألوان", "Colours")}>
+              <div className="flex flex-wrap gap-2">
+                {colors.map((c) => (
+                  <label key={c.id} className="chip cursor-pointer gap-2 has-[:checked]:border-pine has-[:checked]:bg-pine-soft">
+                    <input type="checkbox" name="qs_colors" value={c.id} className="peer sr-only" />
+                    <span className="size-4 rounded-full border border-ink/25" style={{ background: c.hex }} /> {locale === "ar" ? c.name_ar : c.name_en}
+                  </label>
+                ))}
+              </div>
+            </Field>
+            <Input name="qs_stock" type="number" min={0} max={100000} inputMode="numeric" defaultValue={10} label={t("الكمية لكل مقاس ولون", "Stock per size & colour")} className="max-w-[12rem]" />
+          </div>
+        </>
+      )}
+
+      {/* 2 — everything else, tucked away */}
+      <details className="card-admin group p-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-2"><SlidersHorizontal className="size-4 text-pine" /> {t("خيارات إضافية", "More options")} <span className="text-xs font-normal text-mute">{t("(اختيارية — كلها لها قيم تلقائية)", "(optional — all have automatic defaults)")}</span></span>
+          <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="mt-5 space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Input name="name_ar" label={t("الاسم (عربي)", "Name (Arabic)")} defaultValue={product?.name_ar} required dir="rtl" autoFocus={creating} />
             <Input
               name="name_en"
-              label={t("الاسم (إنجليزي)", "Name (English)")}
+              label={t("الاسم الإنجليزي", "English name")}
               defaultValue={product?.name_en}
-              required
               dir="ltr"
+              hint={t("إن تُرك فارغاً يُستخدم الاسم العربي", "Falls back to the Arabic name")}
               onChange={(e) => { if (creating && !slugTouched.current) setValue("slug", slugify(e.target.value)); }}
             />
-            <Input name="slug" label={t("الرابط (slug)", "URL slug")} defaultValue={product?.slug} required dir="ltr" pattern="[a-z0-9]+(-[a-z0-9]+)*" hint={creating ? t("يُكتب تلقائياً من الاسم الإنجليزي", "Filled automatically from the English name") : undefined} onChange={() => { slugTouched.current = true; }} />
-            <Select name="category_id" label={t("الفئة", "Category")} defaultValue={product?.category_id ?? ""} options={[{ value: "", label: "—" }, ...categories.map((c) => ({ value: c.id, label: locale === "ar" ? c.name_ar : c.name_en }))]} />
-            <Input name="base_price" type="number" min={0} step={250} inputMode="numeric" label={t("السعر (د.ع)", "Price (IQD)")} defaultValue={product?.base_price} required />
-            <Input name="compare_at_price" type="number" min={0} step={250} inputMode="numeric" label={t("السعر قبل الخصم (اختياري)", "Compare-at price (optional)")} defaultValue={product?.compare_at_price ?? ""} hint={t("يظهر مشطوباً لإظهار التخفيض", "Shown struck-through as a sale")} />
+            <Input name="compare_at_price" type="number" min={0} step={250} inputMode="numeric" label={t("السعر قبل الخصم", "Compare-at price")} defaultValue={product?.compare_at_price ?? ""} hint={t("يظهر مشطوباً لإظهار التخفيض", "Shown struck-through as a sale")} />
           </div>
-          <Textarea name="description_ar" label={t("الوصف (عربي)", "Description (Arabic)")} defaultValue={product?.description_ar ?? ""} rows={3} dir="rtl" />
-          <Textarea name="description_en" label={t("الوصف (إنجليزي)", "Description (English)")} defaultValue={product?.description_en ?? ""} rows={3} dir="ltr" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Textarea name="description_ar" label={t("الوصف (عربي)", "Description (Arabic)")} defaultValue={product?.description_ar ?? ""} rows={3} dir="rtl" />
+            <Textarea name="description_en" label={t("الوصف (إنجليزي)", "Description (English)")} defaultValue={product?.description_en ?? ""} rows={3} dir="ltr" />
+          </div>
 
           <div className="rounded-2xl bg-bone p-4">
-            <p className="mb-2 flex items-center gap-2 text-sm font-semibold"><Wand2 className="size-4 text-pine" /> {t("نصوص جاهزة (اضغط لتعبئة الخامة والطباعة)", "Ready-made texts (tap to fill fabric & printing)")}</p>
+            <p className="mb-2 flex items-center gap-2 text-sm font-semibold"><Wand2 className="size-4 text-pine" /> {t("نصوص جاهزة للخامة والطباعة", "Ready-made fabric & printing texts")}</p>
             <div className="flex flex-wrap gap-2">
               {TEXT_PRESETS.material.map((p) => <button type="button" key={p.key} onClick={() => applyPreset("material", p.key)} className="chip h-9 text-xs">{locale === "ar" ? p.label_ar : p.label_en}</button>)}
               {TEXT_PRESETS.printing.map((p) => <button type="button" key={p.key} onClick={() => applyPreset("printing", p.key)} className="chip h-9 border-dashed text-xs">{locale === "ar" ? p.label_ar : p.label_en}</button>)}
@@ -93,73 +146,40 @@ export function ProductForm({ product, categories, collections, selectedCollecti
             <Textarea name="printing_ar" label={t("الطباعة (عربي)", "Printing (Arabic)")} defaultValue={product?.printing_ar ?? ""} rows={2} dir="rtl" />
             <Textarea name="printing_en" label={t("الطباعة (إنجليزي)", "Printing (English)")} defaultValue={product?.printing_en ?? ""} rows={2} dir="ltr" />
           </div>
-          <details className="border-t border-line pt-4">
-            <summary className="cursor-pointer text-sm font-semibold">SEO</summary>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Input name="seo_title_ar" label="SEO title (AR)" defaultValue={product?.seo_title_ar ?? ""} maxLength={120} />
-              <Input name="seo_title_en" label="SEO title (EN)" defaultValue={product?.seo_title_en ?? ""} maxLength={120} />
-              <Textarea name="seo_description_ar" label="Meta description (AR)" defaultValue={product?.seo_description_ar ?? ""} maxLength={300} rows={2} />
-              <Textarea name="seo_description_en" label="Meta description (EN)" defaultValue={product?.seo_description_en ?? ""} maxLength={300} rows={2} />
-            </div>
-          </details>
-        </div>
 
-        {creating && (
-          <>
-            <div className="card-admin space-y-4 p-5">
-              <h2 className="text-sm font-semibold">{t("الصور", "Photos")}</h2>
-              <ImagePicker key={pickerKey} productId={newId} colors={colors} />
-            </div>
-            <div className="card-admin space-y-4 p-5">
-              <div>
-                <h2 className="text-sm font-semibold">{t("المقاسات والألوان والكمية", "Sizes, colours & stock")}</h2>
-                <p className="mt-1 text-xs text-mute">{t("اختر المقاسات والألوان وسننشئ كل التوليفات مع الكمية الابتدائية لكل واحدة. تعدّل لاحقاً من جدول المخزون.", "Pick sizes and colours; every combination is created with the starting stock. Fine-tune later in the stock grid.")}</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Checkbox name="is_featured" label={t("مميز", "Featured")} defaultChecked={product?.is_featured} />
+            <Checkbox name="is_new_arrival" label={t("وصل حديثاً", "New arrival")} defaultChecked={product?.is_new_arrival ?? creating} />
+            <Checkbox name="is_limited" label={t("إصدار محدود", "Limited edition")} defaultChecked={product?.is_limited} />
+            <Checkbox name="is_customizable" label={t("قابل للتخصيص (رابط لأداة التصميم)", "Customisable (links to designer)")} defaultChecked={product?.is_customizable} />
+          </div>
+
+          {collections.length > 0 && (
+            <Field name="collection_ids" label={t("المجموعات", "Collections")}>
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                {collections.map((c) => (
+                  <label key={c.id} className="flex items-center gap-2.5 text-sm"><input type="checkbox" name="collection_ids" value={c.id} defaultChecked={selectedCollections.includes(c.id)} className="size-4 accent-ink" /> {locale === "ar" ? c.name_ar : c.name_en}</label>
+                ))}
               </div>
-              <Field label={t("المقاسات", "Sizes")}>
-                <div className="flex flex-wrap gap-2">
-                  {sizes.map((s) => (
-                    <label key={s.code} className="chip cursor-pointer has-[:checked]:border-pine has-[:checked]:bg-pine has-[:checked]:text-white dark:has-[:checked]:text-night">
-                      <input type="checkbox" name="qs_sizes" value={s.code} defaultChecked={["S", "M", "L", "XL", "XXL"].includes(s.code)} className="sr-only" /> {s.code}
-                    </label>
-                  ))}
-                </div>
-              </Field>
-              <Field label={t("الألوان", "Colours")}>
-                <div className="flex flex-wrap gap-2">
-                  {colors.map((c) => (
-                    <label key={c.id} className="chip cursor-pointer gap-2 has-[:checked]:border-pine has-[:checked]:bg-pine-soft">
-                      <input type="checkbox" name="qs_colors" value={c.id} className="peer sr-only" />
-                      <span className="size-4 rounded-full border border-ink/25" style={{ background: c.hex }} /> {locale === "ar" ? c.name_ar : c.name_en}
-                    </label>
-                  ))}
-                </div>
-              </Field>
-              <Input name="qs_stock" type="number" min={0} max={100000} inputMode="numeric" defaultValue={10} label={t("الكمية لكل مقاس ولون", "Stock per size & colour")} className="max-w-[12rem]" />
-            </div>
-          </>
-        )}
-      </div>
+            </Field>
+          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input name="slug" label={t("الرابط (slug)", "URL slug")} defaultValue={product?.slug} dir="ltr" pattern="[a-z0-9]+(-[a-z0-9]+)*" hint={creating ? t("يُكتب تلقائياً", "Filled automatically") : undefined} onChange={() => { slugTouched.current = true; }} />
+            <Input name="tags" label={t("الوسوم (مفصولة بفواصل)", "Tags (comma separated)")} defaultValue={product?.tags.join(", ")} />
+          </div>
+          <div className="grid gap-4 border-t border-line pt-4 sm:grid-cols-2">
+            <Input name="seo_title_ar" label="SEO title (AR)" defaultValue={product?.seo_title_ar ?? ""} maxLength={120} />
+            <Input name="seo_title_en" label="SEO title (EN)" defaultValue={product?.seo_title_en ?? ""} maxLength={120} />
+            <Textarea name="seo_description_ar" label="Meta description (AR)" defaultValue={product?.seo_description_ar ?? ""} maxLength={300} rows={2} />
+            <Textarea name="seo_description_en" label="Meta description (EN)" defaultValue={product?.seo_description_en ?? ""} maxLength={300} rows={2} />
+          </div>
+        </div>
+      </details>
 
-      <div className="space-y-6">
-        <div className="card-admin space-y-3 p-5">
-          <p className="text-sm font-semibold">{t("الظهور", "Visibility")}</p>
-          <Checkbox name="is_published" label={t("منشور في المتجر", "Published")} defaultChecked={product?.is_published ?? creating} />
-          <Checkbox name="is_featured" label={t("مميز", "Featured")} defaultChecked={product?.is_featured} />
-          <Checkbox name="is_new_arrival" label={t("وصل حديثاً", "New arrival")} defaultChecked={product?.is_new_arrival ?? creating} />
-          <Checkbox name="is_limited" label={t("إصدار محدود", "Limited edition")} defaultChecked={product?.is_limited} />
-          <Checkbox name="is_customizable" label={t("قابل للتخصيص (رابط لأداة التصميم)", "Customisable (links to designer)")} defaultChecked={product?.is_customizable} />
-        </div>
-        <div className="card-admin space-y-3 p-5">
-          <Field name="collection_ids" label={t("المجموعات", "Collections")}>
-            <div className="space-y-2">
-              {collections.map((c) => (
-                <label key={c.id} className="flex items-center gap-2.5 text-sm"><input type="checkbox" name="collection_ids" value={c.id} defaultChecked={selectedCollections.includes(c.id)} className="size-4 accent-ink" /> {locale === "ar" ? c.name_ar : c.name_en}</label>
-              ))}
-            </div>
-          </Field>
-          <Input name="tags" label={t("الوسوم (مفصولة بفواصل)", "Tags (comma separated)")} defaultValue={product?.tags.join(", ")} />
-        </div>
-        <div className="sticky bottom-3 z-10 space-y-2 rounded-2xl border border-line bg-paper/95 p-3 backdrop-blur xl:static xl:border-0 xl:bg-transparent xl:p-0">
+      {/* 3 — publish + save */}
+      <div className="sticky bottom-3 z-10 space-y-3 rounded-2xl border border-line bg-paper/95 p-4 shadow-lg backdrop-blur">
+        <Checkbox name="is_published" label={t("نشر المنتج في المتجر", "Publish to the store")} defaultChecked={product?.is_published ?? creating} />
+        <div className="grid gap-2 sm:grid-cols-2">
           <Submit className="w-full" variant="brand" name="after" value="open">{creating ? t("إنشاء المنتج", "Create product") : t("حفظ التغييرات", "Save changes")}</Submit>
           {creating && (
             <Submit className="w-full" variant="outline" name="after" value="another"><Copy className="size-4" /> {t("إنشاء وإضافة منتج شبيه", "Create & add a similar one")}</Submit>

@@ -11,12 +11,13 @@ import { PageHeader, Card, Pill, STATUS_TONE } from "@/components/admin/ui";
 import { AdminForm, Select, Textarea, Input, Submit } from "@/components/admin/form";
 import { updateOrderStatus, addOrderNote, updateOrderDetails } from "@/lib/actions/admin/orders";
 import { nextStatuses } from "@/lib/order-status";
+import { groupDesigns, optionNames, optionList, type DesignRow } from "@/lib/design-admin";
 import { formatIQD, formatDate } from "@/lib/format";
 import { formatIraqiPhone } from "@/lib/phone";
 import { governorateName } from "@/lib/iraq";
 import type { Order, OrderItem, StatusHistory } from "@/lib/types";
 
-interface Design { id: string; garment_type: string; size_code: string; print_locations: string[]; preview_front_path: string | null; preview_back_path: string | null; notes: string | null; config: { objects?: { type: string; location: string; text?: string; fontFamily?: string; fill?: string; artwork_id?: string }[] } }
+interface Design { id: string; batch_id: string | null; name: string | null; options: { method?: string; finish?: string; fabric?: string; package?: string; addons?: string[] } | null; garment_type: string; size_code: string; print_locations: string[]; preview_front_path: string | null; preview_back_path: string | null; notes: string | null; config: { objects?: { type: string; location: string; text?: string; fontFamily?: string; fill?: string; artwork_id?: string }[] } }
 interface Artwork { id: string; storage_path: string; mime_type: string; original_name: string | null; width: number | null; height: number | null; custom_design_id: string | null }
 
 export default async function AdminOrderDetail({ params }: { params: Promise<{ locale: string; id: string }> }) {
@@ -41,11 +42,17 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ l
   if (designIds.length) {
     const [d, a] = await Promise.all([
       supabase.from("custom_designs").select("*").in("id", designIds),
-      supabase.from("uploaded_artwork").select("*").in("custom_design_id", designIds),
+      Promise.resolve(null),
     ]);
+    void a;
     designs = (d.data as Design[]) ?? [];
-    artwork = (a.data as Artwork[]) ?? [];
+    // original files are referenced from the saved layout (one batch = one set of files for every size)
+    const artIds = [...new Set(designs.flatMap((x) => (x.config.objects ?? []).map((o) => o.artwork_id).filter(Boolean) as string[]))];
+    if (artIds.length) artwork = ((await supabase.from("uploaded_artwork").select("*").in("id", artIds)).data as Artwork[]) ?? [];
   }
+  const optNames = await optionNames(supabase);
+  // one card per saved design (its sizes are separate rows sharing a batch)
+  const designGroups = groupDesigns(designs as unknown as DesignRow[]);
   const urls = await signedUrls([
     ...designs.flatMap((d) => [d.preview_front_path, d.preview_back_path].filter(Boolean) as string[]),
     ...artwork.map((a) => a.storage_path),
@@ -62,6 +69,7 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ l
           <Pill tone={STATUS_TONE[order.status]}>{dict.status[order.status]}</Pill>
           <a href={wa} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm"><MessageCircle className="size-4" /> WhatsApp</a>
           <Link href={`/${locale}/admin/orders/${id}/invoice`} target="_blank" className="btn btn-outline btn-sm"><Printer className="size-4" /> {t("الفاتورة", "Invoice")}</Link>
+          {designs.length > 0 && <Link href={`/${locale}/admin/orders/${id}/production`} target="_blank" className="btn btn-brand btn-sm"><Printer className="size-4" /> {t("ورقة التصنيع", "Production sheet")}</Link>}
         </>}
       />
       <div className="grid gap-6 xl:grid-cols-3">
@@ -95,8 +103,8 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ l
             </dl>
           </Card>
 
-          {designs.map((d) => (
-            <Card key={d.id} title={`${t("التصميم الخاص", "Custom design")} — ${d.garment_type} · ${d.size_code}`}>
+          {designGroups.map((grp) => { const d = grp.primary as unknown as Design; return (
+            <Card key={grp.key} title={`${t("التصميم الخاص", "Custom design")}${d.name ? ` «${d.name}»` : ""} — ${d.garment_type} · ${grp.rows.map((r) => `${r.size_code}×${items?.find((i) => i.custom_design_id === r.id)?.quantity ?? 0}`).join("  ")}`}>
               <div className="grid gap-4 sm:grid-cols-2">
                 {[d.preview_front_path, d.preview_back_path].map((p, i) => p && urls[p] && (
                   <a key={p} href={urls[p]} target="_blank" rel="noopener noreferrer" className="relative block aspect-[6/7] bg-bone">
@@ -105,6 +113,7 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ l
                 ))}
               </div>
               <p className="mt-4 text-sm"><span className="font-semibold">{t("أماكن الطباعة", "Placements")}:</span> {d.print_locations.map((l) => dict.designer.locations[l] ?? l).join("، ")}</p>
+              {optionList(d, optNames, locale).length > 0 && <p className="mt-1 text-sm"><span className="font-semibold">{t("خيارات الطباعة", "Print options")}:</span> {optionList(d, optNames, locale).join(" · ")}</p>}
               {d.notes && <p className="mt-1 text-sm"><span className="font-semibold">{t("ملاحظات العميل", "Customer notes")}:</span> {d.notes}</p>}
               <ul className="mt-3 space-y-1 text-sm">
                 {(d.config.objects ?? []).filter((o) => o.type === "text").map((o, i) => (
@@ -113,7 +122,7 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ l
               </ul>
               <div className="mt-4 space-y-2">
                 <p className="text-xs font-semibold text-mute">{t("الملفات الأصلية (للطباعة)", "Original files (for print)")}</p>
-                {artwork.filter((a) => a.custom_design_id === d.id).map((a) => (
+                {artwork.filter((a) => (d.config.objects ?? []).some((o) => o.artwork_id === a.id)).map((a) => (
                   <a key={a.id} href={urls[a.storage_path]} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between border border-line px-3 py-2 text-sm hover:border-ink">
                     <span className="truncate">{a.original_name ?? a.storage_path.split("/").pop()} <span className="text-xs text-mute">({a.mime_type}{a.width ? ` · ${a.width}×${a.height}px` : ""})</span></span>
                     <Download className="size-4" />
@@ -125,7 +134,7 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ l
                 <pre className="mt-2 max-h-64 overflow-auto bg-bone p-3" dir="ltr">{JSON.stringify(d.config, null, 2)}</pre>
               </details>
             </Card>
-          ))}
+          ); })}
 
           <Card title={t("سجل الحالات", "Status history")}>
             <ol className="space-y-3 text-sm">

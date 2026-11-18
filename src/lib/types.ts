@@ -286,7 +286,7 @@ export interface PromoBanner {
 }
 
 export interface GarmentTypeRow {
-  code: "tshirt" | "oversized" | "hoodie" | "sweatshirt";
+  code: "tshirt" | "oversized" | "hoodie" | "sweatshirt" | "longsleeve";
   name_ar: string;
   name_en: string;
   base_price: number;
@@ -305,6 +305,24 @@ export interface PrintLocationRow {
   sort_order: number;
   is_active: boolean;
 }
+
+export interface DesignerOptionRow {
+  id: string;
+  group_code: "method" | "finish" | "fabric" | "package" | "addon";
+  code: string;
+  name_ar: string;
+  name_en: string;
+  description_ar: string | null;
+  description_en: string | null;
+  price: number;
+  is_default: boolean;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface DesignerTierRow { min_qty: number; discount_percent: number; is_active: boolean }
+
+export interface DesignerSettings { lead_days_min: number; lead_days_max: number; rush_days: number; notice_ar: string; notice_en: string; min_dpi: number }
 
 export interface SiteSettings {
   brand: { name: string; tagline_ar: string; tagline_en: string; logo_url: string };

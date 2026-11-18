@@ -4,9 +4,11 @@ import { getSession } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { designSchema, fieldErrors } from "@/lib/validation";
 import { sniffMime, signedUrl } from "@/lib/storage";
+import { resolveOptions, type OptionLite } from "@/lib/design-pricing";
 
+export interface SavedDesignLine { design_id: string; size: string; quantity: number }
 export type SaveDesignResult =
-  | { ok: true; design_id: string; unit_price: number; preview_url: string | null; print_locations: string[] }
+  | { ok: true; batch_id: string; lines: SavedDesignLine[]; unit_price: number; options_price: number; print_locations: string[]; preview_url: string | null }
   | { ok: false; error: string; fields?: Record<string, string> };
 
 function decodeImage(dataUrl: string): { buf: Buffer; mime: string } | null {
@@ -21,6 +23,10 @@ function decodeImage(dataUrl: string): { buf: Buffer; mime: string } | null {
  * Persists a customer's design: validates the editor state, recomputes the
  * price from the database (never trusting the browser), stores the preview
  * renders privately and links the original uploaded artwork to the design.
+ *
+ * One design is ordered in several sizes at once: a saved design (and a cart
+ * line) is created per size, all sharing one `batch_id` and the same previews.
+ * The quantity discount itself is applied by quote_cart on the whole cart.
  */
 export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
   const parsed = designSchema.safeParse(input);
@@ -30,18 +36,27 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
   const db = createAdminClient();
   const session = await getSession();
 
-  const [{ data: garment }, { data: locations }] = await Promise.all([
+  const [{ data: garment }, { data: locations }, { data: opts }] = await Promise.all([
     db.from("custom_garment_types").select("*").eq("code", d.garment_type).eq("is_active", true).maybeSingle(),
     db.from("print_locations").select("code, price").eq("is_active", true),
+    db.from("designer_options").select("id, group_code, code, price, is_default").eq("is_active", true).order("sort_order"),
   ]);
   if (!garment) return { ok: false, error: "garment_unavailable" };
   if (!(garment.color_ids as string[]).includes(d.color_id)) return { ok: false, error: "color_unavailable" };
-  if (!(garment.sizes as string[]).includes(d.size_code)) return { ok: false, error: "size_unavailable" };
+  const sizeEntries = Object.entries(d.sizes);
+  if (sizeEntries.some(([s]) => !(garment.sizes as string[]).includes(s))) return { ok: false, error: "size_unavailable" };
 
   const used = [...new Set(d.objects.map((o) => o.location))];
   const priceByLoc = new Map((locations ?? []).map((l) => [l.code as string, l.price as number]));
   if (used.some((l) => !priceByLoc.has(l) || !(garment.print_locations as string[]).includes(l))) return { ok: false, error: "location_unavailable" };
-  const unitPrice = (garment.base_price as number) + used.reduce((n, l) => n + (priceByLoc.get(l) ?? 0), 0);
+
+  // Unknown option codes are rejected (not silently ignored) so the customer never pays for something that does not exist.
+  const known = (opts ?? []) as OptionLite[];
+  const wanted: [OptionLite["group_code"], string | undefined][] = [["method", d.options.method], ["finish", d.options.finish], ["fabric", d.options.fabric], ["package", d.options.package], ...(d.options.addons ?? []).map((a): [OptionLite["group_code"], string] => ["addon", a])];
+  if (wanted.some(([g, c]) => c && !known.some((o) => o.group_code === g && o.code === c))) return { ok: false, error: "option_unavailable" };
+  const chosen = resolveOptions(known, d.options);
+  const optionsPrice = chosen.price;
+  const unitPrice = (garment.base_price as number) + used.reduce((n, l) => n + (priceByLoc.get(l) ?? 0), 0) + optionsPrice;
 
   const artworkIds = [...new Set(d.objects.map((o) => o.artwork_id).filter(Boolean) as string[])];
   if (artworkIds.length) {
@@ -53,10 +68,10 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
   const back = decodeImage(d.preview_back);
   if (!front || !back) return { ok: false, error: "invalid_preview" };
 
-  const id = crypto.randomUUID();
+  const batchId = crypto.randomUUID();
   const ext = (m: string) => (m === "image/png" ? "png" : "jpg");
-  const frontPath = `designs/${id}/front.${ext(front.mime)}`;
-  const backPath = `designs/${id}/back.${ext(back.mime)}`;
+  const frontPath = `designs/${batchId}/front.${ext(front.mime)}`;
+  const backPath = `designs/${batchId}/back.${ext(back.mime)}`;
   const bucket = db.storage.from("design-uploads");
   const [u1, u2] = await Promise.all([
     bucket.upload(frontPath, front.buf, { contentType: front.mime, upsert: false }),
@@ -64,24 +79,46 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
   ]);
   if (u1.error || u2.error) return { ok: false, error: "storage_failed" };
 
-  const { error } = await db.from("custom_designs").insert({
-    id,
-    user_id: session?.userId ?? null,
-    garment_type: d.garment_type,
-    color_id: d.color_id,
-    size_code: d.size_code,
-    print_locations: used,
-    config: { version: 1, artboard: { width: 600, height: 700 }, objects: d.objects },
-    preview_front_path: frontPath,
-    preview_back_path: backPath,
-    unit_price: unitPrice,
-    notes: d.notes ?? null,
-  });
+  const config = {
+    version: 2,
+    artboard: { width: 600, height: 700 },
+    objects: d.objects,
+    options: chosen.choice,
+    sizes: d.sizes,
+  };
+  const rows = sizeEntries.map(([size, quantity]) => ({ id: crypto.randomUUID(), size, quantity }));
+  const { error } = await db.from("custom_designs").insert(
+    rows.map((r) => ({
+      id: r.id,
+      batch_id: batchId,
+      name: d.name ?? null,
+      user_id: session?.userId ?? null,
+      garment_type: d.garment_type,
+      color_id: d.color_id,
+      size_code: r.size,
+      print_locations: used,
+      config,
+      options: chosen.choice,
+      options_price: optionsPrice,
+      preview_front_path: frontPath,
+      preview_back_path: backPath,
+      unit_price: unitPrice,
+      notes: d.notes ?? null,
+    })),
+  );
   if (error) {
     console.error("saveDesign", error);
     return { ok: false, error: "save_failed" };
   }
-  if (artworkIds.length) await db.from("uploaded_artwork").update({ custom_design_id: id }).in("id", artworkIds).is("custom_design_id", null);
+  if (artworkIds.length) await db.from("uploaded_artwork").update({ custom_design_id: rows[0]!.id }).in("id", artworkIds).is("custom_design_id", null);
 
-  return { ok: true, design_id: id, unit_price: unitPrice, preview_url: await signedUrl(frontPath), print_locations: used };
+  return {
+    ok: true,
+    batch_id: batchId,
+    lines: rows.map((r) => ({ design_id: r.id, size: r.size, quantity: r.quantity })),
+    unit_price: unitPrice,
+    options_price: optionsPrice,
+    print_locations: used,
+    preview_url: await signedUrl(frontPath),
+  };
 }

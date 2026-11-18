@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SHAPE_IDS } from "./design-assets";
 import { normalizeIraqiPhone } from "./phone";
 import { GOVERNORATES } from "./iraq";
 import { ORDER_STATUSES } from "./order-status";
@@ -143,29 +144,57 @@ export const bulkRequestSchema = z.object({
 /* -------------------------- designer --------------------------- */
 
 const designObject = z.object({
-  type: z.enum(["image", "text"]),
+  type: z.enum(["image", "text", "shape"]),
   location: z.enum(["front", "back", "left_chest", "sleeve", "sleeve_left"]),
   left: z.number().finite(),
   top: z.number().finite(),
   // tiny artwork may be scaled up a lot; what matters is the rendered size (checked below)
-  scaleX: z.number().finite().positive().max(5000),
-  scaleY: z.number().finite().positive().max(5000),
-  angle: z.number().finite().min(-360).max(360),
+  scaleX: z.number().finite().max(5000).refine((n) => n !== 0, "scale"),
+  scaleY: z.number().finite().max(5000).refine((n) => n !== 0, "scale"),
+  angle: z.number().finite().min(-720).max(720),
   width: z.number().finite().positive().max(20000),
   height: z.number().finite().positive().max(20000),
+  flipX: z.boolean().optional(),
+  flipY: z.boolean().optional(),
+  opacity: z.number().min(0).max(1).optional(),
   artwork_id: uuid.optional(),
+  filters: z.object({ grayscale: z.boolean().optional(), invert: z.boolean().optional() }).optional(),
+  shape_id: z.enum(SHAPE_IDS).optional(),
   text: z.string().max(200).optional(),
-  fill: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-  fontFamily: z.string().max(60).optional(),
-  fontSize: z.number().positive().max(400).optional(),
+  fill: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  stroke: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  strokeWidth: z.number().min(0).max(40).optional(),
+  fontFamily: z.string().max(80).optional(),
+  fontLabel: z.string().max(40).optional(),
+  fontSize: z.number().positive().max(600).optional(),
   fontWeight: z.union([z.string(), z.number()]).optional(),
-}).refine((o) => o.width * o.scaleX <= 1200 && o.height * o.scaleY <= 1400, { message: "max", path: ["scaleX"] });
+  fontStyle: z.enum(["normal", "italic"]).optional(),
+  underline: z.boolean().optional(),
+  textAlign: z.enum(["left", "center", "right"]).optional(),
+  charSpacing: z.number().min(-200).max(2000).optional(),
+  lineHeight: z.number().min(0.5).max(4).optional(),
+}).refine((o) => Math.abs(o.width * o.scaleX) <= 1400 && Math.abs(o.height * o.scaleY) <= 1600, { message: "max", path: ["scaleX"] })
+  .refine((o) => (o.type === "shape" ? !!o.shape_id : true), { message: "required", path: ["shape_id"] });
+
+const sizeQuantities = z
+  .record(z.string().regex(/^[A-Z0-9]{1,6}$/), z.number().int().min(0).max(99))
+  .transform((r) => Object.fromEntries(Object.entries(r).filter(([, n]) => n > 0)))
+  .refine((r) => Object.keys(r).length >= 1 && Object.values(r).reduce((a, b) => a + b, 0) <= 400, { message: "quantity" });
 
 export const designSchema = z.object({
-  garment_type: z.enum(["tshirt", "oversized", "hoodie", "sweatshirt"]),
+  garment_type: z.enum(["tshirt", "oversized", "hoodie", "sweatshirt", "longsleeve"]),
   color_id: uuid,
-  size_code: z.string().regex(/^[A-Z0-9]{1,6}$/),
-  objects: z.array(designObject).min(1, "required").max(30),
+  /** quantity per size, e.g. { M: 2, L: 3 } — one saved design (and one cart line) per size */
+  sizes: sizeQuantities,
+  name: trimmed(80).optional(),
+  options: z.object({
+    method: z.string().regex(/^[a-z0-9_]{2,32}$/).optional(),
+    finish: z.string().regex(/^[a-z0-9_]{2,32}$/).optional(),
+    fabric: z.string().regex(/^[a-z0-9_]{2,32}$/).optional(),
+    package: z.string().regex(/^[a-z0-9_]{2,32}$/).optional(),
+    addons: z.array(z.string().regex(/^[a-z0-9_]{2,32}$/)).max(12).optional(),
+  }).default({}),
+  objects: z.array(designObject).min(1, "required").max(40),
   notes: trimmed(1000).optional(),
   preview_front: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000),
   preview_back: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000),

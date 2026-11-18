@@ -413,6 +413,39 @@ describe("custom designs", () => {
     expect(qt.lines[0].error).toBe("unavailable");
   });
 
+  it("applies the quantity discount on the TOTAL of custom pieces (all sizes together)", async () => {
+    const a = await design(null);
+    const b = await design(null);
+    const none = await as(svc, (c) => rpc(c, "quote_cart", { items: [{ custom_design_id: a, quantity: 3 }] }));
+    expect(none.subtotal).toBe(84000);
+    expect(none.lines[0].tier_percent).toBe(0);
+    // 3 + 3 = 6 pieces -> 5% (rounded to 250): 28000 - 1500
+    const five = await as(svc, (c) => rpc(c, "quote_cart", { items: [{ custom_design_id: a, quantity: 3 }, { custom_design_id: b, quantity: 3 }] }));
+    expect(five.lines.map((l: { unit_price: number }) => l.unit_price)).toEqual([26500, 26500]);
+    expect(five.lines[0].list_price).toBe(28000);
+    expect(five.subtotal).toBe(26500 * 6);
+    // 12 pieces -> 10%
+    const ten = await as(svc, (c) => rpc(c, "quote_cart", { items: [{ custom_design_id: a, quantity: 12 }] }));
+    expect(ten.lines[0].unit_price).toBe(25250);
+    // the discount follows the cart, so lowering the quantity again removes it
+    const back = await as(svc, (c) => rpc(c, "quote_cart", { items: [{ custom_design_id: a, quantity: 5 }] }));
+    expect(back.subtotal).toBe(28000 * 5);
+    // and it is stored on the order lines
+    const res = await as(svc, (c) => rpc(c, "place_order", orderPayload([{ custom_design_id: a, quantity: 6 }])), true);
+    const [o] = await q("select subtotal from orders where id = $1", [res.order_id]);
+    expect(o).toEqual({ subtotal: 26500 * 6 });
+  });
+
+  it("designer options & tiers are publicly readable but only staff can change them", async () => {
+    const pub = await as(anon, async (c) => (await c.query("select count(*)::int n from designer_options")).rows[0].n);
+    expect(pub).toBeGreaterThan(10);
+    await expect(as(user(alice), (c) => c.query("update designer_tiers set discount_percent = 60"))).resolves.toBeDefined();
+    const [t6] = await q<{ discount_percent: number }>("select discount_percent from designer_tiers where min_qty = 6");
+    expect(t6!.discount_percent).toBe(5);
+    const defaults = await q<{ group_code: string; n: number }>("select group_code, count(*) filter (where is_default)::int n from designer_options where group_code <> 'addon' group by 1");
+    expect(defaults.every((d) => d.n === 1)).toBe(true);
+  });
+
   it("customers can read only their own designs", async () => {
     const mine = await design(alice);
     const theirs = await design(bob);
