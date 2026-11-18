@@ -9,6 +9,7 @@ import { Suspense } from "react";
 import { Toaster } from "@/components/ui/toast";
 import { PressFeedback } from "@/components/ui/press-feedback";
 import { NavProgress } from "@/components/ui/nav-progress";
+import { FormKeeper } from "@/components/ui/form-keeper";
 import { publicEnv } from "@/lib/env";
 
 const cairo = Cairo({ subsets: ["arabic", "latin"], variable: "--font-cairo", display: "swap" });
@@ -64,6 +65,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
           {children}
           <Suspense fallback={null}><NavProgress /></Suspense>
           <PressFeedback />
+          <FormKeeper />
           <Toaster />
         </I18nProvider>
       </body>

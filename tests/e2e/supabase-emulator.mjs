@@ -512,6 +512,16 @@ async function storage(req, res, url, claims, raw) {
     }
     return send(res, 200, out);
   }
+  if (route === "/object/copy" && req.method === "POST") {
+    const { bucketId, sourceKey, destinationKey } = JSON.parse(raw.toString() || "{}");
+    const ok = await withRole(claims, async (c) => (await c.query("select 1 from storage.objects where bucket_id = $1 and name = $2", [bucketId, sourceKey])).rowCount);
+    if (!ok || !existsSync(fileOf(bucketId, sourceKey))) return send(res, 404, { statusCode: "404", error: "not_found", message: "Object not found" });
+    await withRole(claims, (c) => c.query("insert into storage.objects (bucket_id, name) values ($1, $2)", [bucketId, destinationKey]));
+    mkdirSync(path.dirname(fileOf(bucketId, destinationKey)), { recursive: true });
+    writeFileSync(fileOf(bucketId, destinationKey), readFileSync(fileOf(bucketId, sourceKey)));
+    if (existsSync(fileOf(bucketId, sourceKey) + ".__type")) writeFileSync(fileOf(bucketId, destinationKey) + ".__type", readFileSync(fileOf(bucketId, sourceKey) + ".__type"));
+    return send(res, 200, { Key: `${bucketId}/${destinationKey}` });
+  }
   if ((m = /^\/object\/(?:authenticated\/)?([^/]+)\/(.+)$/.exec(route))) {
     if (req.method === "GET") {
       const ok = await withRole(claims, async (c) => (await c.query("select 1 from storage.objects where bucket_id = $1 and name = $2", [m[1], m[2]])).rowCount);

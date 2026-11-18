@@ -14,7 +14,6 @@ export function ProductCard({ product, locale, dict, priority = false, sizes = "
   return (
     <Link
       href={`/${locale}/product/${product.slug}`}
-      prefetch={false}
       className="group block rounded-[1.6rem] border border-line bg-paper p-1.5 transition-all duration-300 hover:-translate-y-1 hover:border-pine/40 hover:shadow-[0_18px_40px_-24px_rgba(55,99,82,0.55)] sm:p-2"
     >
       <div className="relative aspect-[4/5] overflow-hidden rounded-[1.2rem] bg-[#ebe7de]">

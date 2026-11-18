@@ -6,7 +6,7 @@ import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { adminT } from "@/lib/admin-i18n";
 import { createClient } from "@/lib/supabase/client";
-import { addProductImage, updateProductImage, deleteProductImage } from "@/lib/actions/admin/products";
+import { addProductImage, updateProductImage, deleteProductImage, setMainImage } from "@/lib/actions/admin/products";
 import { toast } from "@/components/ui/toast";
 import { AdminForm, Submit } from "./form";
 import type { Color, ProductImage } from "@/lib/types";
@@ -64,7 +64,7 @@ export function ProductImages({ productId, images, colors }: { productId: string
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {images.map((img) => (
           <div key={img.id} className="border border-line">
-            <div className="relative aspect-[4/5] bg-bone"><Image src={img.url} alt="" fill sizes="200px" className="object-cover" /></div>
+            <div className="relative aspect-[4/5] bg-bone"><Image src={img.url} alt="" fill sizes="200px" className="object-cover" />{img.id === images[0]?.id && <span className="absolute start-1.5 top-1.5 rounded-full bg-pine px-2 py-0.5 text-[10px] font-bold text-white">{t("الرئيسية", "Main")}</span>}</div>
             <AdminForm action={updateProductImage} className="space-y-2 p-2">
               <input type="hidden" name="id" value={img.id} />
               <select name="color_id" defaultValue={img.color_id ?? ""} className="field h-8 px-2 text-xs" aria-label={t("اللون", "Colour")}>
@@ -76,6 +76,12 @@ export function ProductImages({ productId, images, colors }: { productId: string
                 <Submit variant="outline" className="h-8 flex-1">{t("حفظ", "Save")}</Submit>
               </div>
             </AdminForm>
+            {img.id !== images[0]?.id && (
+              <AdminForm action={setMainImage} className="px-2 pb-1">
+                <input type="hidden" name="id" value={img.id} /><input type="hidden" name="product_id" value={productId} />
+                <button className="w-full text-xs font-semibold text-pine hover:underline">★ {t("جعلها الرئيسية", "Make main")}</button>
+              </AdminForm>
+            )}
             <AdminForm action={deleteProductImage} className="px-2 pb-2">
               <input type="hidden" name="id" value={img.id} />
               <button className="flex w-full items-center justify-center gap-1 text-xs text-danger hover:underline" onClick={(e) => { if (!confirm(t("حذف الصورة؟", "Delete image?"))) e.preventDefault(); }}><Trash2 className="size-3.5" /> {t("حذف", "Delete")}</button>

@@ -10,6 +10,8 @@ import { ProductImages } from "@/components/admin/product-images";
 import { VariantsTable } from "@/components/admin/variants-table";
 import { deleteProduct } from "@/lib/actions/admin/products";
 import { ConfirmSubmit } from "@/components/admin/form";
+import { DuplicateButton } from "@/components/admin/duplicate-button";
+import { StockGrid } from "@/components/admin/stock-grid";
 import type { Category, Collection, Color, Product, ProductImage, Size, Variant } from "@/lib/types";
 
 export default async function EditProduct({ params }: { params: Promise<{ locale: string; id: string }> }) {
@@ -34,6 +36,8 @@ export default async function EditProduct({ params }: { params: Promise<{ locale
         title={locale === "ar" ? product.name_ar : product.name_en}
         actions={<>
           {product.is_published && <Link href={`/${locale}/product/${product.slug}`} target="_blank" className="btn btn-outline btn-sm"><ExternalLink className="size-4" /> {t("عرض في المتجر", "View in store")}</Link>}
+          <DuplicateButton id={id} variant="button" />
+          <DuplicateButton id={id} copyStock variant="button" className="hidden sm:inline-flex" />
           <form action={deleteProduct}>
             <input type="hidden" name="id" value={product.id} />
             <input type="hidden" name="locale" value={locale} />
@@ -41,8 +45,9 @@ export default async function EditProduct({ params }: { params: Promise<{ locale
           </form>
         </>}
       />
-      <ProductForm product={product} categories={(categories as Category[]) ?? []} collections={(collections as Collection[]) ?? []} selectedCollections={(pc ?? []).map((x) => x.collection_id)} />
+      <ProductForm product={product} categories={(categories as Category[]) ?? []} collections={(collections as Collection[]) ?? []} selectedCollections={(pc ?? []).map((x) => x.collection_id)} sizes={(sizes as Size[]) ?? []} colors={(colors as Color[]) ?? []} />
       <Card title={t("الصور", "Images")}><ProductImages productId={id} images={(images as ProductImage[]) ?? []} colors={(colors as Color[]) ?? []} /></Card>
+      <Card title={t("جدول المخزون (كل الألوان والمقاسات)", "Stock grid (all colours & sizes)")}><StockGrid variants={(variants as Variant[]) ?? []} colors={(colors as Color[]) ?? []} sizes={(sizes as Size[]) ?? []} /></Card>
       <Card title={t("المقاسات والألوان والأسعار", "Variants, sizes & prices")}><VariantsTable productId={id} variants={(variants as Variant[]) ?? []} colors={(colors as Color[]) ?? []} sizes={(sizes as Size[]) ?? []} basePrice={product.base_price} /></Card>
     </div>
   );

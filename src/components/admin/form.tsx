@@ -22,17 +22,22 @@ export function AdminForm({
   action,
   children,
   className,
+  id,
   redirectTo,
   resetOnSuccess = false,
   successMessage,
+  onSuccess,
 }: {
   action: (prev: ActionState, form: FormData) => Promise<ActionState>;
   children: React.ReactNode;
   className?: string;
+  id?: string;
   /** URL to go to on success; "{id}" is replaced with the id returned by the action. */
   redirectTo?: string;
   resetOnSuccess?: boolean;
   successMessage?: string;
+  /** Return "handled" to skip the default redirect/refresh (e.g. "save and add another"). */
+  onSuccess?: (state: Extract<ActionState, { ok: true }>) => "handled" | void;
 }) {
   const { locale } = useI18n();
   const router = useRouter();
@@ -43,6 +48,7 @@ export function AdminForm({
     if (state.ok) {
       toast.success(successMessage ?? state.message ?? (locale === "ar" ? "تم الحفظ" : "Saved"));
       if (resetOnSuccess) ref.current?.reset();
+      if (onSuccess?.(state) === "handled") return;
       if (redirectTo) router.push(redirectTo.replace("{id}", state.id ?? ""));
       else router.refresh();
     } else {
@@ -53,7 +59,7 @@ export function AdminForm({
   }, [state]);
   const fields = state && !state.ok ? state.fields : undefined;
   return (
-    <form ref={ref} action={formAction} className={cn("relative", className)} data-pending={pending || undefined}>
+    <form id={id} ref={ref} action={formAction} data-reset={resetOnSuccess ? "true" : undefined} className={cn("relative", className)} data-pending={pending || undefined}>
       <FieldErrorsContext.Provider value={fields}>{children}</FieldErrorsContext.Provider>
     </form>
   );
@@ -110,11 +116,12 @@ export function Checkbox({ name, label, defaultChecked, className }: { name: str
   );
 }
 
-export function Submit({ children, className, variant = "primary" }: { children: React.ReactNode; className?: string; variant?: "primary" | "outline" | "danger" | "accent" }) {
-  const { pending } = useFormStatus();
+export function Submit({ children, className, variant = "primary", name, value }: { children: React.ReactNode; className?: string; variant?: "primary" | "outline" | "danger" | "accent" | "brand"; name?: string; value?: string }) {
+  const { pending, data } = useFormStatus();
+  const mine = pending && (!name || data?.get(name) === value);
   return (
-    <button type="submit" disabled={pending} className={cn("btn btn-sm h-10", `btn-${variant}`, className)}>
-      {pending && <Loader2 className="size-4 animate-spin" />} {children}
+    <button type="submit" name={name} value={value} disabled={pending} className={cn("btn btn-sm h-10", `btn-${variant}`, className)}>
+      {mine && <Loader2 className="size-4 animate-spin" />} {children}
     </button>
   );
 }

@@ -391,6 +391,123 @@ await flow("feedback: tap ripple, top toasts, hero slideshow with admin-uploaded
   await adminPage.close();
 });
 
+await flow("admin product tools: quick create, similar, duplicate, stock grid, bulk, CSV import/export", async (page) => {
+  const email = `tools${Date.now()}@thetpac.com`;
+  await page.goto(`${BASE}/ar/account/register`);
+  await page.fill("#full_name", "Tools Admin");
+  await page.fill("#email", email);
+  await page.fill("#phone", "07700000055");
+  await page.fill("#password", "admin-pass-2026");
+  await page.fill("#confirm", "admin-pass-2026");
+  await page.getByRole("button", { name: "إنشاء الحساب" }).click();
+  await page.waitForURL(/account$/);
+  await db.query("update customer_profiles set role = 'admin' where email = $1", [email]);
+
+  // ---- quick create: auto slug, presets, sizes/colours/stock, photo ----
+  await page.goto(`${BASE}/ar/admin/products/new`);
+  await page.fill("#name_ar", "هودي تجربة سريع");
+  await page.fill("#name_en", "E2E Quick Hoodie");
+  assert.equal(await page.inputValue("#slug"), "e2e-quick-hoodie", "slug is generated from the English name");
+  await page.getByRole("button", { name: "قطن ثقيل ٢٤٠غ" }).click();
+  assert.match(await page.inputValue("#material_ar"), /قطن/, "preset fills the fabric text");
+  await page.getByRole("button", { name: "طباعة DTF" }).click();
+  await page.fill("#base_price", "33000");
+  for (const c of ["أسود", "أبيض"]) await page.locator("label:has(input[name=qs_colors])").filter({ hasText: c }).first().click();
+  await page.fill("#qs_stock", "7");
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4nGP4z8DwnwEIGGAMAEnkB/m4tK6WAAAAAElFTkSuQmCC", "base64");
+  writeFileSync(`${SHOTS}/p.png`, png);
+  await page.locator("input[type=file][accept*=image]").setInputFiles(`${SHOTS}/p.png`);
+  await page.waitForFunction(() => JSON.parse(document.querySelector("input[name=images_json]").value).length === 1, null, { timeout: 15000 });
+  // create and keep going with a similar product
+  await page.getByRole("button", { name: "إنشاء وإضافة منتج شبيه" }).click();
+  await page.getByText("أضف المنتج الشبيه").waitFor();
+  assert.equal(await page.inputValue("#name_ar"), "", "names are cleared for the next product");
+  assert.equal(await page.inputValue("#base_price"), "33000", "price is kept");
+  assert.match(await page.inputValue("#material_ar"), /قطن/, "texts are kept");
+  assert.equal(await page.locator("input[name=qs_colors]:checked").count(), 2, "colours are kept");
+  await page.fill("#name_ar", "هودي تجربة ثاني");
+  await page.fill("#name_en", "E2E Quick Hoodie");
+  assert.equal(await page.inputValue("#slug"), "e2e-quick-hoodie", "slug field regenerates");
+  await page.getByRole("button", { name: "إنشاء المنتج", exact: true }).click();
+  await page.waitForURL(/admin\/products\/[0-9a-f-]{36}$/);
+
+  const rows = await db.query("select id, slug, (select count(*)::int from product_variants v where v.product_id = p.id) variants, (select coalesce(sum(i.quantity),0)::int from product_variants v join inventory i on i.variant_id = v.id where v.product_id = p.id) stock, (select count(*)::int from product_images im where im.product_id = p.id) images from products p where slug like 'e2e-quick-hoodie%' order by created_at");
+  assert.equal(rows.rows.length, 2);
+  assert.deepEqual(rows.rows.map((r) => [r.variants, r.stock, r.images]), [[10, 70, 1], [10, 70, 0]]);
+  assert.notEqual(rows.rows[0].slug, rows.rows[1].slug, "unique slugs");
+  const tx = await one("select count(*)::int n from inventory_transactions t join product_variants v on v.id = t.variant_id where v.product_id = $1 and t.reason = 'initial'", [rows.rows[0].id]);
+  assert.equal(tx.n, 10, "starting stock is recorded in the stock history");
+
+  // ---- stock grid (on the second product's edit page) ----
+  const secondId = rows.rows[1].id;
+  const firstId = rows.rows[0].id;
+  await page.goto(`${BASE}/ar/admin/products/${firstId}`);
+  await page.getByLabel("أسود M", { exact: true }).fill("12");
+  await page.getByRole("button", { name: "حفظ المخزون" }).click();
+  await page.getByText("تم تحديث المخزون").waitFor();
+  const m = await one("select i.quantity from inventory i join product_variants v on v.id = i.variant_id join colors c on c.id = v.color_id where v.product_id = $1 and c.code = 'black' and v.size_code = 'M'", [firstId]);
+  assert.equal(m.quantity, 12);
+  const adj = await one("select t.change, t.reason from inventory_transactions t join product_variants v on v.id = t.variant_id where v.product_id = $1 and t.reason = 'restock'", [firstId]);
+  assert.deepEqual(adj, { change: 5, reason: "restock" });
+
+  // ---- duplicate (with and without stock) ----
+  await page.getByRole("button", { name: "نسخ المنتج", exact: true }).click();
+  await page.waitForURL((u) => u.pathname.endsWith(secondId) === false && /admin\/products\/[0-9a-f-]{36}$/.test(u.pathname) && !u.pathname.endsWith(firstId));
+  const copy1 = await one("select p.id, p.slug, p.is_published, p.name_ar, (select count(*)::int from product_variants v where v.product_id = p.id) variants, (select coalesce(sum(i.quantity),0)::int from product_variants v join inventory i on i.variant_id = v.id where v.product_id = p.id) stock, (select count(*)::int from product_images im where im.product_id = p.id) images, (select count(*)::int from product_variants v where v.product_id = p.id and v.sku in (select sku from product_variants where product_id = $1)) shared_skus from products p where slug = $2", [firstId, "e2e-quick-hoodie-copy"]);
+  assert.ok(copy1, "copy exists with a -copy slug");
+  assert.equal(copy1.is_published, false, "copies start as drafts");
+  assert.match(copy1.name_ar, /نسخة/);
+  assert.deepEqual([copy1.variants, copy1.stock, copy1.images, copy1.shared_skus], [10, 0, 1, 0], "variants copied with fresh SKUs, no stock, image kept");
+  await page.goto(`${BASE}/ar/admin/products/${firstId}`);
+  await page.getByRole("button", { name: "نسخ مع المخزون" }).click();
+  await page.waitForURL((u) => /admin\/products\/[0-9a-f-]{36}$/.test(u.pathname) && !u.pathname.endsWith(firstId) && !u.pathname.endsWith(copy1.id));
+  const copy2 = await one("select (select coalesce(sum(i.quantity),0)::int from product_variants v join inventory i on i.variant_id = v.id where v.product_id = p.id) stock from products p where slug = 'e2e-quick-hoodie-copy-2'");
+  assert.equal(copy2.stock, 75, "stock copied (70 + the 5 added in the grid)");
+
+  // ---- bulk actions from the list ----
+  await page.goto(`${BASE}/ar/admin/products?q=e2e-quick`);
+  await page.getByLabel("تحديد الكل").check();
+  await page.locator("select[name=op]").selectOption("hide");
+  await page.getByRole("button", { name: "تطبيق" }).click();
+  await page.getByText("تم التطبيق").first().waitFor();
+  const hidden = await one("select count(*)::int n from products where slug like 'e2e-quick%' and is_published = false");
+  assert.equal(hidden.n, 4, "all four are hidden");
+  await page.getByLabel("تحديد الكل").check();
+  await page.locator("select[name=op]").selectOption("price_percent");
+  await page.locator("input[name=value]").fill("10");
+  await page.getByRole("button", { name: "تطبيق" }).click();
+  await page.waitForFunction(() => !document.querySelector("select[name=op]"));
+  const price = await one("select base_price from products where id = $1", [firstId]);
+  assert.equal(price.base_price, 36250, "+10% rounded to the nearest 250");
+
+  // ---- CSV import ----
+  await page.goto(`${BASE}/ar/admin/products/import`);
+  const csv = [
+    "name_ar,name_en,price,category,sizes,colors,stock,published",
+    "منتج استيراد ١,Import One,15000,t-shirts,S|M,black,4,yes",
+    "منتج استيراد ٢,Import Two,16000,t-shirts,S,purple-unicorn,4,yes",
+    "منتج استيراد ٣,Import Three,abc,hoodies,S,black,1,yes",
+  ].join("\n");
+  await page.locator("textarea[name=csv]").fill(csv);
+  await page.getByRole("button", { name: "استيراد المنتجات" }).click();
+  await page.getByText("لون غير موجود").waitFor();
+  await page.getByText("السعر غير صالح").waitFor();
+  const imp = await one("select p.is_published, (select count(*)::int from product_variants v where v.product_id = p.id) variants, (select sum(i.quantity)::int from product_variants v join inventory i on i.variant_id = v.id where v.product_id = p.id) stock from products p where slug = 'import-one'");
+  assert.deepEqual(imp, { is_published: true, variants: 2, stock: 8 });
+  assert.equal((await one("select count(*)::int n from products where slug in ('import-two','import-three')")).n, 0, "invalid rows are not created");
+
+  // ---- export + template ----
+  const exp = await page.request.get(`${BASE}/api/admin/products`);
+  assert.equal(exp.status(), 200);
+  assert.match(await exp.text(), /import-one/);
+  const tpl = await page.request.get(`${BASE}/api/admin/products?template=1`);
+  assert.match(await tpl.text(), /name_ar,name_en,price/);
+  // customers cannot use the tools
+  const anon = await page.context().browser().newContext();
+  assert.equal((await anon.request.get(`${BASE}/api/admin/products`)).status(), 403);
+  await anon.close();
+});
+
 console.log(results.join("\n"));
 await browser.close();
 await db.end();

@@ -112,6 +112,15 @@
   a[class*="rounded"]:not(.btn):active { scale: 0.975; }
   button:not(:disabled), a[class*="rounded"], summary { transition: scale .16s cubic-bezier(.2,.8,.2,1); }
   button:disabled { cursor: not-allowed; }
+  /* "pressed" look applied by <PressFeedback/> — works for words, links, cards and buttons alike */
+  .pressing { opacity: 0.62; transition: opacity 0s !important; }
+  a.pressing:not(.btn):not([data-ripple]):not([class*="rounded"]) {
+    background: color-mix(in srgb, currentColor 16%, transparent);
+    box-shadow: 0 0 0 0.35rem color-mix(in srgb, currentColor 16%, transparent);
+    border-radius: 0.4rem;
+    opacity: 1;
+  }
+  a, button, summary, label { transition-property: opacity, scale, background-color, border-color, color; transition-duration: .22s; }
   /* grid tracks must never be widened by intrinsic content (inputs, long words) */
   :where(.grid) > * { min-width: 0; }
   [dir="rtl"] .flip-rtl { transform: scaleX(-1); }

@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 
-export type ActionState = { ok: true; message?: string; id?: string } | { ok: false; error: string; fields?: Record<string, string> } | null;
+export type ActionState = { ok: true; message?: string; id?: string; extra?: string } | { ok: false; error: string; fields?: Record<string, string> } | null;
 
 export const bool = (v: FormDataEntryValue | null) => v === "on" || v === "true" || v === "1";
 export const str = (v: FormDataEntryValue | null) => (typeof v === "string" ? v : "");
