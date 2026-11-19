@@ -377,7 +377,7 @@ await flow("admin: dashboard, order workflow, stock, product, settings, quotatio
   assert.deepEqual(tx, { change: 7, reason: "restock", who: true });
 
   // create a product
-  await page.goto(`${BASE}/ar/admin/products/new`);
+  await page.goto(`${BASE}/ar/admin/products/new?type=none`);
   await page.fill("#name_ar", "تيشيرت تجربة");
   await openMore(page);
   await page.fill("#name_en", "Test Tee");
@@ -505,7 +505,7 @@ await flow("admin product tools: quick create, similar, duplicate, stock grid, b
   await db.query("update customer_profiles set role = 'admin' where email = $1", [email]);
 
   // ---- quick create: auto slug, presets, sizes/colours/stock, photo ----
-  await page.goto(`${BASE}/ar/admin/products/new`);
+  await page.goto(`${BASE}/ar/admin/products/new?type=none`);
   await page.fill("#name_ar", "هودي تجربة سريع");
   await openMore(page);
   await page.fill("#name_en", "E2E Quick Hoodie");
@@ -669,6 +669,104 @@ await flow("admin print designer: options, tiers, customer designs, production s
   await page.goto(`${BASE}/en/admin/orders/${proOrder}`);
   await page.getByRole("link", { name: /Production sheet/ }).waitFor();
   await page.getByText(/Print options/).waitFor();
+});
+
+await flow("admin printing: type mockup & areas → product from template with artwork → generated photos → store print details → edit in place", async (page) => {
+  const email = `print${Date.now()}@thetpac.com`;
+  await page.goto(`${BASE}/en/account/register`);
+  await page.fill("#full_name", "Print Admin 2");
+  await page.fill("#email", email);
+  await page.fill("#phone", "07700000088");
+  await page.fill("#password", "admin-pass-2026");
+  await page.fill("#confirm", "admin-pass-2026");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.waitForURL(/account$/);
+  await db.query("update customer_profiles set role = 'admin' where email = $1", [email]);
+  // test images drawn in the browser: a blank garment photo (800 x 1000) and a transparent logo (1200 x 800)
+  const png = async (w, h, kind) => {
+    const b64 = await page.evaluate(([w, h, kind]) => {
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      const x = c.getContext("2d");
+      if (kind === "mock") { x.fillStyle = "#EFECE6"; x.fillRect(0, 0, w, h); x.fillStyle = "#2b2b2b"; x.fillRect(w * 0.25, h * 0.12, w * 0.5, h * 0.8); }
+      else { x.fillStyle = "#E3963C"; x.fillRect(40, 40, w - 80, h - 80); x.fillStyle = "#376352"; x.beginPath(); x.arc(w / 2, h / 2, h / 4, 0, 7); x.fill(); }
+      return c.toDataURL("image/png").split(",")[1];
+    }, [w, h, kind]);
+    const file = `${SHOTS}/${kind}.png`;
+    writeFileSync(file, Buffer.from(b64, "base64"));
+    return file;
+  };
+  const mock = await png(800, 1000, "mock");
+  const art = await png(1200, 800, "art");
+
+  // 1) product type: upload the hoodie's front mockup, resize the main print area to 30 x 40 cm
+  const hoodie = (await one("select id from product_types where code = 'hoodie'")).id;
+  await page.goto(`${BASE}/en/admin/product-types/${hoodie}`);
+  await page.getByText("Default photo").first().waitFor();
+  await page.locator("label:has-text('Upload') input[type=file]").first().setInputFiles(mock);
+  await page.getByText("Mockup uploaded").first().waitFor({ timeout: 20000 });
+  await page.waitForTimeout(500);
+  const front = await one("select id, mockup_width, mockup_height, mockup_url from product_type_views where product_type_id = $1 and code = 'front'", [hoodie]);
+  assert.deepEqual([front.mockup_width, front.mockup_height], [800, 1000], "mockup keeps its real proportions");
+  await page.getByLabel("Max width (cm)").fill("30");
+  await page.getByLabel("Max height (cm)").fill("40");
+  await page.getByRole("button", { name: /Save areas/ }).click();
+  await page.getByText("Print areas saved").waitFor();
+  const area = await one("select id, max_width_cm, max_height_cm from product_print_areas where view_id = $1 and code = 'front'", [front.id]);
+  assert.deepEqual([Number(area.max_width_cm), Number(area.max_height_cm)], [30, 40]);
+  assert.equal((await one("select count(*)::int n from product_print_areas where view_id = $1", [front.id])).n, 4, "saving updates the areas in place");
+
+  // 2) new product: type picker → hoodie → artwork on front + back → create
+  await page.goto(`${BASE}/en/admin/products/new`);
+  await page.getByRole("link", { name: /Custom product/ }).waitFor();
+  await page.getByRole("link", { name: /Hoodie/ }).first().click();
+  await page.waitForURL(/type=/);
+  assert.equal(await page.inputValue("#base_price"), "40000", "price comes from the type");
+  const studioInput = page.locator("input[accept='image/png,image/jpeg,image/webp,image/avif']");
+  await studioInput.setInputFiles(art);
+  await page.getByText(/Print size: \d/).waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await studioInput.setInputFiles(art);
+  await page.waitForFunction(() => document.body.innerText.includes("Print size:"), null, { timeout: 20000 });
+  await page.fill("#name_ar", "هودي الشعار");
+  await openMore(page);
+  await page.fill("#name_en", "E2E Logo Hoodie");
+  await page.getByRole("button", { name: "Create product", exact: true }).click();
+  await page.waitForURL(/admin\/products\/[0-9a-f-]{36}$/, { timeout: 60000 });
+  const pid = page.url().split("/").pop();
+  const prod = await one("select slug, product_type_id = $2 as typed, print_enabled from products where id = $1", [pid, hoodie]);
+  assert.ok(prod.typed && prod.print_enabled);
+  const designs = (await db.query("select id, area_id, x, y, width, height, artwork_path from product_designs where product_id = $1 order by sort_order", [pid])).rows;
+  assert.equal(designs.length, 2);
+  assert.ok(designs.every((d) => Number(d.x) + Number(d.width) <= 1.0001 && Number(d.y) + Number(d.height) <= 1.0001), "artwork stays inside its area");
+  assert.ok(designs.every((d) => d.artwork_path.startsWith(`products/${pid}/art/`)), "official artwork stored with the product");
+  const gen = (await db.query("select (select code from colors where id = color_id) color, (select code from product_type_views where id = view_id) view from product_images where product_id = $1 and is_generated order by sort_order", [pid])).rows;
+  assert.deepEqual(gen.map((g) => `${g.color}/${g.view}`).sort(), ["black/back", "black/front", "white/back", "white/front"], "one photo per colour and angle");
+  assert.equal((await one("select count(*)::int n from product_variants where product_id = $1", [pid])).n, 10);
+
+  // 3) storefront: angles, artwork on the mockup, print dimensions
+  const shop = await page.context().browser().newContext({ viewport: { width: 1366, height: 900 } });
+  const s = await shop.newPage();
+  await s.goto(`${BASE}/en/product/${prod.slug}`);
+  await s.getByText("Print details").waitFor();
+  await s.getByText(/× \d+(\.\d)? cm/).first().waitFor();
+  assert.ok((await s.locator(`img[src*="products/${pid}/art/"]`).count()) >= 2, "artwork shown on both angles");
+  await s.getByRole("button", { name: "Print area" }).first().click();
+  await s.getByText("30×40 cm").first().waitFor();
+  await s.screenshot({ path: `${SHOTS}/printing-store.png` });
+  // customers cannot touch official artwork
+  const anonPut = await s.request.post("http://localhost:54321/rest/v1/product_designs", { headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "", "content-type": "application/json" }, data: { product_id: pid, area_id: designs[0].area_id, artwork_url: "/evil.png", x: 0, y: 0, width: 1, height: 1 } });
+  assert.ok(anonPut.status() >= 400, "anonymous writes are refused");
+  await shop.close();
+
+  // 4) edit: enlarge the front artwork and save — same rows updated, photos replaced not duplicated
+  await page.getByRole("button", { name: "Largest size" }).first().click();
+  await page.getByRole("button", { name: /Save printing & photos/ }).click();
+  await page.getByText("Printing saved and product photos updated").waitFor({ timeout: 60000 });
+  const after = (await db.query("select id, width from product_designs where product_id = $1", [pid])).rows;
+  assert.deepEqual(after.map((d) => d.id).sort(), designs.map((d) => d.id).sort(), "designs updated in place");
+  const frontBefore = designs[0];
+  assert.ok(Number(after.find((d) => d.id === frontBefore.id).width) > Number(frontBefore.width), "front artwork enlarged");
+  assert.equal((await one("select count(*)::int n from product_images where product_id = $1 and is_generated", [pid])).n, 4, "no duplicate photos");
 });
 
 console.log(results.join("\n"));

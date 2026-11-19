@@ -6,6 +6,8 @@ import { assertStaff } from "@/lib/auth";
 import { productSchema, variantSchema, fieldErrors } from "@/lib/validation";
 import { bool, str, dbError, logActivity, type ActionState } from "./common";
 import { copySlug, parseCsv, skuPrefix, slugify, uniqueSlug } from "@/lib/product-tools";
+import { z } from "zod";
+import { designItem, generatedImage, writeProductPrinting } from "@/lib/printing-write";
 
 type SB = Awaited<ReturnType<typeof createClient>>;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -111,6 +113,26 @@ export async function saveProduct(_prev: ActionState, form: FormData): Promise<A
     if (error) return dbError(error);
   }
 
+  // printing template + the official artwork placed by the admin (only on create; the edit page has its own printing tab)
+  const typeId = str(form.get("product_type_id"));
+  if (!id && UUID.test(typeId)) {
+    const parse = <T,>(name: string, schema: z.ZodType<T>): T | null => {
+      try {
+        const r = schema.safeParse(JSON.parse(str(form.get(name)) || "[]"));
+        return r.success ? r.data : null;
+      } catch {
+        return null;
+      }
+    };
+    const designs = parse("designs_json", z.array(designItem).max(20));
+    const generated = parse("generated_json", z.array(generatedImage).max(24));
+    if (!designs || !generated) return { ok: false, error: "validation", fields: { designs: "invalid" } };
+    const disabled = form.getAll("disabled_print_area_ids").map(String).filter((x) => UUID.test(x));
+    await supabase.from("products").update({ product_type_id: typeId, print_enabled: str(form.get("print_enabled")) !== "0", disabled_print_area_ids: disabled }).eq("id", productId);
+    const res = await writeProductPrinting(supabase, productId, typeId, designs, generated);
+    if (!res?.ok) return res;
+  }
+
   let variantCount = 0;
   if (!id) {
     // Quick-create extras: images uploaded beforehand, variants + starting stock
@@ -196,7 +218,23 @@ async function cloneProduct(supabase: SB, id: string, copyStock: boolean): Promi
         storagePath = target;
       }
     }
-    await supabase.from("product_images").insert({ product_id: newId, url, storage_path: storagePath, alt_ar: img.alt_ar, alt_en: img.alt_en, color_id: img.color_id, sort_order: img.sort_order });
+    await supabase.from("product_images").insert({ product_id: newId, url, storage_path: storagePath, alt_ar: img.alt_ar, alt_en: img.alt_en, color_id: img.color_id, sort_order: img.sort_order, view_id: img.view_id ?? null, is_generated: !!img.is_generated });
+  }
+
+  // Official artwork placed on the printing template: own copies of the files, same positions.
+  const { data: designs } = await supabase.from("product_designs").select("*").eq("product_id", id).order("sort_order");
+  for (const d of designs ?? []) {
+    let url = d.artwork_url as string;
+    let path: string | null = null;
+    if (d.artwork_path) {
+      const target = `products/${newId}/art/${crypto.randomUUID()}.${String(d.artwork_path).split(".").pop() ?? "png"}`;
+      const { error: copyErr } = await supabase.storage.from("product-images").copy(d.artwork_path, target);
+      if (!copyErr) {
+        url = supabase.storage.from("product-images").getPublicUrl(target).data.publicUrl;
+        path = target;
+      }
+    }
+    await supabase.from("product_designs").insert({ product_id: newId, area_id: d.area_id, artwork_url: url, artwork_path: path, artwork_width: d.artwork_width, artwork_height: d.artwork_height, x: d.x, y: d.y, width: d.width, height: d.height, sort_order: d.sort_order });
   }
 
   type V = { size_code: string; color_id: string; price_override: number | null; is_active: boolean; color: { code: string } | { code: string }[] | null; inventory: { quantity: number; low_stock_threshold: number } | { quantity: number; low_stock_threshold: number }[] | null };

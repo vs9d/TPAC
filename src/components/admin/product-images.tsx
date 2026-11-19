@@ -64,7 +64,7 @@ export function ProductImages({ productId, images, colors }: { productId: string
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {images.map((img) => (
           <div key={img.id} className="border border-line">
-            <div className="relative aspect-[4/5] bg-bone"><Image src={img.url} alt="" fill sizes="200px" className="object-cover" />{img.id === images[0]?.id && <span className="absolute start-1.5 top-1.5 rounded-full bg-pine px-2 py-0.5 text-[10px] font-bold text-white">{t("الرئيسية", "Main")}</span>}</div>
+            <div className="relative aspect-[4/5] bg-bone"><Image src={img.url} alt="" fill sizes="200px" className="object-cover" />{img.id === images[0]?.id && <span className="absolute start-1.5 top-1.5 rounded-full bg-pine px-2 py-0.5 text-[10px] font-bold text-white">{t("الرئيسية", "Main")}</span>}{img.is_generated && <span className="absolute bottom-1.5 start-1.5 rounded-full bg-amber px-2 py-0.5 text-[10px] font-bold text-ink">{t("مولّدة من الموك أب", "From mockup")}</span>}</div>
             <AdminForm action={updateProductImage} className="space-y-2 p-2">
               <input type="hidden" name="id" value={img.id} />
               <select name="color_id" defaultValue={img.color_id ?? ""} className="field h-8 px-2 text-xs" aria-label={t("اللون", "Colour")}>

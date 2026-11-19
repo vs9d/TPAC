@@ -37,7 +37,7 @@ export default async function AdminCustomizer({ params, searchParams }: { params
   ]);
   const options = (opts as DesignerOptionRow[]) ?? [];
   const tierRows = (tiers as DesignerTierRow[]) ?? [];
-  const settings = { lead_days_min: 3, lead_days_max: 5, rush_days: 2, min_dpi: 150, notice_ar: "", notice_en: "", ...((st?.value as Partial<DesignerSettings>) ?? {}) };
+  const settings = { customer_uploads: true, lead_days_min: 3, lead_days_max: 5, rush_days: 2, min_dpi: 150, notice_ar: "", notice_en: "", ...((st?.value as Partial<DesignerSettings>) ?? {}) };
   const base = `/${locale}/admin/customizer`;
   const tabLabel: Record<Tab, string> = {
     garments: t("القطع", "Garments"),
@@ -197,6 +197,10 @@ export default async function AdminCustomizer({ params, searchParams }: { params
       {tab === "settings" && (
         <Card title={t("الإعدادات العامة للمصمم", "Designer settings")}>
           <AdminForm action={saveDesignerSettings} className="space-y-4">
+            <div className="rounded-2xl border border-line p-4">
+              <Checkbox name="customer_uploads" label={t("السماح للزبائن برفع تصاميمهم الخاصة (صفحة «صمّم قطعتك»)", "Let customers upload their own designs (the “Design your piece” page)")} defaultChecked={settings.customer_uploads !== false} />
+              <p className="mt-2 text-xs text-mute">{t("تصاميم المنتجات الرسمية يرفعها ويعدّلها المدير فقط دائماً. عند الإيقاف تختفي صفحة التصميم ويُرفض أي رفع من الزبائن.", "Official product artwork is always admin-only. When off, the design page closes and any customer upload is refused.")}</p>
+            </div>
             <div className="grid gap-3 sm:grid-cols-4">
               <Input name="lead_days_min" type="number" min={0} max={60} label={t("أقل مدة تجهيز (أيام)", "Min production (days)")} defaultValue={settings.lead_days_min} />
               <Input name="lead_days_max" type="number" min={0} max={90} label={t("أطول مدة تجهيز (أيام)", "Max production (days)")} defaultValue={settings.lead_days_max} />

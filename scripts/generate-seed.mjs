@@ -142,5 +142,13 @@ out.push("insert into public.website_settings (key, value) values");
 out.push(Object.entries(settings).map(([k, v]) => `  (${q(k)}, ${q(JSON.stringify(v))}::jsonb)`).join(",\n") + ";");
 
 out.push("commit;");
+// built-in printing types get black & white as default colours once colours exist
+const lastCommit = out.lastIndexOf("commit;");
+out.splice(lastCommit < 0 ? out.length : lastCommit, 0, `do $$ begin
+  if to_regclass('public.product_types') is not null then
+    update public.product_types set default_color_ids = array(select id from public.colors where code in ('black', 'white') order by sort_order)
+     where default_color_ids = '{}' and garment_shape is not null;
+  end if;
+end $$;`);
 writeFileSync(new URL("../supabase/seed.sql", import.meta.url), out.join("\n") + "\n");
 console.log("seed.sql written:", products.length, "products");

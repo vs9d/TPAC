@@ -3,6 +3,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
 import type { Category, Collection, Color, ProductCard, ProductDetail, Size } from "@/lib/types";
+import { normDesign, normType } from "@/lib/print-config";
 
 export interface CatalogQuery {
   q?: string;
@@ -66,12 +67,12 @@ export const getSizes = cache(async (): Promise<Size[]> => {
 export const getProductBySlug = cache(async (slug: string): Promise<ProductDetail | null> => {
   if (!isSupabaseConfigured()) return null;
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("products")
-    .select("*, category:categories(*), product_images(*), product_variants(*, color:colors(*), inventory(quantity, low_stock_threshold))")
-    .eq("slug", slug)
-    .eq("is_published", true)
-    .maybeSingle();
+  const base = "*, category:categories(*), product_images(*), product_variants(*, color:colors(*), inventory(quantity, low_stock_threshold))";
+  const printing = ", product_designs(*), product_type:product_types(*, product_type_views(*, product_print_areas(*)))";
+  const query = (cols: string) => supabase.from("products").select(cols).eq("slug", slug).eq("is_published", true).maybeSingle();
+  let { data, error } = await query(base + printing);
+  // a database without add-product-printing.sql has no printing tables yet: load the product without them
+  if (error) ({ data, error } = await query(base));
   if (error) {
     console.error("getProductBySlug", error);
     return null;
@@ -80,6 +81,8 @@ export const getProductBySlug = cache(async (slug: string): Promise<ProductDetai
   const p = data as unknown as ProductDetail;
   p.product_images.sort((a, b) => a.sort_order - b.sort_order);
   p.product_variants = p.product_variants.filter((v) => v.is_active);
+  if (p.product_type) p.product_type = normType(p.product_type);
+  p.product_designs = (p.product_designs ?? []).map(normDesign).sort((a, b) => a.sort_order - b.sort_order);
   return p;
 });
 

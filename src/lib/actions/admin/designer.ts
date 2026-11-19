@@ -102,7 +102,7 @@ export async function saveDesignerSettings(_prev: ActionState, form: FormData): 
   if (max === null || max < min) return bad("lead_days_max");
   if (rush === null) return bad("rush_days");
   if (dpi === null) return bad("min_dpi");
-  const value = { lead_days_min: min, lead_days_max: max, rush_days: rush, min_dpi: dpi, notice_ar: str(form.get("notice_ar")).trim().slice(0, 600), notice_en: str(form.get("notice_en")).trim().slice(0, 600) };
+  const value = { customer_uploads: bool(form.get("customer_uploads")), lead_days_min: min, lead_days_max: max, rush_days: rush, min_dpi: dpi, notice_ar: str(form.get("notice_ar")).trim().slice(0, 600), notice_en: str(form.get("notice_en")).trim().slice(0, 600) };
   const supabase = await createClient();
   const { error } = await supabase.from("website_settings").upsert({ key: "designer", value, updated_by: session.userId }, { onConflict: "key" });
   if (error) return dbError(error);

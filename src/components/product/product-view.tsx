@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Heart, Minus, Plus, Ruler, X, ZoomIn, Paintbrush } from "lucide-react";
+import { Heart, Minus, Plus, Ruler, X, ZoomIn, Paintbrush, ScanLine } from "lucide-react";
 import { useI18n, fmt } from "@/components/i18n-provider";
 import { useCart } from "@/components/cart/store";
 import { toast } from "@/components/ui/toast";
@@ -12,8 +12,10 @@ import { toggleFavorite } from "@/lib/actions/forms";
 import { formatIQD, cn } from "@/lib/format";
 import type { ProductDetail, Color } from "@/lib/types";
 import { SizeGuideTable } from "./size-guide";
+import { MockupPreview } from "./mockup-preview";
+import { designCm } from "@/lib/print-config";
 
-export function ProductView({ product, sizeOrder, garment, initialFavorite, signedIn }: { product: ProductDetail; sizeOrder: string[]; garment: string; initialFavorite: boolean; signedIn: boolean }) {
+export function ProductView({ product, sizeOrder, garment, initialFavorite, signedIn, customStudio = true }: { product: ProductDetail; sizeOrder: string[]; garment: string; initialFavorite: boolean; signedIn: boolean; customStudio?: boolean }) {
   const { locale, dict } = useI18n();
   const router = useRouter();
   const add = useCart((s) => s.add);
@@ -40,12 +42,32 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
   const stock = variant?.inventory?.quantity ?? 0;
   const threshold = variant?.inventory?.low_stock_threshold ?? 3;
   const price = variant?.price_override ?? product.base_price;
+  // Printing template configured by the admin: views of the product with the official artwork on them.
+  const print = useMemo(() => {
+    const type = product.product_type;
+    if (!type || product.print_enabled === false) return null;
+    const off = new Set(product.disabled_print_area_ids ?? []);
+    const designs = (product.product_designs ?? []);
+    const views = (type.product_type_views ?? []).filter((v) => v.is_active).map((v) => {
+      const areas = (v.product_print_areas ?? []).filter((a) => a.is_active && !off.has(a.id));
+      return { view: v, areas, designs: designs.filter((d) => areas.some((a) => a.id === d.area_id)) };
+    }).filter((x) => x.designs.length);
+    if (!views.length) return null;
+    const details = views.flatMap((x) => x.designs.map((d) => {
+      const a = x.areas.find((y) => y.id === d.area_id)!;
+      return { id: d.id, view: x.view, area: a, cm: designCm(a, d) };
+    }));
+    return { shape: type.garment_shape, views, details };
+  }, [product]);
+  const [showAreas, setShowAreas] = useState(false);
   const images = useMemo(() => {
-    const forColor = product.product_images.filter((i) => i.color_id === colorId);
-    const generic = product.product_images.filter((i) => !i.color_id);
+    // the generated photos are what the live mockups show: keep them for cards / sharing, not twice in the gallery
+    const pool = print ? product.product_images.filter((i) => !i.is_generated) : product.product_images;
+    const forColor = pool.filter((i) => i.color_id === colorId);
+    const generic = pool.filter((i) => !i.color_id);
     const list = [...forColor, ...generic];
-    return list.length ? list : product.product_images;
-  }, [product, colorId]);
+    return list.length || print ? list : product.product_images;
+  }, [product, colorId, print]);
   const color = colors.find((c) => c.id === colorId);
   // Print-on-demand items carry no ready stock: the only way to buy them is through the designer.
   const designOnly = product.is_customizable && product.product_variants.every((v) => (v.inventory?.quantity ?? 0) <= 0);
@@ -99,11 +121,20 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
           const el = e.currentTarget;
           setActive(Math.round(Math.abs(el.scrollLeft) / el.clientWidth));
         }}>
+          {print?.views.map(({ view, areas, designs }) => (
+            <div key={view.id} className={cn("relative aspect-[4/5] w-full shrink-0 snap-center overflow-hidden md:rounded-[1.75rem]", (print.views.length + images.length) % 2 === 1 && view.id === print.views[0]!.view.id && "md:col-span-2")}>
+              <MockupPreview view={view} shape={print.shape} color={color ? { id: color.id, hex: color.hex } : null} areas={areas} designs={designs} showAreas={showAreas} label={`${name} — ${locale === "ar" ? view.name_ar : view.name_en}`} />
+              <span className="absolute start-3 top-3 rounded-full bg-paper/85 px-3 py-1 text-xs font-bold backdrop-blur">{locale === "ar" ? view.name_ar : view.name_en}</span>
+              <button type="button" onClick={() => setShowAreas((v) => !v)} aria-pressed={showAreas} className="absolute bottom-3 end-3 flex items-center gap-1.5 rounded-full bg-paper/85 px-3 py-1.5 text-xs font-semibold backdrop-blur">
+                <ScanLine className="size-4" /> {showAreas ? (locale === "ar" ? "إخفاء منطقة الطباعة" : "Hide print area") : (locale === "ar" ? "منطقة الطباعة" : "Print area")}
+              </button>
+            </div>
+          ))}
           {images.map((img, i) => (
             <button
               key={img.id}
               onClick={() => setZoom(i)}
-              className={cn("group relative aspect-[4/5] w-full shrink-0 snap-center cursor-zoom-in overflow-hidden bg-[#ebe7de] md:rounded-[1.75rem]", i === 0 && images.length % 2 === 1 && "md:col-span-2")}
+              className={cn("group relative aspect-[4/5] w-full shrink-0 snap-center cursor-zoom-in overflow-hidden bg-[#ebe7de] md:rounded-[1.75rem]", !print && i === 0 && images.length % 2 === 1 && "md:col-span-2")}
               aria-label={`${dict.product.zoom} ${i + 1}`}
             >
               <Image src={img.url} alt={(locale === "ar" ? img.alt_ar : img.alt_en) ?? name} fill priority={i === 0} sizes="(min-width:1024px) 30vw, 100vw" className="object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
@@ -111,9 +142,9 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
             </button>
           ))}
         </div>
-        {images.length > 1 && (
+        {images.length + (print?.views.length ?? 0) > 1 && (
           <div className="mt-3 flex justify-center gap-1.5 md:hidden" aria-hidden>
-            {images.map((_, i) => <span key={i} className={cn("h-1 rounded-full transition-all", i === active ? "w-6 bg-ink" : "w-1.5 bg-line")} />)}
+            {Array.from({ length: images.length + (print?.views.length ?? 0) }, (_, i) => <span key={i} className={cn("h-1 rounded-full transition-all", i === active ? "w-6 bg-ink" : "w-1.5 bg-line")} />)}
           </div>
         )}
       </div>
@@ -226,7 +257,7 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
           <button onClick={() => addToCart(true)} disabled={!!variant && stock <= 0} className="btn btn-outline mt-3 h-12 w-full">
             {dict.product.buyNow}
           </button>
-          {product.is_customizable && (
+          {product.is_customizable && customStudio && (
             <Link href={`/${locale}/design?garment=${garment}${color ? `&color=${color.code}` : ""}`} className="btn btn-accent mt-3 h-12 w-full">
               <Paintbrush className="size-4" /> {dict.product.customizeThis}
             </Link>
@@ -234,6 +265,21 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
             </>
           )}
           {variant && <p className="mt-4 text-xs text-mute">{dict.product.sku}: <span dir="ltr">{variant.sku}</span></p>}
+
+          {print && (
+            <div className="mt-8 rounded-[1.5rem] border border-line p-5">
+              <p className="flex items-center gap-2 text-sm font-bold"><ScanLine className="size-4 text-pine" /> {locale === "ar" ? "تفاصيل الطباعة" : "Print details"}</p>
+              <ul className="mt-3 space-y-2 text-sm">
+                {print.details.map((d) => (
+                  <li key={d.id} className="flex flex-wrap items-baseline justify-between gap-x-3">
+                    <span>{locale === "ar" ? d.area.name_ar : d.area.name_en} <span className="text-xs text-mute">· {locale === "ar" ? d.view.name_ar : d.view.name_en}</span></span>
+                    <span className="tabular-nums" dir="ltr"><b>{d.cm.w} × {d.cm.h} cm</b> <span className="text-xs text-mute">/ max {d.area.max_width_cm} × {d.area.max_height_cm}</span></span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-xs text-mute">{locale === "ar" ? "المقاس الأول هو حجم الطباعة الفعلي، والثاني أكبر حجم يُطبع بهذا المكان." : "The first size is the actual print, the second the largest this spot can print."}</p>
+            </div>
+          )}
 
           <div className="mt-8 divide-y divide-line border-y border-line">
             {[

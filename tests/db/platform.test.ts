@@ -454,6 +454,52 @@ describe("custom designs", () => {
   });
 });
 
+describe("product printing configuration", () => {
+  const hoodieArea = async () => (await q<{ id: string }>("select a.id from product_print_areas a join product_type_views v on v.id = a.view_id join product_types t on t.id = v.product_type_id where t.code = 'hoodie' and a.code = 'front'"))[0]!.id;
+  const product = async (published: boolean) => (await q<{ id: string }>("insert into products (slug, name_ar, name_en, base_price, is_published) values ($1, 'ت', 'T', 1000, $2) returning id", [`pp-${Math.random().toString(36).slice(2, 8)}`, published]))[0]!.id;
+
+  it("ships built-in types with views and print areas sized in cm", async () => {
+    const rows = await q<{ code: string; views: number; areas: number }>(
+      "select t.code, count(distinct v.id)::int views, count(a.id)::int areas from product_types t join product_type_views v on v.product_type_id = t.id join product_print_areas a on a.view_id = v.id group by t.code order by t.code");
+    expect(rows.map((r) => r.code)).toEqual(["hoodie", "longsleeve", "oversized", "sweatshirt", "tshirt"]);
+    expect(rows.every((r) => r.views === 2 && r.areas === 5)).toBe(true);
+  });
+
+  it("rejects areas outside the mockup and artwork outside its area", async () => {
+    const v = (await q<{ id: string }>("select id from product_type_views limit 1"))[0]!.id;
+    await expect(q("insert into product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm) values ($1, 'out', 'خ', 'O', 0.8, 0.1, 0.5, 0.2, 10, 10)", [v])).rejects.toThrow(/check/);
+    await expect(q("insert into product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm) values ($1, 'zero', 'خ', 'Z', 0.1, 0.1, 0.2, 0.2, 0, 10)", [v])).rejects.toThrow(/check/);
+    const pid = await product(true);
+    const area = await hoodieArea();
+    await expect(q("insert into product_designs (product_id, area_id, artwork_url, x, y, width, height) values ($1, $2, '/a.png', 0.5, 0.1, 0.6, 0.3)", [pid, area])).rejects.toThrow(/check/);
+    await q("insert into product_designs (product_id, area_id, artwork_url, x, y, width, height) values ($1, $2, '/a.png', 0.1, 0.1, 0.8, 0.3)", [pid, area]);
+  });
+
+  it("only staff can change templates or official artwork; customers see artwork of published products only", async () => {
+    const area = await hoodieArea();
+    const live = await product(true);
+    const draft = await product(false);
+    for (const id of [live, draft]) await q("insert into product_designs (product_id, area_id, artwork_url, x, y, width, height) values ($1, $2, '/a.png', 0, 0, 1, 1)", [id, area]);
+    const seen = await as(anon, async (c) => (await c.query("select product_id from product_designs where product_id = any($1)", [[live, draft]])).rows.map((r) => r.product_id));
+    expect(seen).toEqual([live]);
+    await expect(as(user(alice), (c) => c.query("insert into product_designs (product_id, area_id, artwork_url, x, y, width, height) values ($1, $2, '/evil.png', 0, 0, 1, 1)", [live, area]))).rejects.toThrow(/row-level security/);
+    const changed = await as(user(alice), async (c) => (await c.query("update product_print_areas set max_width_cm = 199 where id = $1", [area])).rowCount);
+    expect(changed).toBe(0);
+    const staffChanged = await as(user(staff), async (c) => (await c.query("update product_print_areas set max_width_cm = 29 where id = $1", [area])).rowCount);
+    expect(staffChanged).toBe(1);
+    const types = await as(anon, async (c) => (await c.query("select count(*)::int n from product_types")).rows[0].n);
+    expect(types).toBeGreaterThanOrEqual(5);
+  });
+
+  it("deleting a product removes its artwork rows", async () => {
+    const area = await hoodieArea();
+    const pid = await product(true);
+    await q("insert into product_designs (product_id, area_id, artwork_url, x, y, width, height) values ($1, $2, '/a.png', 0, 0, 1, 1)", [pid, area]);
+    await q("delete from products where id = $1", [pid]);
+    expect((await q<{ n: number }>("select count(*)::int n from product_designs where product_id = $1", [pid]))[0]!.n).toBe(0);
+  });
+});
+
 describe("bulk orders & quotations", () => {
   it("suggests quantity-based unit prices", async () => {
     const price = await as(anon, async (c) => (await c.query("select bulk_unit_price('tshirt', 120) as p")).rows[0].p);

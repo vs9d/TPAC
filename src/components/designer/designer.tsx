@@ -800,6 +800,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
           invalid_preview: t("تعذّر تجهيز المعاينة — حاول مرة ثانية", "Couldn't prepare the preview — try again"),
           validation: t("في عنصر بالتصميم غير صالح — جرّب حذف آخر عنصر أضفته", "Something in the design isn't valid — try removing the last element you added"),
           storage_failed: t("تعذّر حفظ صور المعاينة — حاول بعد قليل", "Couldn't store the preview images — try again shortly"),
+          uploads_disabled: t("رفع التصاميم الخاصة متوقف حالياً", "Uploading your own designs is paused right now"),
           save_failed: t("تعذّر حفظ التصميم — حاول بعد قليل", "Couldn't save the design — try again shortly"),
         };
         toast.error(map[res.error] ?? dict.common.somethingWrong);

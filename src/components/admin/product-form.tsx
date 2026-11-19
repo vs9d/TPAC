@@ -1,6 +1,6 @@
 "use client";
-import { useRef, useState } from "react";
-import { ChevronDown, Copy, SlidersHorizontal, Wand2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Copy, Loader2, SlidersHorizontal, Wand2 } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { adminT } from "@/lib/admin-i18n";
 import { AdminForm, Input, Textarea, Select, Checkbox, Submit, Field } from "./form";
@@ -9,6 +9,8 @@ import { saveProduct } from "@/lib/actions/admin/products";
 import { slugify, TEXT_PRESETS } from "@/lib/product-tools";
 import { toast } from "@/components/ui/toast";
 import type { Category, Collection, Color, Product, Size } from "@/lib/types";
+import type { ProductTypeRow } from "@/lib/print-config";
+import { ProductStudio, type StudioHandle } from "./printing/product-studio";
 
 const setValue = (id: string, v: string) => {
   const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null;
@@ -20,13 +22,66 @@ const setValue = (id: string, v: string) => {
  * Everything else — English name, slug, descriptions, fabric & printing texts, flags, collections,
  * tags, SEO — lives in one collapsed "More options" block and has sensible automatic defaults.
  */
-export function ProductForm({ product, categories, collections, selectedCollections, sizes = [], colors = [] }: { product?: Product; categories: Category[]; collections: Collection[]; selectedCollections: string[]; sizes?: Size[]; colors?: Color[] }) {
+export function ProductForm({ product, categories, collections, selectedCollections, sizes = [], colors = [], printType }: { product?: Product; categories: Category[]; collections: Collection[]; selectedCollections: string[]; sizes?: Size[]; colors?: Color[]; printType?: ProductTypeRow | null }) {
   const { locale } = useI18n();
   const t = adminT(locale);
   const creating = !product;
   const [newId, setNewId] = useState(() => crypto.randomUUID());
   const [pickerKey, setPickerKey] = useState(0);
   const slugTouched = useRef(false);
+  const studio = useRef<StudioHandle>(null);
+  const ready = useRef(false);
+  const [generating, setGenerating] = useState<string | null>(null);
+  const [checkedColors, setCheckedColors] = useState<string[]>(printType?.default_color_ids ?? []);
+
+  // With a printing template, the product photos are rendered from the mockup + artwork BEFORE the form is sent:
+  // the native submit is held, the photos are uploaded, then the same submit is replayed for the server action.
+  useEffect(() => {
+    if (!creating || !printType) return;
+    const form = document.getElementById("product-form") as HTMLFormElement | null;
+    if (!form) return;
+    const onSubmit = async (e: SubmitEvent) => {
+      if (ready.current) {
+        ready.current = false;
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      const submitter = e.submitter as HTMLButtonElement | null;
+      const s = studio.current;
+      if (!s) return;
+      const set = (name: string, value: string) => {
+        const el = form.querySelector<HTMLInputElement>(`input[name="${name}"]`);
+        if (el) el.value = value;
+      };
+      try {
+        const designs = s.designs();
+        const colorIds = Array.from(form.querySelectorAll<HTMLInputElement>("input[name=qs_colors]:checked")).map((i) => i.value);
+        setGenerating(t("جارِ تجهيز صور المنتج…", "Preparing product photos…"));
+        const images = designs.length && s.printEnabled() ? await s.generate(newId, colorIds, (d, n) => setGenerating(t(`جارِ تجهيز صور المنتج ${d}/${n}…`, `Preparing product photos ${d}/${n}…`))) : [];
+        set("designs_json", JSON.stringify(designs.map(({ id: _i, ...d }) => { void _i; return d; })));
+        set("generated_json", JSON.stringify(images));
+        set("print_enabled", s.printEnabled() ? "1" : "0");
+        form.querySelectorAll("input[name=disabled_print_area_ids]").forEach((n) => n.remove());
+        for (const id of s.disabledAreas()) {
+          const h = document.createElement("input");
+          h.type = "hidden";
+          h.name = "disabled_print_area_ids";
+          h.value = id;
+          form.appendChild(h);
+        }
+        ready.current = true;
+        form.requestSubmit(submitter ?? undefined);
+      } catch (err) {
+        console.error(err);
+        toast.error(t("تعذّر تجهيز صور المنتج — تأكد من الإنترنت وحاول مجدداً", "Couldn't prepare the product photos — check the connection and try again"));
+      } finally {
+        setGenerating(null);
+      }
+    };
+    form.addEventListener("submit", onSubmit);
+    return () => form.removeEventListener("submit", onSubmit);
+  }, [creating, printType, newId, t]);
 
   const applyPreset = (kind: "material" | "printing", key: string) => {
     const p = TEXT_PRESETS[kind].find((x) => x.key === key);
@@ -78,15 +133,30 @@ export function ProductForm({ product, categories, collections, selectedCollecti
       <div className="card-admin space-y-4 p-5">
         <Input name="name_ar" label={t("اسم المنتج", "Product name")} defaultValue={product?.name_ar} required dir="rtl" autoFocus={creating} />
         <div className="grid gap-4 sm:grid-cols-2">
-          <Input name="base_price" type="number" min={0} step={250} inputMode="numeric" label={t("السعر (د.ع)", "Price (IQD)")} defaultValue={product?.base_price} required />
-          <Select name="category_id" label={t("الفئة", "Category")} defaultValue={product?.category_id ?? ""} options={[{ value: "", label: "—" }, ...categories.map((c) => ({ value: c.id, label: locale === "ar" ? c.name_ar : c.name_en }))]} />
+          <Input name="base_price" type="number" min={0} step={250} inputMode="numeric" label={t("السعر (د.ع)", "Price (IQD)")} defaultValue={product?.base_price ?? (printType?.default_price || undefined)} required />
+          <Select name="category_id" label={t("الفئة", "Category")} defaultValue={product?.category_id ?? printType?.category_id ?? ""} options={[{ value: "", label: "—" }, ...categories.map((c) => ({ value: c.id, label: locale === "ar" ? c.name_ar : c.name_en }))]} />
         </div>
       </div>
+
+      {creating && printType && (
+        <div className="card-admin relative space-y-3 p-5">
+          <input type="hidden" name="product_type_id" value={printType.id} />
+          <input type="hidden" name="designs_json" defaultValue="[]" />
+          <input type="hidden" name="generated_json" defaultValue="[]" />
+          <input type="hidden" name="print_enabled" defaultValue="1" />
+          <div>
+            <h2 className="text-sm font-semibold">{t("التصميم على القطعة", "Design on the product")} — {locale === "ar" ? printType.name_ar : printType.name_en}</h2>
+            <p className="mt-1 text-xs text-mute">{t("ارفع تصميم المنتج الرسمي وضعه داخل منطقة الطباعة. صور المنتج تُصنع تلقائياً لكل لون تختاره.", "Upload the official artwork and place it inside the print area. Product photos are generated automatically for every colour you pick.")}</p>
+          </div>
+          <ProductStudio key={newId} ref={studio} type={printType} colors={colors} productId={newId} previewColorIds={checkedColors} />
+          {generating && <div className="absolute inset-0 z-20 grid place-items-center rounded-[inherit] bg-paper/80"><p className="flex items-center gap-2 text-sm font-semibold"><Loader2 className="size-4 animate-spin" /> {generating}</p></div>}
+        </div>
+      )}
 
       {creating && (
         <>
           <div className="card-admin space-y-3 p-5">
-            <h2 className="text-sm font-semibold">{t("الصور", "Photos")}</h2>
+            <h2 className="text-sm font-semibold">{printType ? t("صور إضافية (اختياري)", "Extra photos (optional)") : t("الصور", "Photos")}</h2>
             <ImagePicker key={pickerKey} productId={newId} colors={colors} />
           </div>
           <div className="card-admin space-y-4 p-5">
@@ -98,7 +168,7 @@ export function ProductForm({ product, categories, collections, selectedCollecti
               <div className="flex flex-wrap gap-2">
                 {sizes.map((s) => (
                   <label key={s.code} className="chip cursor-pointer has-[:checked]:border-pine has-[:checked]:bg-pine has-[:checked]:text-white dark:has-[:checked]:text-night">
-                    <input type="checkbox" name="qs_sizes" value={s.code} defaultChecked={["S", "M", "L", "XL", "XXL"].includes(s.code)} className="sr-only" /> {s.code}
+                    <input type="checkbox" name="qs_sizes" value={s.code} defaultChecked={(printType?.default_sizes.length ? printType.default_sizes : ["S", "M", "L", "XL", "XXL"]).includes(s.code)} className="sr-only" /> {s.code}
                   </label>
                 ))}
               </div>
@@ -107,7 +177,7 @@ export function ProductForm({ product, categories, collections, selectedCollecti
               <div className="flex flex-wrap gap-2">
                 {colors.map((c) => (
                   <label key={c.id} className="chip cursor-pointer gap-2 has-[:checked]:border-pine has-[:checked]:bg-pine-soft">
-                    <input type="checkbox" name="qs_colors" value={c.id} className="peer sr-only" />
+                    <input type="checkbox" name="qs_colors" value={c.id} defaultChecked={printType?.default_color_ids.includes(c.id)} onChange={(e) => setCheckedColors((l) => (e.target.checked ? [...l, c.id] : l.filter((x) => x !== c.id)))} className="peer sr-only" />
                     <span className="size-4 rounded-full border border-ink/25" style={{ background: c.hex }} /> {locale === "ar" ? c.name_ar : c.name_en}
                   </label>
                 ))}

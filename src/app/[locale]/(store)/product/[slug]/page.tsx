@@ -13,6 +13,7 @@ import { ReviewForm } from "@/components/product/review-form";
 import { JsonLd } from "@/components/seo/json-ld";
 import { publicEnv } from "@/lib/env";
 import { formatDate } from "@/lib/format";
+import { customerUploadsEnabled } from "@/lib/designer-settings";
 
 type Props = { params: Promise<{ locale: string; slug: string }> };
 
@@ -45,11 +46,12 @@ export default async function ProductPage({ params }: Props) {
   const dict = getDictionary(locale);
   const product = await getProductBySlug(slug);
   if (!product) notFound();
-  const [sizes, reviews, related, session] = await Promise.all([
+  const [sizes, reviews, related, session, customStudio] = await Promise.all([
     getSizes(),
     getReviews(product.id),
     searchProducts({ category: product.category?.slug, exclude: product.id, limit: 4, sort: "popular" }).catch(() => ({ total: 0, items: [] })),
     getSession(),
+    customerUploadsEnabled(),
   ]);
   let favorite = false;
   if (session) {
@@ -112,7 +114,7 @@ export default async function ProductPage({ params }: Props) {
         <span className="text-ink">{name}</span>
       </nav>
 
-      <ProductView product={product} sizeOrder={sizes.map((s) => s.code)} garment={garment} initialFavorite={favorite} signedIn={!!session} />
+      <ProductView product={product} sizeOrder={sizes.map((s) => s.code)} garment={garment} initialFavorite={favorite} signedIn={!!session} customStudio={customStudio} />
 
       <section className="mt-20 border-t border-line pt-12" aria-labelledby="reviews">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">

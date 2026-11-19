@@ -75,6 +75,29 @@ Key functions: `quote_cart`, `place_order`, `update_order_status`, `adjust_inven
 ### Stock policy
 Stock is **committed when the order is placed** (not at confirmation) so two customers can never buy the same last unit. Cancelling before the order ships restores it automatically (`cancellation` transaction). Cancelling after shipping does not restore stock — record returns with an inventory adjustment (`return`).
 
+### Product printing configuration (`add-product-printing.sql`)
+
+Admin-controlled templates that decide how every product is shown and where it may be printed — new kinds of
+product are added from the dashboard, no code change needed.
+
+| Table | Purpose |
+|---|---|
+| `product_types` | Hoodie, T-shirt, long sleeve… (code, names, default price / sizes / colours / category, optional built-in vector fallback) |
+| `product_type_views` | Angles of a type (front, back, side…), each with its blank mockup photo, its pixel size, and optional per-colour mockups (`color_mockups` jsonb) |
+| `product_print_areas` | Printable rectangles on a view — position/size as **fractions of the mockup**, plus `max_width_cm` / `max_height_cm` |
+| `product_designs` | The official artwork the **admin** placed for a product — position/size as **fractions of its area** (CHECK: never outside the area) |
+| `products.product_type_id / print_enabled / disabled_print_area_ids` | Template of a product and per-product switches |
+| `product_images.view_id / is_generated` | Card/cart photos rendered from mockup + artwork; replaced (not duplicated) on every save |
+
+* Print size in cm = design fraction × area max cm, so a design can never exceed the printable dimensions.
+* Mockup choice: colour mockup → default photo → built-in vector garment (tinted).
+* RLS: templates and artwork are public-read (artwork only for published products) and staff-write only;
+  official artwork lives in the public `product-images` bucket under `products/<id>/art/`, mockups under `mockups/<type>/`.
+* Admin UI: Dashboard → Product types & printing (mockups + visual area editor), New product → type picker → studio,
+  product edit page → "Printing & mockup". Storefront: live layered mockups per angle/colour + print details.
+* `website_settings.designer.customer_uploads` switches the customer print studio (customers' OWN artwork) on/off;
+  enforced in `/api/uploads/sign` and `saveDesign`.
+
 ## Frontend
 
 - `src/app/[locale]/(store)` storefront, `src/app/[locale]/admin` dashboard; `ar` is RTL, `en` LTR; `<html lang dir>` per locale.

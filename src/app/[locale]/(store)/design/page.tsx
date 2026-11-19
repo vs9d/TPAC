@@ -8,6 +8,8 @@ import { getColors } from "@/lib/data/catalog";
 import { isSupabaseConfigured } from "@/lib/env";
 import { Designer } from "@/components/designer/designer";
 import { adminT } from "@/lib/admin-i18n";
+import { customerUploadsEnabled } from "@/lib/designer-settings";
+import Link from "next/link";
 import type { DesignerFont } from "@/lib/design-assets";
 import type { DesignerOptionRow, DesignerSettings, DesignerTierRow, GarmentTypeRow, PrintLocationRow } from "@/lib/types";
 
@@ -102,7 +104,7 @@ export default async function DesignPage({ params, searchParams }: { params: Pro
     tiers = (tr.data as DesignerTierRow[]) ?? [];
     settings = { ...DEFAULT_SETTINGS, ...((s.data?.value as Partial<DesignerSettings>) ?? {}) };
   }
-  const colors = await getColors();
+  const [colors, open] = await Promise.all([getColors(), customerUploadsEnabled()]);
   return (
     <div className="container-x relative py-8 md:py-12">
       {/* font classes make sure the @font-face rules are emitted for canvas text */}
@@ -126,7 +128,13 @@ export default async function DesignPage({ params, searchParams }: { params: Pro
           ))}
         </ol>
       </header>
-      {garments.length === 0 ? (
+      {!open ? (
+        <div className="studio-card mx-auto max-w-xl p-8 text-center">
+          <p className="display text-2xl">{t("الطباعة بتصميمك متوقفة حالياً", "Printing your own design is paused for now")}</p>
+          <p className="mt-2 text-mute">{t("تصفّح تصاميمنا الجاهزة، أو تواصل معنا لطلب خاص.", "Browse our ready designs, or contact us for a special request.")}</p>
+          <Link href={`/${locale}/shop`} className="btn btn-brand mt-6">{t("تسوّق التصاميم", "Shop the designs")}</Link>
+        </div>
+      ) : garments.length === 0 ? (
         <p className="py-20 text-center text-mute">{dict.common.serviceUnavailable}</p>
       ) : (
         <Designer garments={garments} locations={locations} colors={colors} fonts={FONTS} options={options} tiers={tiers} settings={settings} initialGarment={garment} initialColor={color} />

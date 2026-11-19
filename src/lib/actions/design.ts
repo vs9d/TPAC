@@ -5,6 +5,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { designSchema, fieldErrors } from "@/lib/validation";
 import { sniffMime, signedUrl } from "@/lib/storage";
 import { resolveOptions, type OptionLite } from "@/lib/design-pricing";
+import { customerUploadsEnabled } from "@/lib/designer-settings";
 
 export interface SavedDesignLine { design_id: string; size: string; quantity: number }
 export type SaveDesignResult =
@@ -34,6 +35,7 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
     console.warn("saveDesign validation", JSON.stringify(fieldErrors(parsed.error)).slice(0, 500));
     return { ok: false, error: "validation", fields: fieldErrors(parsed.error) };
   }
+  if (!(await customerUploadsEnabled())) return { ok: false, error: "uploads_disabled" };
   if (!(await rateLimit("design"))) return { ok: false, error: "rate_limited" };
   const d = parsed.data;
   const db = createAdminClient();

@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ShoppingCart, Package, Boxes, Users, Building2, Tag, Megaphone, Home, Settings, Bell, History, MessageSquare, Star, Palette, Menu, X, Store, Layers, Shirt, Brush } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Package, Boxes, Users, Building2, Tag, Megaphone, Home, Settings, Bell, History, MessageSquare, Star, Palette, Menu, X, Store, Layers, Shirt, Brush, Frame } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { adminT } from "@/lib/admin-i18n";
 import { cn } from "@/lib/format";
@@ -28,6 +28,7 @@ export function AdminShell({ children, role, name, badges }: { children: React.R
       label: t("الكتالوج", "Catalog"),
       items: [
         { href: `${base}/products`, label: t("المنتجات", "Products"), icon: Package },
+        { href: `${base}/product-types`, label: t("أنواع المنتجات والطباعة", "Product types & printing"), icon: Frame },
         { href: `${base}/inventory`, label: t("المخزون", "Inventory"), icon: Boxes },
         { href: `${base}/categories`, label: t("الفئات والمجموعات", "Categories & collections"), icon: Layers },
         { href: `${base}/attributes`, label: t("الألوان والمقاسات", "Colours & sizes"), icon: Palette },

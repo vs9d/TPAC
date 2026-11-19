@@ -990,4 +990,11 @@ insert into public.website_settings (key, value) values
   ('currency', '{"code":"IQD","symbol_ar":"د.ع","symbol_en":"IQD"}'::jsonb),
   ('languages', '{"default":"ar","enabled":["ar","en"]}'::jsonb),
   ('notifications', '{"admin_email":"","admin_whatsapp":"","customer_email":true,"customer_whatsapp":true,"admin_new_order":true,"admin_low_stock":true,"admin_bulk_request":true}'::jsonb);
+-- built-in printing types get black & white as default colours once colours exist (no-op when already set)
+do $$ begin
+  if to_regclass('public.product_types') is not null then
+    update public.product_types set default_color_ids = array(select id from public.colors where code in ('black', 'white') order by sort_order)
+     where default_color_ids = '{}' and garment_shape is not null;
+  end if;
+end $$;
 commit;

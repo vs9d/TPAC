@@ -65,6 +65,9 @@ export interface ProductImage {
   alt_en: string | null;
   color_id: string | null;
   sort_order: number;
+  /** set on photos rendered from a printing template (mockup + official artwork) */
+  view_id?: string | null;
+  is_generated?: boolean;
 }
 
 export interface Variant {
@@ -98,6 +101,10 @@ export interface Product {
   is_new_arrival: boolean;
   is_limited: boolean;
   is_customizable: boolean;
+  /** printing template (null = an ordinary product without a template) */
+  product_type_id?: string | null;
+  print_enabled?: boolean;
+  disabled_print_area_ids?: string[];
   sales_count: number;
   tags: string[];
   seo_title_ar: string | null;
@@ -113,6 +120,9 @@ export interface ProductDetail extends Product {
   category: Category | null;
   product_images: ProductImage[];
   product_variants: Variant[];
+  /** printing template with its views and print areas, and the artwork placed on it (present once add-product-printing.sql ran) */
+  product_type?: import("./print-config").ProductTypeRow | null;
+  product_designs?: import("./print-config").ProductDesignRow[];
 }
 
 /** Shape returned by public.catalog_search() */
