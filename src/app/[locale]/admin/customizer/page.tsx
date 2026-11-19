@@ -7,18 +7,20 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader, Card, Stat, Empty } from "@/components/admin/ui";
 import { AdminForm, Input, Textarea, Checkbox, Submit, ConfirmSubmit } from "@/components/admin/form";
 import { saveGarmentType, savePrintLocation } from "@/lib/actions/admin/catalog";
+import { PodImages } from "@/components/admin/printing/pod-images";
+import { normType, type ProductTypeRow } from "@/lib/print-config";
 import { saveDesignerOption, deleteDesignerOption, saveDesignerTier, deleteDesignerTier, saveDesignerSettings } from "@/lib/actions/admin/designer";
 import { cn } from "@/lib/format";
 import type { Color, DesignerOptionRow, DesignerSettings, DesignerTierRow, GarmentTypeRow, PrintLocationRow, Size } from "@/lib/types";
 
-const TABS = ["garments", "placements", "options", "tiers", "settings"] as const;
+const TABS = ["images", "garments", "placements", "options", "tiers", "settings"] as const;
 type Tab = (typeof TABS)[number];
 
 export default async function AdminCustomizer({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const sp = await searchParams;
-  const tab: Tab = (TABS as readonly string[]).includes(sp.tab ?? "") ? (sp.tab as Tab) : "garments";
+  const tab: Tab = (TABS as readonly string[]).includes(sp.tab ?? "") ? (sp.tab as Tab) : "images";
   const t = adminT(locale);
   const dict = getDictionary(locale);
   const supabase = await createClient();
@@ -35,11 +37,15 @@ export default async function AdminCustomizer({ params, searchParams }: { params
     supabase.from("custom_designs").select("id", { count: "exact", head: true }).gte("created_at", weekAgo),
     supabase.from("orders").select("id", { count: "exact", head: true }).eq("has_custom_items", true),
   ]);
+  const podTypes = tab === "images" && g?.length
+    ? (((await supabase.from("product_types").select("*, product_type_views(*, product_print_areas(*))").in("code", (g as GarmentTypeRow[]).map((x) => x.code))).data as ProductTypeRow[]) ?? []).map(normType)
+    : [];
   const options = (opts as DesignerOptionRow[]) ?? [];
   const tierRows = (tiers as DesignerTierRow[]) ?? [];
   const settings = { customer_uploads: true, lead_days_min: 3, lead_days_max: 5, rush_days: 2, min_dpi: 150, notice_ar: "", notice_en: "", ...((st?.value as Partial<DesignerSettings>) ?? {}) };
   const base = `/${locale}/admin/customizer`;
   const tabLabel: Record<Tab, string> = {
+    images: t("صور الطباعة", "Printing images"),
     garments: t("القطع", "Garments"),
     placements: t("أماكن الطباعة", "Placements"),
     options: t("خيارات الطباعة", "Print options"),
@@ -72,6 +78,12 @@ export default async function AdminCustomizer({ params, searchParams }: { params
           <Link key={x} href={`${base}?tab=${x}`} className={cn("shrink-0 rounded-full px-4 py-2 text-sm font-bold transition", tab === x ? "bg-ink text-paper" : "text-mute hover:text-ink")} aria-current={tab === x ? "page" : undefined}>{tabLabel[x]}</Link>
         ))}
       </nav>
+
+      {tab === "images" && (
+        <Card title={t("صور القطع في «صمّم قطعتك»", "Garment images in “Design your piece”")}>
+          <PodImages garments={(g as GarmentTypeRow[]) ?? []} types={podTypes} colors={(colors as Color[]) ?? []} />
+        </Card>
+      )}
 
       {tab === "garments" && (
         <div className="grid gap-4 lg:grid-cols-2">

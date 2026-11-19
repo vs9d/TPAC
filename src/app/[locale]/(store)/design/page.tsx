@@ -11,6 +11,8 @@ import { adminT } from "@/lib/admin-i18n";
 import { customerUploadsEnabled } from "@/lib/designer-settings";
 import Link from "next/link";
 import type { DesignerFont } from "@/lib/design-assets";
+import { normType, type ProductTypeRow } from "@/lib/print-config";
+import { podTemplate, type PodTemplate } from "@/lib/pod-templates";
 import type { DesignerOptionRow, DesignerSettings, DesignerTierRow, GarmentTypeRow, PrintLocationRow } from "@/lib/types";
 
 // Fonts are only fetched when a design actually uses them (preload: false), so the page stays light.
@@ -88,6 +90,7 @@ export default async function DesignPage({ params, searchParams }: { params: Pro
   let options: DesignerOptionRow[] = [];
   let tiers: DesignerTierRow[] = [];
   let settings = DEFAULT_SETTINGS;
+  let templates: Record<string, PodTemplate | null> = {};
   if (isSupabaseConfigured()) {
     const supabase = await createClient();
     const [g, l, o, tr, s] = await Promise.all([
@@ -103,6 +106,11 @@ export default async function DesignPage({ params, searchParams }: { params: Pro
     options = (o.data as DesignerOptionRow[]) ?? [];
     tiers = (tr.data as DesignerTierRow[]) ?? [];
     settings = { ...DEFAULT_SETTINGS, ...((s.data?.value as Partial<DesignerSettings>) ?? {}) };
+    // photos + print areas the admin manages for each garment (same records as catalog product types)
+    if (garments.length) {
+      const { data: types } = await supabase.from("product_types").select("*, product_type_views(*, product_print_areas(*))").in("code", garments.map((x) => x.code));
+      templates = Object.fromEntries(((types as ProductTypeRow[]) ?? []).map((ty) => [ty.code, podTemplate(normType(ty))]));
+    }
   }
   const [colors, open] = await Promise.all([getColors(), customerUploadsEnabled()]);
   return (
@@ -137,7 +145,7 @@ export default async function DesignPage({ params, searchParams }: { params: Pro
       ) : garments.length === 0 ? (
         <p className="py-20 text-center text-mute">{dict.common.serviceUnavailable}</p>
       ) : (
-        <Designer garments={garments} locations={locations} colors={colors} fonts={FONTS} options={options} tiers={tiers} settings={settings} initialGarment={garment} initialColor={color} />
+        <Designer garments={garments} locations={locations} colors={colors} fonts={FONTS} options={options} tiers={tiers} settings={settings} initialGarment={garment} initialColor={color} templates={templates} />
       )}
     </div>
   );

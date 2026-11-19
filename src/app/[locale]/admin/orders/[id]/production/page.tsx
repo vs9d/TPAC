@@ -52,7 +52,7 @@ export default async function ProductionSheet({ params }: { params: Promise<{ lo
         const c = colorById.get(d.color_id);
         const total = g.rows.reduce((n, r) => n + (qtyByDesign.get(r.id)?.quantity ?? 0), 0);
         const objs = d.config.objects ?? [];
-        const areas = GARMENTS[d.garment_type as GarmentType]?.printAreas;
+        const areas = { ...GARMENTS[d.garment_type as GarmentType]?.printAreas, ...(d.config.areas ?? {}) } as Record<string, { cm: { width: number; height: number } }>;
         const fileIds = [...new Set(objs.map((o) => o.artwork_id).filter(Boolean) as string[])];
         return (
           <section key={g.key} className="break-inside-avoid-page border-b border-line py-6 [page-break-inside:avoid]">
@@ -87,7 +87,7 @@ export default async function ProductionSheet({ params }: { params: Promise<{ lo
               <thead><tr className="border-y border-ink text-start"><th className="py-1 text-start">{t("المكان", "Placement")}</th><th className="text-start">{t("العنصر", "Element")}</th><th className="text-start">{t("التفاصيل", "Details")}</th><th className="text-end">{t("القياس (سم)", "Size (cm)")}</th></tr></thead>
               <tbody>
                 {objs.map((o, i) => {
-                  const cm = objectCm(d.garment_type, o);
+                  const cm = objectCm(d.garment_type, o, d.config.areas);
                   const detail = o.type === "text"
                     ? [o.fontLabel ?? o.fontFamily, o.fill ? o.fill : t("مفرّغ", "outline"), o.fontWeight && Number(o.fontWeight) >= 600 ? t("عريض", "bold") : "", o.fontStyle === "italic" ? t("مائل", "italic") : "", o.stroke && (o.strokeWidth ?? 0) > 0 ? `${t("حد", "stroke")} ${o.stroke}` : ""].filter(Boolean).join(" · ")
                     : o.type === "shape" ? [o.fill, o.stroke && (o.strokeWidth ?? 0) > 0 ? `${t("حد", "stroke")} ${o.stroke}` : ""].filter(Boolean).join(" · ")

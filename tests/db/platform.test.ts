@@ -491,6 +491,18 @@ describe("product printing configuration", () => {
     expect(types).toBeGreaterThanOrEqual(5);
   });
 
+  it("print-on-demand images: everyone can read them, only staff can replace or delete them", async () => {
+    const v = (await q<{ id: string }>("select v.id from product_type_views v join product_types t on t.id = v.product_type_id where t.code = 'tshirt' and v.code = 'front'"))[0]!.id;
+    const read = await as(anon, async (c) => (await c.query("select id from product_type_views where id = $1", [v])).rowCount);
+    expect(read).toBe(1);
+    for (const who of [anon, user(alice)]) {
+      const changed = await as(who, async (c) => (await c.query("update product_type_views set mockup_url = '/evil.png' where id = $1", [v])).rowCount);
+      expect(changed).toBe(0);
+    }
+    const staffSees = await as(user(staff), async (c) => (await c.query("update product_type_views set mockup_url = '/new.png', mockup_width = 900, mockup_height = 1000 where id = $1 returning mockup_url", [v])).rows);
+    expect(staffSees).toEqual([{ mockup_url: "/new.png" }]);
+  });
+
   it("deleting a product removes its artwork rows", async () => {
     const area = await hoodieArea();
     const pid = await product(true);

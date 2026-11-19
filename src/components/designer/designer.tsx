@@ -8,7 +8,8 @@ import { toast } from "@/components/ui/toast";
 import { saveDesign } from "@/lib/actions/design";
 import { ACCEPT_DESIGN, uploadArtwork } from "@/lib/upload-client";
 import { adminT } from "@/lib/admin-i18n";
-import { ARTBOARD, GARMENTS, LOCATION_VIEW, garmentDataUrl, luminance, type GarmentType, type GarmentView, type PrintLocation } from "@/lib/garments";
+import { ARTBOARD, LOCATION_VIEW, garmentDataUrl, luminance, type GarmentType, type GarmentView, type PrintLocation } from "@/lib/garments";
+import { fitInArtboard, podArea, podAreas, podPhoto, type PodTemplate } from "@/lib/pod-templates";
 import { TEMPLATES, TEXT_PRESETS_UI, shapeById, type DesignerFont } from "@/lib/design-assets";
 import { discountedUnit, resolveOptions, tierPercent, type OptionLite } from "@/lib/design-pricing";
 import { cn, formatIQD } from "@/lib/format";
@@ -21,7 +22,7 @@ import { ReviewDialog } from "./review";
 const MAX_HISTORY = 60;
 const NUDGE = 1;
 
-export function Designer({ garments, locations, colors, fonts, options, tiers, settings, initialGarment, initialColor }: {
+export function Designer({ garments, locations, colors, fonts, options, tiers, settings, initialGarment, initialColor, templates = {} }: {
   garments: GarmentTypeRow[];
   locations: PrintLocationRow[];
   colors: Color[];
@@ -31,6 +32,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   settings: DesignerSettings;
   initialGarment?: string;
   initialColor?: string;
+  /** admin-managed photos + print areas per garment code (Dashboard → Print designer → Printing images) */
+  templates?: Record<string, PodTemplate | null>;
 }) {
   const { locale, dict } = useI18n();
   const t = adminT(locale);
@@ -77,10 +80,13 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const exportingRef = useRef(false);
   const snapRef = useRef({ x: false, y: false, loc: "front" as PrintLocation });
   const historyRef = useRef<{ stack: string[]; index: number; busy: boolean; timer: ReturnType<typeof setTimeout> | null }>({ stack: [], index: -1, busy: false, timer: null });
-  const stateRef = useRef({ garmentCode, location, view, colorHex: color?.hex ?? "#FFFFFF", guides });
-  stateRef.current = { garmentCode, location, view, colorHex: color?.hex ?? "#FFFFFF", guides };
+  const stateRef = useRef({ garmentCode, location, view, colorHex: color?.hex ?? "#FFFFFF", colorId: color?.id ?? "", guides });
+  stateRef.current = { garmentCode, location, view, colorHex: color?.hex ?? "#FFFFFF", colorId: color?.id ?? "", guides };
+  const tplRef = useRef(templates);
+  tplRef.current = templates;
+  const tpl = (g: string) => tplRef.current[g] ?? null;
 
-  const area = useCallback((loc: PrintLocation) => GARMENTS[stateRef.current.garmentCode as GarmentType].printAreas[loc], []);
+  const area = useCallback((loc: PrintLocation) => podArea(tplRef.current[stateRef.current.garmentCode] ?? null, stateRef.current.garmentCode as GarmentType, loc), []);
   const design = useCallback(() => ((canvasRef.current?.getObjects() ?? []) as Tagged[]).filter((o) => o.tpacKind && o.tpacKind !== "guide"), []);
 
   // ------------------------------------------------------------------ helpers
@@ -152,17 +158,32 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     const c = canvasRef.current;
     const F = fabricRef.current;
     if (!c || !F) return;
-    const { garmentCode: g, colorHex, guides: showGuides } = stateRef.current;
+    const { garmentCode: g, colorHex, colorId: cid, guides: showGuides } = stateRef.current;
     const v = override?.view ?? stateRef.current.view;
     const loc = override?.location ?? stateRef.current.location;
-    const bg = await F.FabricImage.fromURL(garmentDataUrl(g as GarmentType, v, colorHex));
-    bg.set({ originX: "left", originY: "top", left: 0, top: 0, scaleX: ARTBOARD.width / (bg.width || 600), scaleY: ARTBOARD.height / (bg.height || 700) });
+    // the admin's photo for this view / colour when there is one, the built-in drawing otherwise
+    const photo = podPhoto(tpl(g), v, cid);
+    let bg: Awaited<ReturnType<typeof F.FabricImage.fromURL>> | null = null;
+    if (photo) {
+      try {
+        bg = await F.FabricImage.fromURL(photo, { crossOrigin: "anonymous" });
+        const box = fitInArtboard(bg.width || 600, bg.height || 700);
+        bg.set({ originX: "left", originY: "top", left: box.x, top: box.y, scaleX: box.width / (bg.width || 600), scaleY: box.height / (bg.height || 700) });
+      } catch {
+        bg = null;
+      }
+    }
+    if (!bg) {
+      bg = await F.FabricImage.fromURL(garmentDataUrl(g as GarmentType, v, colorHex));
+      bg.set({ originX: "left", originY: "top", left: 0, top: 0, scaleX: ARTBOARD.width / (bg.width || 600), scaleY: ARTBOARD.height / (bg.height || 700) });
+    }
     c.backgroundImage = bg;
+    const areaMap = podAreas(tpl(g), g as GarmentType);
     for (const o of c.getObjects() as Tagged[]) if (o.tpacKind === "guide") c.remove(o);
     const dark = luminance(colorHex) < 0.35;
-    for (const l of Object.keys(GARMENTS[g as GarmentType].printAreas) as PrintLocation[]) {
+    for (const l of Object.keys(areaMap) as PrintLocation[]) {
       if (LOCATION_VIEW[l] !== v) continue;
-      const a = GARMENTS[g as GarmentType].printAreas[l];
+      const a = areaMap[l];
       const active = l === loc;
       const guide = new F.Rect({
         originX: "left", originY: "top", left: a.x, top: a.y, width: a.width, height: a.height,
@@ -180,7 +201,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       const onView = !!o.tpacLocation && LOCATION_VIEW[o.tpacLocation] === v && !o.tpacHidden;
       o.set({ visible: onView, selectable: onView, evented: onView, lockMovementX: !!o.tpacLocked, lockMovementY: !!o.tpacLocked, lockScalingX: !!o.tpacLocked, lockScalingY: !!o.tpacLocked, lockRotation: !!o.tpacLocked, hasControls: !o.tpacLocked });
       if (o.tpacLocation) {
-        const a = GARMENTS[g as GarmentType].printAreas[o.tpacLocation];
+        const a = areaMap[o.tpacLocation];
         o.clipPath = new F.Rect({ originX: "left", originY: "top", left: a.x, top: a.y, width: a.width, height: a.height, absolutePositioned: true });
         constrain(o);
       }

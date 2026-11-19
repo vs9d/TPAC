@@ -769,6 +769,68 @@ await flow("admin printing: type mockup & areas → product from template with a
   assert.equal((await one("select count(*)::int n from product_images where product_id = $1 and is_generated", [pid])).n, 4, "no duplicate photos");
 });
 
+await flow("print-on-demand images: admin uploads → preview → save → customers see it → delete falls back", async (page) => {
+  const email = `pod${Date.now()}@thetpac.com`;
+  await page.goto(`${BASE}/en/account/register`);
+  await page.fill("#full_name", "POD Admin");
+  await page.fill("#email", email);
+  await page.fill("#phone", "07700000099");
+  await page.fill("#password", "admin-pass-2026");
+  await page.fill("#confirm", "admin-pass-2026");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.waitForURL(/account$/);
+  const b64 = await page.evaluate(() => {
+    const c = document.createElement("canvas"); c.width = 900; c.height = 1000;
+    const x = c.getContext("2d"); x.fillStyle = "#ECE9E2"; x.fillRect(0, 0, 900, 1000); x.fillStyle = "#1d3b5a"; x.fillRect(220, 120, 460, 820);
+    return c.toDataURL("image/png").split(",")[1];
+  });
+  const file = `${SHOTS}/pod-tee.png`;
+  writeFileSync(file, Buffer.from(b64, "base64"));
+
+  // a customer can't reach the settings, and can't write the image records
+  await page.goto(`${BASE}/en/admin/customizer`);
+  await page.waitForURL((u) => !u.pathname.includes("/admin"));
+  await db.query("update customer_profiles set role = 'admin' where email = $1", [email]);
+
+  // Dashboard → Print designer → Printing images (first tab)
+  await page.goto(`${BASE}/en/admin/customizer`);
+  await page.getByRole("tab", { name: "T-shirt", exact: true }).click();
+  await page.getByText("Built-in drawing").first().waitFor();
+  await page.getByLabel("Image Default image (all colours)").setInputFiles(file);
+  await page.getByText("Preview — not saved").waitFor();
+  const before = await one("select v.mockup_url from product_type_views v join product_types t on t.id = v.product_type_id where t.code = 'tshirt' and v.code = 'front'");
+  assert.equal(before.mockup_url, null, "nothing is stored before Save");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByText("Image saved — customers see it now").waitFor({ timeout: 20000 });
+  await page.getByText("Current image").first().waitFor();
+  const saved = await one("select v.mockup_url, v.mockup_width, v.mockup_height from product_type_views v join product_types t on t.id = v.product_type_id where t.code = 'tshirt' and v.code = 'front'");
+  assert.ok(saved.mockup_url?.includes("/product-images/mockups/"), "stored in the product-images bucket");
+  assert.deepEqual([saved.mockup_width, saved.mockup_height], [900, 1000]);
+
+  // customer side: the studio loads the new photo, and previews (canvas export) still work with it
+  const ctx = await page.context().browser().newContext({ viewport: { width: 1366, height: 900 } });
+  const c = await ctx.newPage();
+  const photo = c.waitForResponse((r) => r.url() === saved.mockup_url && r.status() === 200, { timeout: 20000 });
+  await c.goto(`${BASE}/en/design?garment=tshirt`);
+  await photo;
+  await c.getByRole("button", { name: "or write a word" }).click();
+  await c.getByRole("button", { name: "Add", exact: true }).click();
+  await c.getByRole("button", { name: "Review & add to bag" }).click();
+  await c.getByRole("dialog", { name: "Review your design" }).waitFor();
+  await c.screenshot({ path: `${SHOTS}/pod-customer.png` });
+  // still there after a reload (persisted, not cached in the browser)
+  await c.reload();
+  await c.waitForResponse((r) => r.url() === saved.mockup_url, { timeout: 20000 });
+  await ctx.close();
+
+  // delete → customers get the built-in drawing again
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Delete" }).first().click();
+  await page.getByText("Image deleted").waitFor();
+  assert.equal((await one("select v.mockup_url from product_type_views v join product_types t on t.id = v.product_type_id where t.code = 'tshirt' and v.code = 'front'")).mockup_url, null);
+  assert.equal((await one("select count(*)::int n from storage.objects where name = $1", [saved.mockup_url.split("/product-images/")[1]])).n, 0, "the old file is removed from storage");
+});
+
 console.log(results.join("\n"));
 await browser.close();
 await db.end();

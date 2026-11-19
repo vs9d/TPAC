@@ -6,6 +6,9 @@ import { designSchema, fieldErrors } from "@/lib/validation";
 import { sniffMime, signedUrl } from "@/lib/storage";
 import { resolveOptions, type OptionLite } from "@/lib/design-pricing";
 import { customerUploadsEnabled } from "@/lib/designer-settings";
+import { normType, type ProductTypeRow } from "@/lib/print-config";
+import { podAreas, podTemplate } from "@/lib/pod-templates";
+import type { GarmentType } from "@/lib/garments";
 
 export interface SavedDesignLine { design_id: string; size: string; quantity: number }
 export type SaveDesignResult =
@@ -87,8 +90,13 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
     return { ok: false, error: "storage_failed" };
   }
 
+  // the print areas the customer actually designed in (admin photo + areas, or the built-in garment),
+  // kept with the design so the production sheet measures in the right centimetres
+  const { data: typeRow } = await db.from("product_types").select("*, product_type_views(*, product_print_areas(*))").eq("code", d.garment_type).maybeSingle();
+  const areas = podAreas(typeRow ? podTemplate(normType(typeRow as ProductTypeRow)) : null, d.garment_type as GarmentType);
   const config = {
     version: 2,
+    areas: Object.fromEntries(used.map((l) => [l, areas[l]])),
     artboard: { width: 600, height: 700 },
     objects: d.objects,
     options: chosen.choice,

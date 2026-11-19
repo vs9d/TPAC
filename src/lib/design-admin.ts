@@ -16,7 +16,7 @@ export interface DesignObjectCfg {
 export interface DesignRow {
   id: string; batch_id: string | null; name: string | null; user_id: string | null;
   garment_type: string; color_id: string; size_code: string; print_locations: string[];
-  config: { version?: number; objects?: DesignObjectCfg[]; sizes?: Record<string, number>; options?: Record<string, unknown> };
+  config: { version?: number; objects?: DesignObjectCfg[]; sizes?: Record<string, number>; options?: Record<string, unknown>; areas?: Record<string, { x: number; y: number; width: number; height: number; cm: { width: number; height: number } }> };
   options: { method?: string; finish?: string; fabric?: string; package?: string; addons?: string[] } | null;
   options_price: number; preview_front_path: string | null; preview_back_path: string | null;
   unit_price: number; notes: string | null; created_at: string;
@@ -58,8 +58,8 @@ export async function loadArtwork(supabase: SB, rows: DesignRow[]): Promise<{ ar
 }
 
 /** Physical size (cm) of an element on its placement. */
-export function objectCm(garment: string, o: DesignObjectCfg): { w: number; h: number } {
-  const a = GARMENTS[garment as GarmentType]?.printAreas[o.location];
+export function objectCm(garment: string, o: DesignObjectCfg, saved?: DesignRow["config"]["areas"]): { w: number; h: number } {
+  const a = saved?.[o.location] ?? GARMENTS[garment as GarmentType]?.printAreas[o.location];
   if (!a) return { w: 0, h: 0 };
   const rad = ((o.angle ?? 0) * Math.PI) / 180;
   const w = Math.abs(o.width * o.scaleX);
