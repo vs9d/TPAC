@@ -114,4 +114,5 @@ export function lockedAreaHeight(area: Pick<Rect, "width">, view: Pick<TypeViewR
 /** Absolute rectangle (fractions of the mockup) of a design inside its area. */
 export const absolute = (area: Rect, d: Rect): Rect => ({ x: area.x + d.x * area.width, y: area.y + d.y * area.height, width: d.width * area.width, height: d.height * area.height });
 
-export const slugCode = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+/** Code for types / views / areas: lowercase latin, digits, "-" and "_" (underscores are kept: placement codes like left_chest rely on them). */
+export const slugCode = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9_]+/g, "-").replace(/^[-_]+|[-_]+$/g, "").slice(0, 40);

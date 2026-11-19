@@ -38,3 +38,11 @@ describe("print-on-demand images in the studio", () => {
     expect(podArea(null, "hoodie", "front")).toEqual(GARMENTS.hoodie.printAreas.front);
   });
 });
+
+describe("placement codes", () => {
+  it("keeps underscores so left_chest / sleeve_left still match the studio", async () => {
+    const { slugCode } = await import("@/lib/print-config");
+    expect(slugCode("left_chest")).toBe("left_chest");
+    expect(slugCode("Sleeve Left!")).toBe("sleeve-left");
+  });
+});

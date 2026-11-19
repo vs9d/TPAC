@@ -303,3 +303,8 @@ do $$ begin
      where default_color_ids = '{}' and garment_shape is not null;
   end if;
 end $$;
+
+-- repair: an earlier dashboard version saved placement codes with "-" (left-chest, sleeve-left)
+update public.product_print_areas a set code = replace(a.code, '-', '_')
+ where a.code in ('left-chest', 'sleeve-left')
+   and not exists (select 1 from public.product_print_areas b where b.view_id = a.view_id and b.code = replace(a.code, '-', '_'));

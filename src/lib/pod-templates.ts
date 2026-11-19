@@ -25,10 +25,11 @@ export function podTemplate(type: ProductTypeRow | null | undefined): PodTemplat
     if (!v.is_active || (v.code !== "front" && v.code !== "back")) continue;
     views[v.code] = { mockup_url: v.mockup_url, color_mockups: v.color_mockups ?? {}, width: v.mockup_width, height: v.mockup_height };
     for (const a of v.product_print_areas ?? []) {
-      if (!a.is_active || !LOCATIONS.includes(a.code as PrintLocation)) continue;
+      const code = a.code.replace(/-/g, "_") as PrintLocation; // "left-chest" and "left_chest" are the same placement
+      if (!a.is_active || !LOCATIONS.includes(code)) continue;
       // a placement belongs to the view the studio shows it on (sleeves and chest are on the front)
-      if (LOCATION_VIEW[a.code as PrintLocation] !== v.code) continue;
-      areas[a.code as PrintLocation] = { view: v.code, x: Number(a.x), y: Number(a.y), width: Number(a.width), height: Number(a.height), cmW: Number(a.max_width_cm), cmH: Number(a.max_height_cm) };
+      if (LOCATION_VIEW[code] !== v.code) continue;
+      areas[code] = { view: v.code, x: Number(a.x), y: Number(a.y), width: Number(a.width), height: Number(a.height), cmW: Number(a.max_width_cm), cmH: Number(a.max_height_cm) };
     }
   }
   return { views, areas };
