@@ -198,6 +198,11 @@ export const designSchema = z.object({
   notes: trimmed(1000).optional(),
   preview_front: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000),
   preview_back: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000),
+  /** previews of sleeves that have their own close-up photo */
+  preview_sides: z.object({
+    right: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000).optional(),
+    left: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000).optional(),
+  }).optional(),
 });
 export type DesignInput = z.infer<typeof designSchema>;
 

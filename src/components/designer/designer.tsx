@@ -8,8 +8,8 @@ import { toast } from "@/components/ui/toast";
 import { saveDesign } from "@/lib/actions/design";
 import { ACCEPT_DESIGN, uploadArtwork } from "@/lib/upload-client";
 import { adminT } from "@/lib/admin-i18n";
-import { ARTBOARD, LOCATION_VIEW, garmentDataUrl, luminance, type GarmentType, type GarmentView, type PrintLocation } from "@/lib/garments";
-import { fitInArtboard, podArea, podAreas, podPhoto, type PodTemplate } from "@/lib/pod-templates";
+import { ARTBOARD, LOCATION_VIEW, garmentDataUrl, luminance, type GarmentType, type PrintLocation } from "@/lib/garments";
+import { fitInArtboard, podArea, podAreas, podPhoto, viewOf, type PodTemplate, type StudioView } from "@/lib/pod-templates";
 import { TEMPLATES, TEXT_PRESETS_UI, shapeById, type DesignerFont } from "@/lib/design-assets";
 import { discountedUnit, resolveOptions, tierPercent, type OptionLite } from "@/lib/design-pricing";
 import { cn, formatIQD } from "@/lib/format";
@@ -44,7 +44,15 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const first = garments.find((g) => g.code === initialGarment) ?? garments[0]!;
   const [garmentCode, setGarmentCode] = useState<GarmentTypeRow["code"]>(first.code);
   const garment = garments.find((g) => g.code === garmentCode)!;
-  const garmentColors = useMemo(() => colors.filter((c) => garment.color_ids.includes(c.id)), [colors, garment]);
+  // when the admin gave this garment a photo per colour, only offer colours that have one
+  // (a colour without its photo would otherwise show the default photo in the wrong colour)
+  const garmentColors = useMemo(() => {
+    const list = colors.filter((c) => garment.color_ids.includes(c.id));
+    const front = templates[garment.code]?.views.front;
+    const photographed = front ? Object.keys(front.color_mockups) : [];
+    const withPhoto = photographed.length ? list.filter((c) => photographed.includes(c.id)) : list;
+    return withPhoto.length ? withPhoto : list;
+  }, [colors, garment, templates]);
   const [colorId, setColorId] = useState<string>(garmentColors.find((c) => c.code === initialColor)?.id ?? garmentColors[0]?.id ?? "");
   const color = colors.find((c) => c.id === colorId) ?? garmentColors[0];
   const [sizes, setSizes] = useState<Record<string, number>>({ [garment.sizes.includes("L") ? "L" : garment.sizes[0]!]: 1 });
@@ -60,7 +68,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const creativeRef = useRef<HTMLDivElement>(null);
   const pieceRef = useRef<HTMLElement>(null);
   const [location, setLocation] = useState<PrintLocation>("front");
-  const view: GarmentView = LOCATION_VIEW[location];
+  const view: StudioView = viewOf(templates[garmentCode] ?? null, location);
   const [guides, setGuides] = useState(true);
   const [layers, setLayers] = useState<LayerInfo[]>([]);
   const [selected, setSelected] = useState<Tagged | null>(null);
@@ -69,7 +77,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const [dragging, setDragging] = useState(false);
   const [ready, setReady] = useState(false);
   const [hist, setHist] = useState({ undo: false, redo: false });
-  const [review, setReview] = useState<{ front: string; back: string } | null>(null);
+  const [review, setReview] = useState<{ front: string; back: string; right?: string; left?: string } | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [saving, startSaving] = useTransition();
 
@@ -154,7 +162,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   }, [snapshot]);
 
   /** Re-applies clipping / visibility / guides for the current view. */
-  const renderScene = useCallback(async (override?: { view: GarmentView; location: PrintLocation }) => {
+  const renderScene = useCallback(async (override?: { view: StudioView; location: PrintLocation }) => {
     const c = canvasRef.current;
     const F = fabricRef.current;
     if (!c || !F) return;
@@ -174,7 +182,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       }
     }
     if (!bg) {
-      bg = await F.FabricImage.fromURL(garmentDataUrl(g as GarmentType, v, colorHex));
+      bg = await F.FabricImage.fromURL(garmentDataUrl(g as GarmentType, v === "back" ? "back" : "front", colorHex));
       bg.set({ originX: "left", originY: "top", left: 0, top: 0, scaleX: ARTBOARD.width / (bg.width || 600), scaleY: ARTBOARD.height / (bg.height || 700) });
     }
     c.backgroundImage = bg;
@@ -182,7 +190,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     for (const o of c.getObjects() as Tagged[]) if (o.tpacKind === "guide") c.remove(o);
     const dark = luminance(colorHex) < 0.35;
     for (const l of Object.keys(areaMap) as PrintLocation[]) {
-      if (LOCATION_VIEW[l] !== v) continue;
+      if (viewOf(tpl(g), l) !== v) continue;
       const a = areaMap[l];
       const active = l === loc;
       const guide = new F.Rect({
@@ -198,7 +206,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     }
     for (const o of c.getObjects() as Tagged[]) {
       if (o.tpacKind === "guide") continue;
-      const onView = !!o.tpacLocation && LOCATION_VIEW[o.tpacLocation] === v && !o.tpacHidden;
+      const onView = !!o.tpacLocation && viewOf(tpl(g), o.tpacLocation) === v && !o.tpacHidden;
       o.set({ visible: onView, selectable: onView, evented: onView, lockMovementX: !!o.tpacLocked, lockMovementY: !!o.tpacLocked, lockScalingX: !!o.tpacLocked, lockScalingY: !!o.tpacLocked, lockRotation: !!o.tpacLocked, hasControls: !o.tpacLocked });
       if (o.tpacLocation) {
         const a = areaMap[o.tpacLocation];
@@ -207,7 +215,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       }
     }
     const active = c.getActiveObject() as Tagged | undefined;
-    if (active && (!active.visible || (active.tpacLocation && LOCATION_VIEW[active.tpacLocation] !== v))) c.discardActiveObject();
+    if (active && (!active.visible || (active.tpacLocation && viewOf(tpl(g), active.tpacLocation) !== v))) c.discardActiveObject();
     snapRef.current.loc = loc;
     c.requestRenderAll();
   }, [constrain]);
@@ -246,7 +254,9 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
 
   /** Region of the artboard shown for a placement: the whole garment, or a close-up for chest / sleeves. */
   const focusOf = (loc: PrintLocation) => {
-    if (loc === "front" || loc === "back") return { x: 0, y: 0, w: ARTBOARD.width };
+    // whole view for front / back, and for a sleeve that has its own close-up photo
+    const own = viewOf(tplRef.current[stateRef.current.garmentCode] ?? null, loc);
+    if (loc === "front" || loc === "back" || own === "right" || own === "left") return { x: 0, y: 0, w: ARTBOARD.width };
     const a = area(loc);
     const w = Math.min(ARTBOARD.width, Math.max(a.width, a.height) * 6);
     const h = (w * ARTBOARD.height) / ARTBOARD.width;
@@ -413,7 +423,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
 
   const finishAdd = useCallback(async (o: Tagged) => {
     const c = canvasRef.current!;
-    if (o.tpacLocation && LOCATION_VIEW[o.tpacLocation] !== stateRef.current.view) setLocation(o.tpacLocation);
+    if (o.tpacLocation && viewOf(tpl(stateRef.current.garmentCode), o.tpacLocation) !== stateRef.current.view) setLocation(o.tpacLocation);
     await renderScene();
     c.setActiveObject(o);
     c.requestRenderAll();
@@ -692,12 +702,12 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
    * Renders a view to an image (garment + design, no guides, no handles) at a fixed 900 × 1050 px,
    * independent of how big the canvas is on screen: size and zoom are set explicitly and restored afterwards.
    */
-  const exportView = async (v: GarmentView, format: "jpeg" | "png" = "jpeg"): Promise<string> => {
+  const exportView = async (v: StudioView, format: "jpeg" | "png" = "jpeg"): Promise<string> => {
     const c = canvasRef.current!;
     exportingRef.current = true;
     const prev = { w: c.getWidth(), h: c.getHeight(), vpt: [...c.viewportTransform] as [number, number, number, number, number, number] };
     try {
-      await renderScene({ view: v, location: v === "front" ? "front" : "back" });
+      await renderScene({ view: v, location: v === "front" ? "front" : v === "back" ? "back" : v === "right" ? "sleeve" : "sleeve_left" });
       for (const o of c.getObjects() as Tagged[]) if (o.tpacKind === "guide") o.visible = false;
       c.discardActiveObject();
       c.setDimensions({ width: 900, height: 1050 });
@@ -728,7 +738,12 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     }
     setPreparing(true);
     try {
-      setReview({ front: await compact(await exportView("front")), back: await compact(await exportView("back")) });
+      const sides: { right?: string; left?: string } = {};
+      for (const side of ["right", "left"] as const) {
+        const loc = side === "right" ? "sleeve" : "sleeve_left";
+        if (viewOf(tpl(garmentCode), loc) === side && design().some((o) => !o.tpacHidden && o.tpacLocation === loc)) sides[side] = await compact(await exportView(side));
+      }
+      setReview({ front: await compact(await exportView("front")), back: await compact(await exportView("back")), ...sides });
     } finally {
       setPreparing(false);
     }
@@ -737,7 +752,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const download = async () => {
     setPreparing(true);
     try {
-      for (const v of ["front", "back"] as GarmentView[]) {
+      for (const v of (["front", "back", "right", "left"] as StudioView[]).filter((x) => x === "front" || x === "back" || tpl(garmentCode)?.views[x])) {
         const a = document.createElement("a");
         a.href = await exportView(v, "png");
         a.download = `tpac-${garmentCode}-${v}.png`;
@@ -767,6 +782,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
         notes: notes || undefined,
         preview_front: review.front,
         preview_back: review.back,
+        preview_sides: review.right || review.left ? { right: review.right, left: review.left } : undefined,
         objects: objs.map((o) => {
           const base = {
             type: o.tpacKind as "image" | "text" | "shape",
@@ -1025,7 +1041,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
 
       {review && (
         <ReviewDialog
-          front={review.front} back={review.back} warnings={warnings} saving={saving}
+          front={review.front} back={review.back} sides={[review.right, review.left].filter((x): x is string => !!x)} warnings={warnings} saving={saving}
           garmentName={locale === "ar" ? garment.name_ar : garment.name_en} colorName={color ? (locale === "ar" ? color.name_ar : color.name_en) : ""} colorHex={color?.hex}
           sizes={sizes} placements={usedLocations.map((l) => dict.designer.locations[l]!)} extras={pickedRows.map(optionName)}
           unit={unitAfter} listUnit={unit} pct={pct} totalQty={totalQty} notice={locale === "ar" ? settings.notice_ar : settings.notice_en}

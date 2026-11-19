@@ -11,7 +11,7 @@ import { PageHeader, Card, Pill, STATUS_TONE } from "@/components/admin/ui";
 import { AdminForm, Select, Textarea, Input, Submit } from "@/components/admin/form";
 import { updateOrderStatus, addOrderNote, updateOrderDetails } from "@/lib/actions/admin/orders";
 import { nextStatuses } from "@/lib/order-status";
-import { groupDesigns, optionNames, optionList, type DesignRow } from "@/lib/design-admin";
+import { groupDesigns, optionNames, optionList, previewPaths, type DesignRow } from "@/lib/design-admin";
 import { formatIQD, formatDate } from "@/lib/format";
 import { formatIraqiPhone } from "@/lib/phone";
 import { governorateName } from "@/lib/iraq";
@@ -54,7 +54,7 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ l
   // one card per saved design (its sizes are separate rows sharing a batch)
   const designGroups = groupDesigns(designs as unknown as DesignRow[]);
   const urls = await signedUrls([
-    ...designs.flatMap((d) => [d.preview_front_path, d.preview_back_path].filter(Boolean) as string[]),
+    ...designs.flatMap((d) => previewPaths(d as unknown as DesignRow).map((p) => p.path)),
     ...artwork.map((a) => a.storage_path),
   ]);
   const allowed = nextStatuses(order.status);
@@ -106,9 +106,9 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ l
           {designGroups.map((grp) => { const d = grp.primary as unknown as Design; return (
             <Card key={grp.key} title={`${t("التصميم الخاص", "Custom design")}${d.name ? ` «${d.name}»` : ""} — ${d.garment_type} · ${grp.rows.map((r) => `${r.size_code}×${items?.find((i) => i.custom_design_id === r.id)?.quantity ?? 0}`).join("  ")}`}>
               <div className="grid gap-4 sm:grid-cols-2">
-                {[d.preview_front_path, d.preview_back_path].map((p, i) => p && urls[p] && (
+                {previewPaths(d as unknown as DesignRow).map(({ key, path: p }) => urls[p] && (
                   <a key={p} href={urls[p]} target="_blank" rel="noopener noreferrer" className="relative block aspect-[6/7] bg-bone">
-                    <Image src={urls[p]!} alt={i ? "back" : "front"} fill sizes="300px" className="object-contain" unoptimized />
+                    <Image src={urls[p]!} alt={key} fill sizes="300px" className="object-contain" unoptimized />
                   </a>
                 ))}
               </div>

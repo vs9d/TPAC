@@ -27,7 +27,7 @@ export function PodImages({ garments, types, colors }: { garments: GarmentTypeRo
   const [code, setCode] = useState(garments[0]?.code ?? "");
   const garment = garments.find((g) => g.code === code);
   const type = types.find((x) => x.code === code);
-  const [viewCode, setViewCode] = useState<"front" | "back">("front");
+  const [viewCode, setViewCode] = useState<string>("front");
   const view = type?.product_type_views?.find((v) => v.code === viewCode);
   const gColors = colors.filter((c) => garment?.color_ids.includes(c.id));
 
@@ -51,9 +51,9 @@ export function PodImages({ garments, types, colors }: { garments: GarmentTypeRo
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex rounded-full border border-line p-1">
-              {(["front", "back"] as const).map((v) => (
-                <button key={v} onClick={() => setViewCode(v)} aria-pressed={viewCode === v} className={cn("rounded-full px-5 py-2 text-sm font-bold transition", viewCode === v ? "bg-pine text-white dark:text-night" : "hover:bg-bone")}>
-                  {v === "front" ? t("الأمام", "Front") : t("الخلف", "Back")}
+              {(["front", "back", "right", "left"] as const).filter((v) => v === "front" || v === "back" || type.product_type_views?.some((x) => x.code === v)).map((v) => (
+                <button key={v} onClick={() => setViewCode(v)} aria-pressed={viewCode === v} className={cn("rounded-full px-4 py-2 text-sm font-bold transition", viewCode === v ? "bg-pine text-white dark:text-night" : "hover:bg-bone")}>
+                  {{ front: t("الأمام", "Front"), back: t("الخلف", "Back"), right: t("الكم الأيمن", "Right sleeve"), left: t("الكم الأيسر", "Left sleeve") }[v]}
                 </button>
               ))}
             </div>

@@ -831,6 +831,32 @@ await flow("print-on-demand images: admin uploads → preview → save → custo
   assert.equal((await one("select count(*)::int n from storage.objects where name = $1", [saved.mockup_url.split("/product-images/")[1]])).n, 0, "the old file is removed from storage");
 });
 
+await flow("hoodie photos: 5 colours × front / back / both sleeves, sleeve design saved with its own preview", async (page) => {
+  await db.query(readFileSync(new URL("../../supabase/add-hoodie-photos.sql", import.meta.url), "utf8"));
+  await page.goto(`${BASE}/en/design?garment=hoodie`);
+  await page.locator("canvas").first().waitFor();
+  // only the photographed colours are offered
+  for (const c of ["Black", "White", "Brown", "Navy", "Maroon"]) await page.getByRole("radio", { name: c, exact: true }).waitFor();
+  assert.equal(await page.getByRole("radio", { name: "Sand", exact: true }).count(), 0);
+  await page.getByRole("radio", { name: "Maroon", exact: true }).click();
+  const sleevePhoto = page.waitForResponse((r) => r.url().includes("/mockups/hoodie-maroon-right.webp") && r.status() === 200, { timeout: 20000 });
+  await page.getByRole("tab", { name: "Right sleeve" }).click();
+  await sleevePhoto;
+  await page.getByRole("button", { name: "or write a word" }).click();
+  await page.getByLabel("Text").first().fill("TPAC");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("button", { name: "Review & add to bag" }).click();
+  const dlg = page.getByRole("dialog", { name: "Review your design" });
+  await dlg.getByText("Sleeve", { exact: true }).waitFor();
+  await dlg.getByRole("button", { name: "Confirm & add to bag" }).click();
+  await page.getByRole("dialog", { name: "Your bag" }).waitFor({ timeout: 20000 });
+  const d = await one("select print_locations, config from custom_designs order by created_at desc limit 1");
+  assert.deepEqual(d.print_locations, ["sleeve"]);
+  assert.ok(d.config.previews?.right?.endsWith("/right.jpg"), "sleeve preview stored");
+  assert.deepEqual(d.config.areas.sleeve.cm, { width: 6, height: 24 }, "the sleeve's own print size");
+  assert.equal((await one("select count(*)::int n from storage.objects where name = $1", [d.config.previews.right])).n, 1);
+});
+
 console.log(results.join("\n"));
 await browser.close();
 await db.end();

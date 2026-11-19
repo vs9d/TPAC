@@ -16,7 +16,7 @@ export interface DesignObjectCfg {
 export interface DesignRow {
   id: string; batch_id: string | null; name: string | null; user_id: string | null;
   garment_type: string; color_id: string; size_code: string; print_locations: string[];
-  config: { version?: number; objects?: DesignObjectCfg[]; sizes?: Record<string, number>; options?: Record<string, unknown>; areas?: Record<string, { x: number; y: number; width: number; height: number; cm: { width: number; height: number } }> };
+  config: { version?: number; objects?: DesignObjectCfg[]; sizes?: Record<string, number>; options?: Record<string, unknown>; areas?: Record<string, { x: number; y: number; width: number; height: number; cm: { width: number; height: number } }>; previews?: { right?: string; left?: string } };
   options: { method?: string; finish?: string; fabric?: string; package?: string; addons?: string[] } | null;
   options_price: number; preview_front_path: string | null; preview_back_path: string | null;
   unit_price: number; notes: string | null; created_at: string;
@@ -53,7 +53,7 @@ export async function loadArtwork(supabase: SB, rows: DesignRow[]): Promise<{ ar
   const ids = [...new Set(rows.flatMap((r) => (r.config.objects ?? []).map((o) => o.artwork_id).filter(Boolean) as string[]))];
   const { data } = ids.length ? await supabase.from("uploaded_artwork").select("id, storage_path, mime_type, original_name, width, height").in("id", ids) : { data: [] };
   const art = new Map(((data as ArtworkRow[]) ?? []).map((a) => [a.id, a]));
-  const urls = await signedUrls([...rows.flatMap((r) => [r.preview_front_path, r.preview_back_path].filter(Boolean) as string[]), ...[...art.values()].map((a) => a.storage_path)]);
+  const urls = await signedUrls([...rows.flatMap((r) => previewPaths(r).map((p) => p.path)), ...[...art.values()].map((a) => a.storage_path)]);
   return { art, urls };
 }
 
@@ -78,3 +78,17 @@ export function describeObject(o: DesignObjectCfg, locale: "ar" | "en", art: Map
   const a = o.artwork_id ? art.get(o.artwork_id) : undefined;
   return a ? `${a.original_name ?? a.storage_path.split("/").pop()}${a.width ? ` (${a.width}×${a.height}px)` : ""}` : "image";
 }
+
+/** Every preview image of a design: front, back, and the sleeve close-ups when it has them. */
+export function previewPaths(d: Pick<DesignRow, "preview_front_path" | "preview_back_path" | "config">): { key: "front" | "back" | "right" | "left"; path: string }[] {
+  const list: { key: "front" | "back" | "right" | "left"; path: string | null | undefined }[] = [
+    { key: "front", path: d.preview_front_path },
+    { key: "back", path: d.preview_back_path },
+    { key: "right", path: d.config?.previews?.right },
+    { key: "left", path: d.config?.previews?.left },
+  ];
+  return list.filter((x): x is { key: "front" | "back" | "right" | "left"; path: string } => !!x.path);
+}
+
+export const previewLabel = (key: string, locale: "ar" | "en") =>
+  ({ front: ["الأمام", "FRONT"], back: ["الخلف", "BACK"], right: ["الكم الأيمن", "RIGHT SLEEVE"], left: ["الكم الأيسر", "LEFT SLEEVE"] } as Record<string, [string, string]>)[key]?.[locale === "ar" ? 0 : 1] ?? key;

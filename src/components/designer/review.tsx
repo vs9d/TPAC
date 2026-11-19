@@ -6,8 +6,8 @@ import { adminT } from "@/lib/admin-i18n";
 import { formatIQD } from "@/lib/format";
 
 /** Last look before the design is saved and added to the bag: previews, spec, warnings and the printing notice. */
-export function ReviewDialog({ front, back, warnings, saving, garmentName, colorName, colorHex, sizes, placements, extras, unit, listUnit, pct, totalQty, notice, onClose, onConfirm, onFix }: {
-  front: string; back: string; warnings: string[]; saving: boolean; garmentName: string; colorName: string; colorHex?: string;
+export function ReviewDialog({ front, back, sides = [], warnings, saving, garmentName, colorName, colorHex, sizes, placements, extras, unit, listUnit, pct, totalQty, notice, onClose, onConfirm, onFix }: {
+  front: string; back: string; sides?: string[]; warnings: string[]; saving: boolean; garmentName: string; colorName: string; colorHex?: string;
   sizes: Record<string, number>; placements: string[]; extras: string[]; unit: number; listUnit: number; pct: number; totalQty: number; notice: string;
   onClose: () => void; onConfirm: () => void; onFix: () => void;
 }) {
@@ -23,8 +23,8 @@ export function ReviewDialog({ front, back, warnings, saving, garmentName, color
           <button onClick={onClose} disabled={saving} className="grid size-9 place-items-center rounded-full hover:bg-bone" aria-label={t("إغلاق", "Close")}><X className="size-5" /></button>
         </header>
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
-          <div className="grid grid-cols-2 gap-3">
-            {[[front, t("الأمام", "Front")], [back, t("الخلف", "Back")]].map(([src, label]) => (
+          <div className={sides.length ? "grid grid-cols-2 gap-3 sm:grid-cols-4" : "grid grid-cols-2 gap-3"}>
+            {[[front, t("الأمام", "Front")], [back, t("الخلف", "Back")], ...sides.map((src, i) => [src, sides.length === 2 ? (i ? t("الكم الأيسر", "Left sleeve") : t("الكم الأيمن", "Right sleeve")) : t("الكم", "Sleeve")])].map(([src, label]) => (
               <figure key={label} className="overflow-hidden rounded-2xl bg-bone">
                 <div className="relative aspect-[6/7]"><Image src={src!} alt={label!} fill sizes="320px" className="object-contain" unoptimized /></div>
                 <figcaption className="py-1.5 text-center text-xs font-bold">{label}</figcaption>

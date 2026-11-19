@@ -10,9 +10,18 @@
 import { ARTBOARD, GARMENTS, LOCATION_VIEW, type GarmentType, type GarmentView, type PrintArea, type PrintLocation } from "./garments";
 import type { ProductTypeRow } from "./print-config";
 
+/** Views the studio can show: front / back, plus a dedicated photo of each sleeve when the admin provides one. */
+export type StudioView = GarmentView | "right" | "left";
+export const STUDIO_VIEWS: StudioView[] = ["front", "back", "right", "left"];
 export interface PodView { mockup_url: string | null; color_mockups: Record<string, { url: string }>; width: number; height: number }
-export interface PodArea { view: GarmentView; x: number; y: number; width: number; height: number; cmW: number; cmH: number }
-export interface PodTemplate { views: Partial<Record<GarmentView, PodView>>; areas: Partial<Record<PrintLocation, PodArea>> }
+export interface PodArea { view: StudioView; x: number; y: number; width: number; height: number; cmW: number; cmH: number }
+export interface PodTemplate { views: Partial<Record<StudioView, PodView>>; areas: Partial<Record<PrintLocation, PodArea>> }
+
+/** Which views may hold a placement: sleeves sit on the front, or on their own sleeve photo. */
+const ALLOWED: Record<PrintLocation, StudioView[]> = { front: ["front"], left_chest: ["front"], back: ["back"], sleeve: ["front", "right"], sleeve_left: ["front", "left"] };
+
+/** The view a placement is shown on (its own sleeve photo when configured, else the built-in mapping). */
+export const viewOf = (t: PodTemplate | null, loc: PrintLocation): StudioView => t?.areas[loc]?.view ?? LOCATION_VIEW[loc];
 
 const LOCATIONS: PrintLocation[] = ["front", "back", "left_chest", "sleeve", "sleeve_left"];
 
@@ -22,14 +31,15 @@ export function podTemplate(type: ProductTypeRow | null | undefined): PodTemplat
   const views: PodTemplate["views"] = {};
   const areas: PodTemplate["areas"] = {};
   for (const v of type.product_type_views ?? []) {
-    if (!v.is_active || (v.code !== "front" && v.code !== "back")) continue;
-    views[v.code] = { mockup_url: v.mockup_url, color_mockups: v.color_mockups ?? {}, width: v.mockup_width, height: v.mockup_height };
+    if (!v.is_active || !STUDIO_VIEWS.includes(v.code as StudioView)) continue;
+    views[v.code as StudioView] = { mockup_url: v.mockup_url, color_mockups: v.color_mockups ?? {}, width: v.mockup_width, height: v.mockup_height };
     for (const a of v.product_print_areas ?? []) {
       const code = a.code.replace(/-/g, "_") as PrintLocation; // "left-chest" and "left_chest" are the same placement
       if (!a.is_active || !LOCATIONS.includes(code)) continue;
-      // a placement belongs to the view the studio shows it on (sleeves and chest are on the front)
-      if (LOCATION_VIEW[code] !== v.code) continue;
-      areas[code] = { view: v.code, x: Number(a.x), y: Number(a.y), width: Number(a.width), height: Number(a.height), cmW: Number(a.max_width_cm), cmH: Number(a.max_height_cm) };
+      // a placement belongs to a view the studio can show it on (a sleeve photo wins over the front)
+      if (!ALLOWED[code].includes(v.code as StudioView)) continue;
+      if (areas[code] && areas[code]!.view !== "front") continue;
+      areas[code] = { view: v.code as StudioView, x: Number(a.x), y: Number(a.y), width: Number(a.width), height: Number(a.height), cmW: Number(a.max_width_cm), cmH: Number(a.max_height_cm) };
     }
   }
   return { views, areas };
@@ -44,7 +54,7 @@ export function fitInArtboard(w: number, h: number) {
 }
 
 /** The photo the admin uploaded for this view and colour, or null (then the built-in drawing is used). */
-export function podPhoto(t: PodTemplate | null, view: GarmentView, colorId?: string | null): string | null {
+export function podPhoto(t: PodTemplate | null, view: StudioView, colorId?: string | null): string | null {
   const v = t?.views[view];
   if (!v) return null;
   return (colorId && v.color_mockups[colorId]?.url) || v.mockup_url || null;

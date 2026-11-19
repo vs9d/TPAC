@@ -5,7 +5,7 @@ import { getDictionary } from "@/lib/i18n";
 import { adminT } from "@/lib/admin-i18n";
 import { createClient } from "@/lib/supabase/server";
 import { PrintButton } from "@/components/admin/print-button";
-import { describeObject, groupDesigns, loadArtwork, objectCm, optionList, optionNames, type DesignRow } from "@/lib/design-admin";
+import { describeObject, groupDesigns, loadArtwork, objectCm, optionList, optionNames, previewLabel, previewPaths, type DesignRow } from "@/lib/design-admin";
 import { GARMENTS, type GarmentType } from "@/lib/garments";
 import { formatDate } from "@/lib/format";
 import { formatIraqiPhone } from "@/lib/phone";
@@ -62,10 +62,10 @@ export default async function ProductionSheet({ params }: { params: Promise<{ lo
             </div>
             <div className="grid gap-4 sm:grid-cols-5">
               <div className="grid grid-cols-2 gap-2 sm:col-span-3">
-                {[d.preview_front_path, d.preview_back_path].map((p, i) => (
-                  <figure key={i} className="overflow-hidden rounded-lg border border-line bg-bone">
-                    <div className="relative aspect-[6/7]">{p && urls[p] && <Image src={urls[p]!} alt={i ? "back" : "front"} fill sizes="320px" className="object-contain" unoptimized />}</div>
-                    <figcaption className="py-1 text-center text-xs font-bold">{i ? t("الخلف", "BACK") : t("الأمام", "FRONT")}</figcaption>
+                {previewPaths(d).map(({ key, path }) => (
+                  <figure key={key} className="overflow-hidden rounded-lg border border-line bg-bone">
+                    <div className="relative aspect-[6/7]">{urls[path] && <Image src={urls[path]!} alt={key} fill sizes="320px" className="object-contain" unoptimized />}</div>
+                    <figcaption className="py-1 text-center text-xs font-bold">{previewLabel(key, locale)}</figcaption>
                   </figure>
                 ))}
               </div>

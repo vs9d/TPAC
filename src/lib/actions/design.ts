@@ -89,6 +89,18 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
     console.error("saveDesign storage failed", u1.error ?? u2.error);
     return { ok: false, error: "storage_failed" };
   }
+  // sleeve close-ups (only when the garment has its own sleeve photos and the sleeve carries a design)
+  const sidePaths: Record<string, string> = {};
+  for (const side of ["right", "left"] as const) {
+    const raw = d.preview_sides?.[side];
+    if (!raw) continue;
+    const img = decodeImage(raw);
+    if (!img) return { ok: false, error: "invalid_preview" };
+    const path = `designs/${batchId}/${side}.${ext(img.mime)}`;
+    const up = await bucket.upload(path, img.buf, { contentType: img.mime, upsert: false });
+    if (up.error) return { ok: false, error: "storage_failed" };
+    sidePaths[side] = path;
+  }
 
   // the print areas the customer actually designed in (admin photo + areas, or the built-in garment),
   // kept with the design so the production sheet measures in the right centimetres
@@ -97,6 +109,7 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
   const config = {
     version: 2,
     areas: Object.fromEntries(used.map((l) => [l, areas[l]])),
+    previews: sidePaths,
     artboard: { width: 600, height: 700 },
     objects: d.objects,
     options: chosen.choice,

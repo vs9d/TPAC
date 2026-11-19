@@ -46,3 +46,31 @@ describe("placement codes", () => {
     expect(slugCode("Sleeve Left!")).toBe("sleeve-left");
   });
 });
+
+describe("sleeve photos", () => {
+  const withSides = (): ProductTypeRow => {
+    const t = type("/front.png", 1000, 1100);
+    const area = (id: string, code: string, view: string) => ({ id, view_id: view, code, name_ar: "ك", name_en: "S", x: 0.1, y: 0.17, width: 0.27, height: 0.4, max_width_cm: 6, max_height_cm: 24, sort_order: 0, is_active: true });
+    t.product_type_views!.push(
+      { id: "r", product_type_id: "t", code: "right", name_ar: "ي", name_en: "R", mockup_url: "/right.png", mockup_path: null, mockup_width: 450, mockup_height: 1200, color_mockups: {}, sort_order: 2, is_active: true, product_print_areas: [area("s1", "sleeve", "r")] },
+      { id: "l", product_type_id: "t", code: "left", name_ar: "س", name_en: "L", mockup_url: "/left.png", mockup_path: null, mockup_width: 450, mockup_height: 1200, color_mockups: {}, sort_order: 3, is_active: true, product_print_areas: [area("s2", "sleeve_left", "l")] },
+    );
+    return t;
+  };
+  it("puts each sleeve on its own photo when there is one, otherwise on the front", async () => {
+    const { viewOf } = await import("@/lib/pod-templates");
+    const t = podTemplate(withSides());
+    expect(viewOf(t, "sleeve")).toBe("right");
+    expect(viewOf(t, "sleeve_left")).toBe("left");
+    expect(viewOf(t, "front")).toBe("front");
+    expect(viewOf(podTemplate(type("/front.png")), "sleeve")).toBe("front");
+    expect(podPhoto(t, "right", null)).toBe("/right.png");
+  });
+  it("converts the sleeve area using the sleeve photo's own proportions", () => {
+    const a = podArea(podTemplate(withSides()), "hoodie", "sleeve");
+    // 450 x 1200 photo fitted in 600 x 700 -> 262.5 x 700, centred at x = 168.75
+    expect(a.x).toBeCloseTo(168.75 + 0.1 * 262.5, 3);
+    expect(a.height).toBeCloseTo(0.4 * 700, 3);
+    expect(a.cm).toEqual({ width: 6, height: 24 });
+  });
+});
