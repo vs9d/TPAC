@@ -120,7 +120,7 @@ export interface ProductDetail extends Product {
   category: Category | null;
   product_images: ProductImage[];
   product_variants: Variant[];
-  /** printing template with its views and print areas, and the artwork placed on it (present once add-product-printing.sql ran) */
+  /** printing template with its views and print areas, and the artwork placed on it (present once add-product-printing-1.sql + -2.sql ran) */
   product_type?: import("./print-config").ProductTypeRow | null;
   product_designs?: import("./print-config").ProductDesignRow[];
 }

@@ -20,7 +20,7 @@ export default async function NewProduct({ params, searchParams }: { params: Pro
     supabase.from("collections").select("*").order("sort_order"),
     supabase.from("sizes").select("*").order("sort_order"),
     supabase.from("colors").select("*").order("sort_order"),
-    // missing until add-product-printing.sql has been run: then the plain form is shown straight away
+    // missing until add-product-printing-1.sql + -2.sql has been run: then the plain form is shown straight away
     supabase.from("product_types").select("*, product_type_views(*, product_print_areas(*))").eq("is_active", true).order("sort_order"),
   ]);
   const types = ((typeRows as ProductTypeRow[]) ?? []).map(normType);

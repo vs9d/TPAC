@@ -46,7 +46,7 @@ export function PodImages({ garments, types, colors }: { garments: GarmentTypeRo
       </div>
 
       {!type ? (
-        <p className="rounded-2xl border border-amber bg-amber/10 p-4 text-sm">{t("لا يوجد قالب صور لهذه القطعة بعد — شغّل الملف supabase/add-product-printing.sql في Supabase مرة واحدة.", "No image template for this garment yet — run supabase/add-product-printing.sql in Supabase once.")}</p>
+        <p className="rounded-2xl border border-amber bg-amber/10 p-4 text-sm">{t("لا يوجد قالب صور لهذه القطعة بعد — شغّل الملف supabase/add-product-printing-1.sql ثم -2.sql في Supabase مرة واحدة.", "No image template for this garment yet — run supabase/add-product-printing-1.sql then -2.sql in Supabase once.")}</p>
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">

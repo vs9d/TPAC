@@ -71,7 +71,7 @@ export const getProductBySlug = cache(async (slug: string): Promise<ProductDetai
   const printing = ", product_designs(*), product_type:product_types(*, product_type_views(*, product_print_areas(*)))";
   const query = (cols: string) => supabase.from("products").select(cols).eq("slug", slug).eq("is_published", true).maybeSingle();
   let { data, error } = await query(base + printing);
-  // a database without add-product-printing.sql has no printing tables yet: load the product without them
+  // a database without add-product-printing-1.sql + -2.sql has no printing tables yet: load the product without them
   if (error) ({ data, error } = await query(base));
   if (error) {
     console.error("getProductBySlug", error);

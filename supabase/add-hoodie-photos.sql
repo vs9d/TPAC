@@ -1,6 +1,6 @@
 -- =====================================================================
 -- TPAC: real hoodie photos (black, white, brown, navy) for the print studio
--- and for hoodie products. Needs add-product-printing.sql first.
+-- and for hoodie products. Needs add-product-printing-1.sql and -2.sql first.
 -- Supabase → SQL Editor → paste → Run. Safe to run more than once.
 -- The photos ship with the website (/mockups/…): replace them any time from
 -- Dashboard → Print designer → Printing images.

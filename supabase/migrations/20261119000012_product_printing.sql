@@ -1,10 +1,7 @@
 -- =====================================================================
--- TPAC: Product printing configuration.
---   product_types       — templates (hoodie, T-shirt, …) the admin can add without code changes
---   product_type_views  — angles of a type, each with its own blank mockup (+ optional per-colour mockups)
---   product_print_areas — printable rectangles on a view (fractions of the mockup) with max size in cm
---   product_designs     — the official artwork the ADMIN placed inside an area for a product
--- Supabase → SQL Editor → paste → Run. Safe to run more than once.
+-- TPAC: product printing — PART 1 of 2 (tables + security).
+-- Supabase → SQL Editor → New query → paste → Run. Then run PART 2.
+-- Safe to run more than once. Nothing is deleted.
 -- =====================================================================
 
 create table if not exists public.product_types (
@@ -14,7 +11,6 @@ create table if not exists public.product_types (
   name_en text not null check (length(name_en) between 1 and 80),
   description_ar text check (description_ar is null or length(description_ar) <= 500),
   description_en text check (description_en is null or length(description_en) <= 500),
-  -- built-in vector drawing used when no mockup photo has been uploaded yet (null for brand-new types)
   garment_shape text check (garment_shape is null or garment_shape in ('tshirt', 'oversized', 'hoodie', 'sweatshirt', 'longsleeve')),
   default_price int not null default 0 check (default_price >= 0),
   default_sizes text[] not null default '{S,M,L,XL,XXL}',
@@ -34,10 +30,8 @@ create table if not exists public.product_type_views (
   name_en text not null check (length(name_en) between 1 and 60),
   mockup_url text check (mockup_url is null or length(mockup_url) <= 1000),
   mockup_path text,
-  -- intrinsic pixel size of the mockup: keeps the preview frame and the print areas in proportion
   mockup_width int not null default 600 check (mockup_width between 50 and 10000),
   mockup_height int not null default 700 check (mockup_height between 50 and 10000),
-  -- { "<color uuid>": { "url": "...", "path": "..." } } — a blank of the garment in that colour
   color_mockups jsonb not null default '{}'::jsonb check (jsonb_typeof(color_mockups) = 'object'),
   sort_order int not null default 0,
   is_active boolean not null default true,
@@ -50,7 +44,6 @@ create table if not exists public.product_print_areas (
   code text not null check (code ~ '^[a-z0-9]+([_-][a-z0-9]+)*$' and length(code) <= 30),
   name_ar text not null check (length(name_ar) between 1 and 60),
   name_en text not null check (length(name_en) between 1 and 60),
-  -- position and size on the mockup, as fractions of its width / height
   x numeric(7, 5) not null check (x >= 0 and x < 1),
   y numeric(7, 5) not null check (y >= 0 and y < 1),
   width numeric(7, 5) not null check (width > 0 and width <= 1),
@@ -76,7 +69,6 @@ create table if not exists public.product_designs (
   artwork_path text,
   artwork_width int check (artwork_width is null or artwork_width > 0),
   artwork_height int check (artwork_height is null or artwork_height > 0),
-  -- placement INSIDE the print area, as fractions of the area: a design can never exceed the printable size
   x numeric(7, 5) not null check (x >= 0),
   y numeric(7, 5) not null check (y >= 0),
   width numeric(7, 5) not null check (width > 0),
@@ -88,223 +80,102 @@ create table if not exists public.product_designs (
 );
 create index if not exists product_designs_product_idx on public.product_designs(product_id, sort_order);
 
--- product photos rendered from the mockup + design (replaced, never duplicated, when the design changes)
 alter table public.product_images add column if not exists view_id uuid references public.product_type_views(id) on delete set null;
 alter table public.product_images add column if not exists is_generated boolean not null default false;
 
-drop trigger if exists product_types_updated on public.product_types;
-create trigger product_types_updated before update on public.product_types for each row execute function public.set_updated_at();
-drop trigger if exists product_designs_updated on public.product_designs;
-create trigger product_designs_updated before update on public.product_designs for each row execute function public.set_updated_at();
+create or replace trigger product_types_updated before update on public.product_types for each row execute function public.set_updated_at();
+create or replace trigger product_designs_updated before update on public.product_designs for each row execute function public.set_updated_at();
 
-alter table public.product_types enable row level security;
-alter table public.product_type_views enable row level security;
-alter table public.product_print_areas enable row level security;
-alter table public.product_designs enable row level security;
-drop policy if exists product_types_read on public.product_types;
-drop policy if exists product_types_write on public.product_types;
-drop policy if exists product_type_views_read on public.product_type_views;
-drop policy if exists product_type_views_write on public.product_type_views;
-drop policy if exists product_print_areas_read on public.product_print_areas;
-drop policy if exists product_print_areas_write on public.product_print_areas;
-drop policy if exists product_designs_read on public.product_designs;
-drop policy if exists product_designs_write on public.product_designs;
-create policy product_types_read on public.product_types for select to anon, authenticated using (is_active or public.is_staff());
-create policy product_types_write on public.product_types for all to authenticated using (public.is_staff()) with check (public.is_staff());
-create policy product_type_views_read on public.product_type_views for select to anon, authenticated using (is_active or public.is_staff());
-create policy product_type_views_write on public.product_type_views for all to authenticated using (public.is_staff()) with check (public.is_staff());
-create policy product_print_areas_read on public.product_print_areas for select to anon, authenticated using (is_active or public.is_staff());
-create policy product_print_areas_write on public.product_print_areas for all to authenticated using (public.is_staff()) with check (public.is_staff());
--- official artwork: visible with its (published) product; only staff can add, move, replace or remove it
-create policy product_designs_read on public.product_designs for select to anon, authenticated using (
-  exists (select 1 from public.products p where p.id = product_id and (p.is_published or public.is_staff())));
-create policy product_designs_write on public.product_designs for all to authenticated using (public.is_staff()) with check (public.is_staff());
-
--- the customer print studio (customers uploading THEIR OWN artwork) can be switched off by the admin
-insert into public.website_settings (key, value) values ('designer', '{"customer_uploads": true}'::jsonb)
-on conflict (key) do update set value = jsonb_build_object('customer_uploads', true) || public.website_settings.value;
-
--- built-in types, laid out like the vector garments (upload real mockup photos from the dashboard)
-insert into public.product_types (code, name_ar, name_en, garment_shape, default_price, default_color_ids, sort_order)
-values ('tshirt', 'تيشيرت', 'T-shirt', 'tshirt', 20000, array(select id from public.colors where code in ('black', 'white')), 1)
-on conflict (code) do nothing;
-insert into public.product_type_views (product_type_id, code, name_ar, name_en, mockup_width, mockup_height, sort_order)
-select id, 'front', 'الأمام', 'Front', 600, 700, 0 from public.product_types where code = 'tshirt'
-on conflict (product_type_id, code) do nothing;
-insert into public.product_type_views (product_type_id, code, name_ar, name_en, mockup_width, mockup_height, sort_order)
-select id, 'back', 'الخلف', 'Back', 600, 700, 1 from public.product_types where code = 'tshirt'
-on conflict (product_type_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'front', 'وسط الأمام', 'Front centre', 0.33000, 0.21429, 0.34000, 0.40000, 30, 40, 0
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'tshirt' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'back', 'وسط الظهر', 'Back centre', 0.32000, 0.18571, 0.36000, 0.45714, 32, 45, 1
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'tshirt' and v.code = 'back'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'left_chest', 'الصدر الأيسر', 'Left chest', 0.58667, 0.20000, 0.11667, 0.10000, 10, 10, 2
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'tshirt' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'sleeve', 'الكم الأيمن', 'Right sleeve', 0.10333, 0.21429, 0.08667, 0.07429, 8, 8, 3
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'tshirt' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'sleeve_left', 'الكم الأيسر', 'Left sleeve', 0.81000, 0.21429, 0.08667, 0.07429, 8, 8, 4
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'tshirt' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_types (code, name_ar, name_en, garment_shape, default_price, default_color_ids, sort_order)
-values ('oversized', 'تيشيرت أوفرسايز', 'Oversized tee', 'oversized', 25000, array(select id from public.colors where code in ('black', 'white')), 2)
-on conflict (code) do nothing;
-insert into public.product_type_views (product_type_id, code, name_ar, name_en, mockup_width, mockup_height, sort_order)
-select id, 'front', 'الأمام', 'Front', 600, 700, 0 from public.product_types where code = 'oversized'
-on conflict (product_type_id, code) do nothing;
-insert into public.product_type_views (product_type_id, code, name_ar, name_en, mockup_width, mockup_height, sort_order)
-select id, 'back', 'الخلف', 'Back', 600, 700, 1 from public.product_types where code = 'oversized'
-on conflict (product_type_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'front', 'وسط الأمام', 'Front centre', 0.32000, 0.21429, 0.36000, 0.42857, 32, 42, 0
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'oversized' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'back', 'وسط الظهر', 'Back centre', 0.30667, 0.18286, 0.38667, 0.48571, 34, 48, 1
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'oversized' and v.code = 'back'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'left_chest', 'الصدر الأيسر', 'Left chest', 0.58667, 0.20000, 0.12000, 0.10286, 10, 10, 2
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'oversized' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'sleeve', 'الكم الأيمن', 'Right sleeve', 0.06667, 0.28571, 0.09333, 0.08000, 8, 8, 3
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'oversized' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'sleeve_left', 'الكم الأيسر', 'Left sleeve', 0.84000, 0.28571, 0.09333, 0.08000, 8, 8, 4
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'oversized' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_types (code, name_ar, name_en, garment_shape, default_price, default_color_ids, sort_order)
-values ('hoodie', 'هودي', 'Hoodie', 'hoodie', 40000, array(select id from public.colors where code in ('black', 'white')), 3)
-on conflict (code) do nothing;
-insert into public.product_type_views (product_type_id, code, name_ar, name_en, mockup_width, mockup_height, sort_order)
-select id, 'front', 'الأمام', 'Front', 600, 700, 0 from public.product_types where code = 'hoodie'
-on conflict (product_type_id, code) do nothing;
-insert into public.product_type_views (product_type_id, code, name_ar, name_en, mockup_width, mockup_height, sort_order)
-select id, 'back', 'الخلف', 'Back', 600, 700, 1 from public.product_types where code = 'hoodie'
-on conflict (product_type_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'front', 'وسط الأمام', 'Front centre', 0.34000, 0.27143, 0.32000, 0.31429, 28, 30, 0
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'hoodie' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'back', 'وسط الظهر', 'Back centre', 0.31667, 0.33714, 0.36667, 0.41429, 32, 40, 1
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'hoodie' and v.code = 'back'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'left_chest', 'الصدر الأيسر', 'Left chest', 0.58333, 0.25143, 0.10667, 0.09143, 10, 10, 2
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'hoodie' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'sleeve', 'الكم الأيمن', 'Right sleeve', 0.13333, 0.27143, 0.07667, 0.06571, 8, 8, 3
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'hoodie' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'sleeve_left', 'الكم الأيسر', 'Left sleeve', 0.79000, 0.27143, 0.07667, 0.06571, 8, 8, 4
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'hoodie' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_types (code, name_ar, name_en, garment_shape, default_price, default_color_ids, sort_order)
-values ('sweatshirt', 'سويتشيرت', 'Sweatshirt', 'sweatshirt', 35000, array(select id from public.colors where code in ('black', 'white')), 4)
-on conflict (code) do nothing;
-insert into public.product_type_views (product_type_id, code, name_ar, name_en, mockup_width, mockup_height, sort_order)
-select id, 'front', 'الأمام', 'Front', 600, 700, 0 from public.product_types where code = 'sweatshirt'
-on conflict (product_type_id, code) do nothing;
-insert into public.product_type_views (product_type_id, code, name_ar, name_en, mockup_width, mockup_height, sort_order)
-select id, 'back', 'الخلف', 'Back', 600, 700, 1 from public.product_types where code = 'sweatshirt'
-on conflict (product_type_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'front', 'وسط الأمام', 'Front centre', 0.33000, 0.21429, 0.34000, 0.40000, 30, 40, 0
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'sweatshirt' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'back', 'وسط الظهر', 'Back centre', 0.32000, 0.18571, 0.36000, 0.45714, 32, 45, 1
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'sweatshirt' and v.code = 'back'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'left_chest', 'الصدر الأيسر', 'Left chest', 0.58667, 0.20000, 0.11667, 0.10000, 10, 10, 2
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'sweatshirt' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'sleeve', 'الكم الأيمن', 'Right sleeve', 0.12667, 0.25143, 0.07667, 0.06571, 8, 8, 3
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'sweatshirt' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'sleeve_left', 'الكم الأيسر', 'Left sleeve', 0.79667, 0.25143, 0.07667, 0.06571, 8, 8, 4
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'sweatshirt' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_types (code, name_ar, name_en, garment_shape, default_price, default_color_ids, sort_order)
-values ('longsleeve', 'كم طويل', 'Long sleeve', 'longsleeve', 28000, array(select id from public.colors where code in ('black', 'white')), 5)
-on conflict (code) do nothing;
-insert into public.product_type_views (product_type_id, code, name_ar, name_en, mockup_width, mockup_height, sort_order)
-select id, 'front', 'الأمام', 'Front', 600, 700, 0 from public.product_types where code = 'longsleeve'
-on conflict (product_type_id, code) do nothing;
-insert into public.product_type_views (product_type_id, code, name_ar, name_en, mockup_width, mockup_height, sort_order)
-select id, 'back', 'الخلف', 'Back', 600, 700, 1 from public.product_types where code = 'longsleeve'
-on conflict (product_type_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'front', 'وسط الأمام', 'Front centre', 0.33000, 0.21429, 0.34000, 0.40000, 30, 40, 0
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'longsleeve' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'back', 'وسط الظهر', 'Back centre', 0.32000, 0.18571, 0.36000, 0.45714, 32, 45, 1
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'longsleeve' and v.code = 'back'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'left_chest', 'الصدر الأيسر', 'Left chest', 0.58667, 0.20000, 0.11667, 0.10000, 10, 10, 2
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'longsleeve' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'sleeve', 'الكم الأيمن', 'Right sleeve', 0.12667, 0.24286, 0.07667, 0.06571, 8, 8, 3
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'longsleeve' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
-select v.id, 'sleeve_left', 'الكم الأيسر', 'Left sleeve', 0.79667, 0.24286, 0.07667, 0.06571, 8, 8, 4
-  from public.product_type_views v join public.product_types t on t.id = v.product_type_id
- where t.code = 'longsleeve' and v.code = 'front'
-on conflict (view_id, code) do nothing;
-
--- default colours for the built-in types (black & white where those colours exist)
-do $$ begin
-  if to_regclass('public.product_types') is not null then
-    update public.product_types set default_color_ids = array(select id from public.colors where code in ('black', 'white') order by sort_order)
-     where default_color_ids = '{}' and garment_shape is not null;
-  end if;
+-- security: everyone reads, only staff write (policies are created once, never dropped)
+do $$
+declare t text;
+begin
+  foreach t in array array['product_types', 'product_type_views', 'product_print_areas', 'product_designs'] loop
+    execute format('alter table public.%I enable row level security', t);
+    if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = t and policyname = t || '_read') then
+      if t = 'product_designs' then
+        execute 'create policy product_designs_read on public.product_designs for select to anon, authenticated using (exists (select 1 from public.products p where p.id = product_id and (p.is_published or public.is_staff())))';
+      else
+        execute format('create policy %I on public.%I for select to anon, authenticated using (is_active or public.is_staff())', t || '_read', t);
+      end if;
+    end if;
+    if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = t and policyname = t || '_write') then
+      execute format('create policy %I on public.%I for all to authenticated using (public.is_staff()) with check (public.is_staff())', t || '_write', t);
+    end if;
+  end loop;
 end $$;
 
--- repair: an earlier dashboard version saved placement codes with "-" (left-chest, sleeve-left)
+-- =====================================================================
+-- TPAC: product printing — PART 2 of 2 (built-in types + settings).
+-- Run PART 1 first. Safe to run more than once; your changes are kept.
+-- =====================================================================
+
+-- built-in types (hoodie, T-shirt…) laid out like the drawn garments
+insert into public.product_types (code, name_ar, name_en, garment_shape, default_price, sort_order) values
+  ('tshirt', 'تيشيرت', 'T-shirt', 'tshirt', 20000, 1),
+  ('oversized', 'تيشيرت أوفرسايز', 'Oversized tee', 'oversized', 25000, 2),
+  ('hoodie', 'هودي', 'Hoodie', 'hoodie', 40000, 3),
+  ('sweatshirt', 'سويتشيرت', 'Sweatshirt', 'sweatshirt', 35000, 4),
+  ('longsleeve', 'كم طويل', 'Long sleeve', 'longsleeve', 28000, 5)
+on conflict (code) do nothing;
+
+insert into public.product_type_views (product_type_id, code, name_ar, name_en, mockup_width, mockup_height, sort_order)
+select t.id, v.code, v.name_ar, v.name_en, 600, 700, v.sort_order
+  from public.product_types t
+ cross join (values ('front', 'الأمام', 'Front', 0), ('back', 'الخلف', 'Back', 1)) as v(code, name_ar, name_en, sort_order)
+ where t.garment_shape is not null
+on conflict (product_type_id, code) do nothing;
+
+-- an earlier dashboard version saved some placement codes with "-" (left-chest, sleeve-left): repair them
 update public.product_print_areas a set code = replace(a.code, '-', '_')
  where a.code in ('left-chest', 'sleeve-left')
    and not exists (select 1 from public.product_print_areas b where b.view_id = a.view_id and b.code = replace(a.code, '-', '_'));
+
+insert into public.product_print_areas (view_id, code, name_ar, name_en, x, y, width, height, max_width_cm, max_height_cm, sort_order)
+select v.id, a.code, n.name_ar, n.name_en, a.x, a.y, a.w, a.h, a.cw, a.ch, a.s
+  from (values
+    ('tshirt', 'front', 0.33000, 0.21429, 0.34000, 0.40000, 30, 40, 0),
+    ('tshirt', 'back', 0.32000, 0.18571, 0.36000, 0.45714, 32, 45, 1),
+    ('tshirt', 'left_chest', 0.58667, 0.20000, 0.11667, 0.10000, 10, 10, 2),
+    ('tshirt', 'sleeve', 0.10333, 0.21429, 0.08667, 0.07429, 8, 8, 3),
+    ('tshirt', 'sleeve_left', 0.81000, 0.21429, 0.08667, 0.07429, 8, 8, 4),
+    ('oversized', 'front', 0.32000, 0.21429, 0.36000, 0.42857, 32, 42, 0),
+    ('oversized', 'back', 0.30667, 0.18286, 0.38667, 0.48571, 34, 48, 1),
+    ('oversized', 'left_chest', 0.58667, 0.20000, 0.12000, 0.10286, 10, 10, 2),
+    ('oversized', 'sleeve', 0.06667, 0.28571, 0.09333, 0.08000, 8, 8, 3),
+    ('oversized', 'sleeve_left', 0.84000, 0.28571, 0.09333, 0.08000, 8, 8, 4),
+    ('hoodie', 'front', 0.34000, 0.27143, 0.32000, 0.31429, 28, 30, 0),
+    ('hoodie', 'back', 0.31667, 0.33714, 0.36667, 0.41429, 32, 40, 1),
+    ('hoodie', 'left_chest', 0.58333, 0.25143, 0.10667, 0.09143, 10, 10, 2),
+    ('hoodie', 'sleeve', 0.13333, 0.27143, 0.07667, 0.06571, 8, 8, 3),
+    ('hoodie', 'sleeve_left', 0.79000, 0.27143, 0.07667, 0.06571, 8, 8, 4),
+    ('sweatshirt', 'front', 0.33000, 0.21429, 0.34000, 0.40000, 30, 40, 0),
+    ('sweatshirt', 'back', 0.32000, 0.18571, 0.36000, 0.45714, 32, 45, 1),
+    ('sweatshirt', 'left_chest', 0.58667, 0.20000, 0.11667, 0.10000, 10, 10, 2),
+    ('sweatshirt', 'sleeve', 0.12667, 0.25143, 0.07667, 0.06571, 8, 8, 3),
+    ('sweatshirt', 'sleeve_left', 0.79667, 0.25143, 0.07667, 0.06571, 8, 8, 4),
+    ('longsleeve', 'front', 0.33000, 0.21429, 0.34000, 0.40000, 30, 40, 0),
+    ('longsleeve', 'back', 0.32000, 0.18571, 0.36000, 0.45714, 32, 45, 1),
+    ('longsleeve', 'left_chest', 0.58667, 0.20000, 0.11667, 0.10000, 10, 10, 2),
+    ('longsleeve', 'sleeve', 0.12667, 0.24286, 0.07667, 0.06571, 8, 8, 3),
+    ('longsleeve', 'sleeve_left', 0.79667, 0.24286, 0.07667, 0.06571, 8, 8, 4)
+  ) as a(type_code, code, x, y, w, h, cw, ch, s)
+  join (values
+    ('front', 'وسط الأمام', 'Front centre'),
+    ('back', 'وسط الظهر', 'Back centre'),
+    ('left_chest', 'الصدر الأيسر', 'Left chest'),
+    ('sleeve', 'الكم الأيمن', 'Right sleeve'),
+    ('sleeve_left', 'الكم الأيسر', 'Left sleeve')
+  ) as n(code, name_ar, name_en) on n.code = a.code
+  join public.product_types t on t.code = a.type_code
+  join public.product_type_views v on v.product_type_id = t.id and v.code = case when a.code = 'back' then 'back' else 'front' end
+on conflict (view_id, code) do nothing;
+
+-- black & white as default colours of the built-in types (only where none are set yet)
+update public.product_types
+   set default_color_ids = array(select id from public.colors where code in ('black', 'white') order by sort_order)
+ where default_color_ids = '{}' and garment_shape is not null;
+
+-- the switch for customers uploading their OWN designs in "Design your piece" (on by default)
+insert into public.website_settings (key, value) values ('designer', '{"customer_uploads": true}'::jsonb)
+on conflict (key) do update set value = jsonb_build_object('customer_uploads', true) || website_settings.value;

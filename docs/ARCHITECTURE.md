@@ -75,7 +75,7 @@ Key functions: `quote_cart`, `place_order`, `update_order_status`, `adjust_inven
 ### Stock policy
 Stock is **committed when the order is placed** (not at confirmation) so two customers can never buy the same last unit. Cancelling before the order ships restores it automatically (`cancellation` transaction). Cancelling after shipping does not restore stock — record returns with an inventory adjustment (`return`).
 
-### Product printing configuration (`add-product-printing.sql`)
+### Product printing configuration (`add-product-printing-1.sql + -2.sql`)
 
 Admin-controlled templates that decide how every product is shown and where it may be printed — new kinds of
 product are added from the dashboard, no code change needed.

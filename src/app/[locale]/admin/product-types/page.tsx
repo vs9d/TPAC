@@ -28,7 +28,7 @@ export default async function ProductTypes({ params }: { params: Promise<{ local
   return (
     <div className="space-y-6">
       <PageHeader title={t("أنواع المنتجات والطباعة", "Product types & printing")} subtitle={t("لكل نوع صور موك أب خاصة به وزوايا ومناطق طباعة بأبعاد بالسنتيمتر. المنتجات الجديدة تبدأ من هنا.", "Each type has its own mockup photos, views and print areas sized in cm. New products start from here.")} />
-      {error && <p className="rounded-2xl border border-amber bg-amber/10 p-4 text-sm">{t("شغّل الملف supabase/add-product-printing.sql في Supabase لتفعيل هذا القسم.", "Run supabase/add-product-printing.sql in Supabase to enable this section.")}</p>}
+      {error && <p className="rounded-2xl border border-amber bg-amber/10 p-4 text-sm">{t("شغّل الملف supabase/add-product-printing-1.sql ثم -2.sql في Supabase لتفعيل هذا القسم.", "Run supabase/add-product-printing-1.sql then -2.sql in Supabase to enable this section.")}</p>}
       {types.length === 0 && !error ? <Empty>{t("لا توجد أنواع", "No types yet")}</Empty> : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {types.map((ty) => {
