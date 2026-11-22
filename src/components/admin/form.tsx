@@ -69,12 +69,12 @@ import { createContext, useContext } from "react";
 import { useFormStatus } from "react-dom";
 const FieldErrorsContext = createContext<Record<string, string> | undefined>(undefined);
 
-export function Field({ name, label, hint, className, children }: { name?: string; label: string; hint?: string; className?: string; children: React.ReactNode }) {
+export function Field({ name, label, hint, className, children, htmlFor }: { name?: string; label: string; hint?: string; className?: string; children: React.ReactNode; htmlFor?: string }) {
   const errors = useContext(FieldErrorsContext);
   const err = name ? errors?.[name] : undefined;
   return (
     <div className={className}>
-      <label className="label" htmlFor={name}>{label}</label>
+      <label className="label" htmlFor={htmlFor ?? name}>{label}</label>
       {children}
       {hint && !err && <p className="mt-1 text-xs text-mute">{hint}</p>}
       {err && <p className="mt-1 text-xs text-danger">{err}</p>}
@@ -84,7 +84,7 @@ export function Field({ name, label, hint, className, children }: { name?: strin
 
 export function Input({ name, label, hint, className, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { name: string; label: string; hint?: string }) {
   return (
-    <Field name={name} label={label} hint={hint} className={className}>
+    <Field name={name} label={label} hint={hint} className={className} htmlFor={props.id ?? name}>
       <input id={name} name={name} className="field h-10 text-sm" {...props} />
     </Field>
   );
@@ -92,7 +92,7 @@ export function Input({ name, label, hint, className, ...props }: React.InputHTM
 
 export function Textarea({ name, label, hint, className, rows = 3, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { name: string; label: string; hint?: string }) {
   return (
-    <Field name={name} label={label} hint={hint} className={className}>
+    <Field name={name} label={label} hint={hint} className={className} htmlFor={props.id ?? name}>
       <textarea id={name} name={name} rows={rows} className="field text-sm" {...props} />
     </Field>
   );

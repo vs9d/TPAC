@@ -10,6 +10,8 @@ import { Designer } from "@/components/designer/designer";
 import { adminT } from "@/lib/admin-i18n";
 import { customerUploadsEnabled } from "@/lib/designer-settings";
 import Link from "next/link";
+import { faqFrom, type FaqItem } from "@/lib/design-faq";
+import { DesignFaq } from "@/components/designer/faq";
 import type { DesignerFont } from "@/lib/design-assets";
 import { normType, type ProductTypeRow } from "@/lib/print-config";
 import { podTemplate, type PodTemplate } from "@/lib/pod-templates";
@@ -91,6 +93,7 @@ export default async function DesignPage({ params, searchParams }: { params: Pro
   let tiers: DesignerTierRow[] = [];
   let settings = DEFAULT_SETTINGS;
   let templates: Record<string, PodTemplate | null> = {};
+  let faq: FaqItem[] = faqFrom(null, DEFAULT_SETTINGS);
   if (isSupabaseConfigured()) {
     const supabase = await createClient();
     const [g, l, o, tr, s] = await Promise.all([
@@ -106,6 +109,8 @@ export default async function DesignPage({ params, searchParams }: { params: Pro
     options = (o.data as DesignerOptionRow[]) ?? [];
     tiers = (tr.data as DesignerTierRow[]) ?? [];
     settings = { ...DEFAULT_SETTINGS, ...((s.data?.value as Partial<DesignerSettings>) ?? {}) };
+    const { data: faqRow } = await supabase.from("website_settings").select("value").eq("key", "design_faq").maybeSingle();
+    faq = faqFrom(faqRow?.value, settings);
     // photos + print areas the admin manages for each garment (same records as catalog product types)
     if (garments.length) {
       const { data: types } = await supabase.from("product_types").select("*, product_type_views(*, product_print_areas(*))").in("code", garments.map((x) => x.code));
@@ -147,6 +152,7 @@ export default async function DesignPage({ params, searchParams }: { params: Pro
       ) : (
         <Designer garments={garments} locations={locations} colors={colors} fonts={FONTS} options={options} tiers={tiers} settings={settings} initialGarment={garment} initialColor={color} templates={templates} />
       )}
+      <DesignFaq items={faq} locale={locale} />
     </div>
   );
 }

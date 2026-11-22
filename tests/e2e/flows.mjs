@@ -38,8 +38,8 @@ async function flow(name, fn, ctxOpts = { viewport: { width: 1366, height: 900 }
 }
 
 // ---------------------------------------------------------------------------
-/** The product form keeps rarely used fields inside a collapsed "More options" block. */
-const openMore = (page) => page.evaluate(() => { const d = document.querySelector("#product-form details"); if (d) d.open = true; });
+/** The product form folds rarely used fields (fabric texts, URL & SEO) into collapsible blocks. */
+const openMore = (page) => page.evaluate(() => { document.querySelectorAll("#product-form details").forEach((d) => { d.open = true; }); });
 
 await flow("guest: browse → variant → cart → checkout (COD) → track", async (page) => {
   await page.goto(`${BASE}/ar/shop?category=oversized-t-shirts`);
@@ -853,7 +853,7 @@ await flow("hoodie photos: 5 colours × front / back / both sleeves, sleeve desi
   const d = await one("select print_locations, config from custom_designs order by created_at desc limit 1");
   assert.deepEqual(d.print_locations, ["sleeve"]);
   assert.ok(d.config.previews?.right?.endsWith("/right.jpg"), "sleeve preview stored");
-  assert.deepEqual(d.config.areas.sleeve.cm, { width: 6, height: 24 }, "the sleeve's own print size");
+  assert.deepEqual(d.config.areas.sleeve.cm, { width: 8, height: 28 }, "the sleeve's own print size");
   assert.equal((await one("select count(*)::int n from storage.objects where name = $1", [d.config.previews.right])).n, 1);
 });
 

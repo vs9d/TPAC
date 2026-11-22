@@ -1,3 +1,4 @@
+import { whatsappNumber } from "@/lib/whatsapp";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { isLocale } from "@/lib/i18n/config";
@@ -25,8 +26,8 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
         <h1 className="display text-5xl md:text-7xl">{dict.contact.title}</h1>
         <p className="mt-5 max-w-md text-lg text-mute">{dict.contact.body}</p>
         <dl className="mt-10 space-y-6 text-sm">
-          {s.contact.whatsapp && (
-            <div><dt className="eyebrow text-mute">{dict.contact.whatsapp}</dt><dd className="mt-1"><a href={`https://wa.me/${s.contact.whatsapp}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-lg font-semibold hover:text-pine" dir="ltr"><WhatsAppIcon /> {formatIraqiPhone(s.contact.whatsapp)}</a></dd></div>
+          {whatsappNumber(s.contact.whatsapp) && (
+            <div><dt className="eyebrow text-mute">{dict.contact.whatsapp}</dt><dd className="mt-1"><a href={`https://wa.me/${whatsappNumber(s.contact.whatsapp)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-lg font-semibold hover:text-pine" dir="ltr"><WhatsAppIcon /> {formatIraqiPhone(whatsappNumber(s.contact.whatsapp))}</a></dd></div>
           )}
           {s.contact.email && <div><dt className="eyebrow text-mute">Email</dt><dd className="mt-1 text-lg font-semibold"><a href={`mailto:${s.contact.email}`}>{s.contact.email}</a></dd></div>}
           {s.social.instagram && <div><dt className="eyebrow text-mute">Instagram</dt><dd className="mt-1"><a href={s.social.instagram} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-lg font-semibold"><InstagramIcon /> @thetpac</a></dd></div>}

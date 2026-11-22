@@ -6,6 +6,8 @@ import { Footer } from "@/components/layout/footer";
 import { AnnouncementBar } from "@/components/layout/announcement-bar";
 import { CartDrawer } from "@/components/cart/cart-drawer";
 import { CartSync } from "@/components/cart/cart-sync";
+import { WhatsAppButton } from "@/components/layout/whatsapp-button";
+import { whatsappNumber } from "@/lib/whatsapp";
 import { getCategories } from "@/lib/data/catalog";
 import { getBanners, getSettings } from "@/lib/data/content";
 import { getSession, isStaffRole } from "@/lib/auth";
@@ -29,6 +31,7 @@ export default async function StoreLayout({ children, params }: { children: Reac
       <Footer locale={locale} dict={dict} settings={settings} categories={nav} />
       <CartDrawer />
       <CartSync userId={session?.userId ?? null} />
+      <WhatsAppButton number={whatsappNumber(settings.contact.whatsapp)} locale={locale} />
     </>
   );
 }

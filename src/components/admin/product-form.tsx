@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Copy, Loader2, SlidersHorizontal, Wand2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, ChevronDown, Copy, Loader2, Wand2 } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { adminT } from "@/lib/admin-i18n";
 import { AdminForm, Input, Textarea, Select, Checkbox, Submit, Field } from "./form";
@@ -112,6 +113,10 @@ export function ProductForm({ product, categories, collections, selectedCollecti
     toast.success(t("تم الحفظ — أضف المنتج الشبيه. السعر والفئة والمقاسات محفوظة.", "Saved — add the similar one. Price, category and sizes are kept."));
   };
 
+  const L = (ar: string, en: string) => t(ar, en);
+  const card = "card-admin space-y-4 p-5";
+  const title = (s: string) => <h2 className="text-sm font-bold">{s}</h2>;
+
   return (
     <AdminForm
       id="product-form"
@@ -124,47 +129,77 @@ export function ProductForm({ product, categories, collections, selectedCollecti
           return "handled";
         }
       }}
-      className="mx-auto max-w-3xl space-y-5"
+      className="grid gap-5 xl:grid-cols-3 xl:items-start"
     >
       {product && <input type="hidden" name="id" value={product.id} />}
       {creating && <input type="hidden" name="new_id" value={newId} />}
 
-      {/* 1 — the essentials */}
-      <div className="card-admin space-y-4 p-5">
-        <Input name="name_ar" label={t("اسم المنتج", "Product name")} defaultValue={product?.name_ar} required dir="rtl" autoFocus={creating} />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input name="base_price" type="number" min={0} step={250} inputMode="numeric" label={t("السعر (د.ع)", "Price (IQD)")} defaultValue={product?.base_price ?? (printType?.default_price || undefined)} required />
-          <Select name="category_id" label={t("الفئة", "Category")} defaultValue={product?.category_id ?? printType?.category_id ?? ""} options={[{ value: "", label: "—" }, ...categories.map((c) => ({ value: c.id, label: locale === "ar" ? c.name_ar : c.name_en }))]} />
+      {/* contextual save bar (like Shopify): always reachable at the top */}
+      <div className="sticky top-2 z-30 flex items-center justify-between gap-3 rounded-2xl bg-night px-3 py-2.5 text-snow shadow-lg sm:px-4 sm:py-3 xl:col-span-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link href={`/${locale}/admin/products`} className="grid size-9 shrink-0 place-items-center rounded-full hover:bg-snow/10" aria-label={L("رجوع للمنتجات", "Back to products")}><ArrowRight className="size-4 ltr:rotate-180" /></Link>
+          <p className="truncate text-sm font-semibold">{creating ? L("منتج جديد — غير محفوظ", "New product — not saved") : L("تعديل المنتج", "Editing product")}{printType ? ` · ${locale === "ar" ? printType.name_ar : printType.name_en}` : ""}</p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Link href={`/${locale}/admin/products`} className="btn btn-sm hidden border border-snow/25 text-snow hover:bg-snow/10 sm:inline-flex">{L("تجاهل", "Discard")}</Link>
+          {creating && <Submit className="!border-snow/25 !bg-transparent !text-snow hover:!bg-snow/10" variant="outline" name="after" value="another"><Copy className="size-4" /> <span className="sr-only sm:not-sr-only">{L("إنشاء وإضافة منتج شبيه", "Create & add a similar one")}</span></Submit>}
+          <Submit variant="brand" name="after" value="open">{creating ? L("إنشاء المنتج", "Create product") : L("حفظ التغييرات", "Save changes")}</Submit>
         </div>
       </div>
 
-      {creating && printType && (
-        <div className="card-admin relative space-y-3 p-5">
-          <input type="hidden" name="product_type_id" value={printType.id} />
-          <input type="hidden" name="designs_json" defaultValue="[]" />
-          <input type="hidden" name="generated_json" defaultValue="[]" />
-          <input type="hidden" name="print_enabled" defaultValue="1" />
-          <div>
-            <h2 className="text-sm font-semibold">{t("التصميم على القطعة", "Design on the product")} — {locale === "ar" ? printType.name_ar : printType.name_en}</h2>
-            <p className="mt-1 text-xs text-mute">{t("ارفع تصميم المنتج الرسمي وضعه داخل منطقة الطباعة. صور المنتج تُصنع تلقائياً لكل لون تختاره.", "Upload the official artwork and place it inside the print area. Product photos are generated automatically for every colour you pick.")}</p>
-          </div>
-          <ProductStudio key={newId} ref={studio} type={printType} colors={colors} productId={newId} previewColorIds={checkedColors} />
-          {generating && <div className="absolute inset-0 z-20 grid place-items-center rounded-[inherit] bg-paper/80"><p className="flex items-center gap-2 text-sm font-semibold"><Loader2 className="size-4 animate-spin" /> {generating}</p></div>}
+      {/* ------------------------------------------------ main column */}
+      <div className="space-y-5 xl:col-span-2">
+        <div className={card}>
+          <Input name="name_ar" label={L("العنوان", "Title")} defaultValue={product?.name_ar} required dir="rtl" autoFocus={creating} placeholder={L("مثال: هودي بغداد أوفرسايز", "e.g. Baghdad oversized hoodie")} />
+          <Input
+            name="name_en"
+            label={L("العنوان بالإنجليزي", "English title")}
+            defaultValue={product?.name_en}
+            dir="ltr"
+            hint={L("اختياري — يُستخدم العربي إذا تُرك فارغاً، ومنه يُكتب الرابط", "Optional — falls back to the Arabic title; the URL is made from it")}
+            onChange={(e) => { if (creating && !slugTouched.current) setValue("slug", slugify(e.target.value)); }}
+          />
+          <Textarea name="description_ar" label={L("الوصف", "Description")} defaultValue={product?.description_ar ?? ""} rows={5} dir="rtl" placeholder={L("القماش، القَصّة، الطباعة، ونصيحة المقاس…", "Fabric, fit, print, sizing tip…")} />
+          <Textarea name="description_en" label={L("الوصف بالإنجليزي", "English description")} defaultValue={product?.description_en ?? ""} rows={3} dir="ltr" />
         </div>
-      )}
 
-      {creating && (
-        <>
-          <div className="card-admin space-y-3 p-5">
-            <h2 className="text-sm font-semibold">{printType ? t("صور إضافية (اختياري)", "Extra photos (optional)") : t("الصور", "Photos")}</h2>
+        {creating && printType && (
+          <div className={`${card} relative`}>
+            <input type="hidden" name="product_type_id" value={printType.id} />
+            <input type="hidden" name="designs_json" defaultValue="[]" />
+            <input type="hidden" name="generated_json" defaultValue="[]" />
+            <input type="hidden" name="print_enabled" defaultValue="1" />
+            <div>
+              {title(`${L("التصميم على القطعة", "Design on the product")} — ${locale === "ar" ? printType.name_ar : printType.name_en}`)}
+              <p className="mt-1 text-xs text-mute">{L("ارفع تصميم المنتج الرسمي وضعه داخل منطقة الطباعة. صور المنتج تُصنع تلقائياً لكل لون تختاره.", "Upload the official artwork and place it inside the print area. Product photos are generated automatically for every colour you pick.")}</p>
+            </div>
+            <ProductStudio key={newId} ref={studio} type={printType} colors={colors} productId={newId} previewColorIds={checkedColors} />
+            {generating && <div className="absolute inset-0 z-20 grid place-items-center rounded-[inherit] bg-paper/80"><p className="flex items-center gap-2 text-sm font-semibold"><Loader2 className="size-4 animate-spin" /> {generating}</p></div>}
+          </div>
+        )}
+
+        {creating && (
+          <div className={card}>
+            {title(printType ? L("صور إضافية (اختياري)", "Extra photos (optional)") : L("الصور", "Media"))}
             <ImagePicker key={pickerKey} productId={newId} colors={colors} />
           </div>
-          <div className="card-admin space-y-4 p-5">
+        )}
+
+        <div className={card}>
+          {title(L("التسعير", "Pricing"))}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input name="base_price" type="number" min={0} step={250} inputMode="numeric" label={L("السعر (د.ع)", "Price (IQD)")} defaultValue={product?.base_price ?? (printType?.default_price || undefined)} required />
+            <Input name="compare_at_price" type="number" min={0} step={250} inputMode="numeric" label={L("السعر قبل الخصم", "Compare-at price")} defaultValue={product?.compare_at_price ?? ""} hint={L("يظهر مشطوباً لإظهار التخفيض", "Shown struck-through as a sale")} />
+          </div>
+        </div>
+
+        {creating && (
+          <div className={card}>
             <div>
-              <h2 className="text-sm font-semibold">{t("المقاسات والألوان والكمية", "Sizes, colours & stock")}</h2>
-              <p className="mt-1 text-xs text-mute">{t("نُنشئ كل التوليفات تلقائياً. تعدّل الكميات لاحقاً من جدول المخزون.", "Every combination is created automatically. Fine-tune quantities later in the stock grid.")}</p>
+              {title(L("المقاسات والألوان والمخزون", "Variants & inventory"))}
+              <p className="mt-1 text-xs text-mute">{L("نُنشئ كل التوليفات تلقائياً. تعدّل الكميات لاحقاً من جدول المخزون.", "Every combination is created automatically. Fine-tune quantities later in the stock grid.")}</p>
             </div>
-            <Field label={t("المقاسات", "Sizes")}>
+            <Field label={L("المقاسات", "Sizes")}>
               <div className="flex flex-wrap gap-2">
                 {sizes.map((s) => (
                   <label key={s.code} className="chip cursor-pointer has-[:checked]:border-pine has-[:checked]:bg-pine has-[:checked]:text-white dark:has-[:checked]:text-night">
@@ -173,7 +208,7 @@ export function ProductForm({ product, categories, collections, selectedCollecti
                 ))}
               </div>
             </Field>
-            <Field label={t("الألوان", "Colours")}>
+            <Field label={L("الألوان", "Colours")}>
               <div className="flex flex-wrap gap-2">
                 {colors.map((c) => (
                   <label key={c.id} className="chip cursor-pointer gap-2 has-[:checked]:border-pine has-[:checked]:bg-pine-soft">
@@ -183,87 +218,112 @@ export function ProductForm({ product, categories, collections, selectedCollecti
                 ))}
               </div>
             </Field>
-            <Input name="qs_stock" type="number" min={0} max={100000} inputMode="numeric" defaultValue={10} label={t("الكمية لكل مقاس ولون", "Stock per size & colour")} className="max-w-[12rem]" />
+            <Input name="qs_stock" type="number" min={0} max={100000} inputMode="numeric" defaultValue={10} label={L("الكمية لكل مقاس ولون", "Stock per size & colour")} className="max-w-[12rem]" />
           </div>
-        </>
-      )}
+        )}
 
-      {/* 2 — everything else, tucked away */}
-      <details className="card-admin group p-5">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
-          <span className="flex items-center gap-2"><SlidersHorizontal className="size-4 text-pine" /> {t("خيارات إضافية", "More options")} <span className="text-xs font-normal text-mute">{t("(اختيارية — كلها لها قيم تلقائية)", "(optional — all have automatic defaults)")}</span></span>
-          <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
-        </summary>
-        <div className="mt-5 space-y-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input
-              name="name_en"
-              label={t("الاسم الإنجليزي", "English name")}
-              defaultValue={product?.name_en}
-              dir="ltr"
-              hint={t("إن تُرك فارغاً يُستخدم الاسم العربي", "Falls back to the Arabic name")}
-              onChange={(e) => { if (creating && !slugTouched.current) setValue("slug", slugify(e.target.value)); }}
-            />
-            <Input name="compare_at_price" type="number" min={0} step={250} inputMode="numeric" label={t("السعر قبل الخصم", "Compare-at price")} defaultValue={product?.compare_at_price ?? ""} hint={t("يظهر مشطوباً لإظهار التخفيض", "Shown struck-through as a sale")} />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Textarea name="description_ar" label={t("الوصف (عربي)", "Description (Arabic)")} defaultValue={product?.description_ar ?? ""} rows={3} dir="rtl" />
-            <Textarea name="description_en" label={t("الوصف (إنجليزي)", "Description (English)")} defaultValue={product?.description_en ?? ""} rows={3} dir="ltr" />
-          </div>
-
-          <div className="rounded-2xl bg-bone p-4">
-            <p className="mb-2 flex items-center gap-2 text-sm font-semibold"><Wand2 className="size-4 text-pine" /> {t("نصوص جاهزة للخامة والطباعة", "Ready-made fabric & printing texts")}</p>
+        <details className="card-admin group p-5" open={!!(product?.material_ar || product?.printing_ar)}>
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold [&::-webkit-details-marker]:hidden">
+            <span className="flex items-center gap-2"><Wand2 className="size-4 text-pine" /> {L("الخامة والطباعة", "Fabric & printing")} <span className="text-xs font-normal text-mute">{L("(اختياري)", "(optional)")}</span></span>
+            <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="mt-4 space-y-4">
             <div className="flex flex-wrap gap-2">
               {TEXT_PRESETS.material.map((p) => <button type="button" key={p.key} onClick={() => applyPreset("material", p.key)} className="chip h-9 text-xs">{locale === "ar" ? p.label_ar : p.label_en}</button>)}
               {TEXT_PRESETS.printing.map((p) => <button type="button" key={p.key} onClick={() => applyPreset("printing", p.key)} className="chip h-9 border-dashed text-xs">{locale === "ar" ? p.label_ar : p.label_en}</button>)}
             </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Textarea name="material_ar" label={L("الخامة (عربي)", "Material (Arabic)")} defaultValue={product?.material_ar ?? ""} rows={2} dir="rtl" />
+              <Textarea name="material_en" label={L("الخامة (إنجليزي)", "Material (English)")} defaultValue={product?.material_en ?? ""} rows={2} dir="ltr" />
+              <Textarea name="printing_ar" label={L("الطباعة (عربي)", "Printing (Arabic)")} defaultValue={product?.printing_ar ?? ""} rows={2} dir="rtl" />
+              <Textarea name="printing_en" label={L("الطباعة (إنجليزي)", "Printing (English)")} defaultValue={product?.printing_en ?? ""} rows={2} dir="ltr" />
+            </div>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Textarea name="material_ar" label={t("الخامة (عربي)", "Material (Arabic)")} defaultValue={product?.material_ar ?? ""} rows={2} dir="rtl" />
-            <Textarea name="material_en" label={t("الخامة (إنجليزي)", "Material (English)")} defaultValue={product?.material_en ?? ""} rows={2} dir="ltr" />
-            <Textarea name="printing_ar" label={t("الطباعة (عربي)", "Printing (Arabic)")} defaultValue={product?.printing_ar ?? ""} rows={2} dir="rtl" />
-            <Textarea name="printing_en" label={t("الطباعة (إنجليزي)", "Printing (English)")} defaultValue={product?.printing_en ?? ""} rows={2} dir="ltr" />
-          </div>
+        </details>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Checkbox name="is_featured" label={t("مميز", "Featured")} defaultChecked={product?.is_featured} />
-            <Checkbox name="is_new_arrival" label={t("وصل حديثاً", "New arrival")} defaultChecked={product?.is_new_arrival ?? creating} />
-            <Checkbox name="is_limited" label={t("إصدار محدود", "Limited edition")} defaultChecked={product?.is_limited} />
-            <Checkbox name="is_customizable" label={t("قابل للتخصيص (رابط لأداة التصميم)", "Customisable (links to designer)")} defaultChecked={product?.is_customizable} />
-          </div>
+        <div className={card}>
+          {title(L("نتيجة البحث في جوجل", "Search engine listing"))}
+          <SearchPreview locale={locale} />
+          <details className="group">
+            <summary className="cursor-pointer list-none text-sm font-semibold text-pine underline underline-offset-4 [&::-webkit-details-marker]:hidden">{L("تعديل الرابط والعنوان والوصف", "Edit URL, title and description")}</summary>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Input name="slug" label={L("الرابط (slug)", "URL handle")} defaultValue={product?.slug} dir="ltr" pattern="[a-z0-9]+(-[a-z0-9]+)*" hint={creating ? L("يُكتب تلقائياً", "Filled automatically") : undefined} onChange={() => { slugTouched.current = true; }} className="sm:col-span-2" />
+              <Input name="seo_title_ar" label={L("عنوان الصفحة (عربي)", "Page title (AR)")} defaultValue={product?.seo_title_ar ?? ""} maxLength={120} />
+              <Input name="seo_title_en" label={L("عنوان الصفحة (إنجليزي)", "Page title (EN)")} defaultValue={product?.seo_title_en ?? ""} maxLength={120} dir="ltr" />
+              <Textarea name="seo_description_ar" label={L("الوصف في جوجل (عربي)", "Meta description (AR)")} defaultValue={product?.seo_description_ar ?? ""} maxLength={300} rows={2} />
+              <Textarea name="seo_description_en" label={L("الوصف في جوجل (إنجليزي)", "Meta description (EN)")} defaultValue={product?.seo_description_en ?? ""} maxLength={300} rows={2} dir="ltr" />
+            </div>
+          </details>
+        </div>
+      </div>
 
+      {/* ------------------------------------------------ sidebar */}
+      <div className="space-y-5 xl:sticky xl:top-24">
+        <div className={card}>
+          {title(L("الحالة", "Status"))}
+          <select id="is_published" name="is_published" defaultValue={(product?.is_published ?? creating) ? "1" : ""} className="field h-11" aria-label={L("الحالة", "Status")}>
+            <option value="1">{L("نشط — ظاهر في المتجر", "Active — visible in the store")}</option>
+            <option value="">{L("مسودة — مخفي", "Draft — hidden")}</option>
+          </select>
+        </div>
+
+        <div className={card}>
+          {title(L("تنظيم المنتج", "Product organization"))}
+          <Select name="category_id" label={L("الفئة", "Category")} defaultValue={product?.category_id ?? printType?.category_id ?? ""} options={[{ value: "", label: "—" }, ...categories.map((c) => ({ value: c.id, label: locale === "ar" ? c.name_ar : c.name_en }))]} />
+          <Field label={L("نوع المنتج", "Product type")}>
+            <p className="field flex h-10 items-center text-sm text-mute">{printType ? (locale === "ar" ? printType.name_ar : printType.name_en) : L("مخصص (بدون قالب طباعة)", "Custom (no print template)")}</p>
+          </Field>
           {collections.length > 0 && (
-            <Field name="collection_ids" label={t("المجموعات", "Collections")}>
-              <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <Field name="collection_ids" label={L("المجموعات", "Collections")}>
+              <div className="max-h-48 space-y-2 overflow-y-auto">
                 {collections.map((c) => (
                   <label key={c.id} className="flex items-center gap-2.5 text-sm"><input type="checkbox" name="collection_ids" value={c.id} defaultChecked={selectedCollections.includes(c.id)} className="size-4 accent-ink" /> {locale === "ar" ? c.name_ar : c.name_en}</label>
                 ))}
               </div>
             </Field>
           )}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input name="slug" label={t("الرابط (slug)", "URL slug")} defaultValue={product?.slug} dir="ltr" pattern="[a-z0-9]+(-[a-z0-9]+)*" hint={creating ? t("يُكتب تلقائياً", "Filled automatically") : undefined} onChange={() => { slugTouched.current = true; }} />
-            <Input name="tags" label={t("الوسوم (مفصولة بفواصل)", "Tags (comma separated)")} defaultValue={product?.tags.join(", ")} />
-          </div>
-          <div className="grid gap-4 border-t border-line pt-4 sm:grid-cols-2">
-            <Input name="seo_title_ar" label="SEO title (AR)" defaultValue={product?.seo_title_ar ?? ""} maxLength={120} />
-            <Input name="seo_title_en" label="SEO title (EN)" defaultValue={product?.seo_title_en ?? ""} maxLength={120} />
-            <Textarea name="seo_description_ar" label="Meta description (AR)" defaultValue={product?.seo_description_ar ?? ""} maxLength={300} rows={2} />
-            <Textarea name="seo_description_en" label="Meta description (EN)" defaultValue={product?.seo_description_en ?? ""} maxLength={300} rows={2} />
-          </div>
+          <Input name="tags" label={L("الوسوم", "Tags")} defaultValue={product?.tags.join(", ")} placeholder={L("هودي، شتوي، بغداد", "hoodie, winter, baghdad")} hint={L("افصلها بفواصل", "Separate with commas")} />
         </div>
-      </details>
 
-      {/* 3 — publish + save */}
-      <div className="sticky bottom-3 z-10 space-y-3 rounded-2xl border border-line bg-paper/95 p-4 shadow-lg backdrop-blur">
-        <Checkbox name="is_published" label={t("نشر المنتج في المتجر", "Publish to the store")} defaultChecked={product?.is_published ?? creating} />
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Submit className="w-full" variant="brand" name="after" value="open">{creating ? t("إنشاء المنتج", "Create product") : t("حفظ التغييرات", "Save changes")}</Submit>
-          {creating && (
-            <Submit className="w-full" variant="outline" name="after" value="another"><Copy className="size-4" /> {t("إنشاء وإضافة منتج شبيه", "Create & add a similar one")}</Submit>
-          )}
+        <div className={`${card} !space-y-3`}>
+          {title(L("الشارات", "Badges"))}
+          <Checkbox name="is_new_arrival" label={L("وصل حديثاً", "New arrival")} defaultChecked={product?.is_new_arrival ?? creating} />
+          <Checkbox name="is_featured" label={L("مميز في الرئيسية", "Featured on the homepage")} defaultChecked={product?.is_featured} />
+          <Checkbox name="is_limited" label={L("إصدار محدود", "Limited edition")} defaultChecked={product?.is_limited} />
+          <Checkbox name="is_customizable" label={L("قابل للتخصيص (رابط لأداة التصميم)", "Customisable (links to the designer)")} defaultChecked={product?.is_customizable} />
         </div>
       </div>
     </AdminForm>
+  );
+}
+
+/** Live Google-style preview of the product's search result, read from the form fields as you type. */
+function SearchPreview({ locale }: { locale: "ar" | "en" }) {
+  const [v, setV] = useState({ title: "", desc: "", slug: "" });
+  useEffect(() => {
+    const form = document.getElementById("product-form");
+    const val = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.value?.trim() ?? "";
+    const read = () => setV({
+      title: val("seo_title_ar") || val("name_ar"),
+      desc: val("seo_description_ar") || val("description_ar"),
+      slug: val("slug") || "…",
+    });
+    read();
+    form?.addEventListener("input", read);
+    return () => form?.removeEventListener("input", read);
+  }, []);
+  const t = adminT(locale);
+  return (
+    <div className="rounded-2xl border border-line bg-paper p-4" dir="rtl">
+      {v.title ? (
+        <>
+          <p className="truncate text-xs text-mute" dir="ltr">thetpac.com › {locale} › product › {v.slug}</p>
+          <p className="mt-1 truncate text-lg text-[#1a0dab] dark:text-[#8ab4f8]">{(v.title + " | TPAC").slice(0, 70)}</p>
+          <p className="mt-0.5 line-clamp-2 text-sm text-mute">{v.desc ? v.desc.slice(0, 160) : t("أضف وصفاً يظهر هنا في نتائج البحث.", "Add a description to show here in search results.")}</p>
+        </>
+      ) : (
+        <p className="text-sm text-mute">{t("اكتب عنوان المنتج لترى كيف يظهر في جوجل.", "Add a title to see how the product appears on Google.")}</p>
+      )}
+    </div>
   );
 }

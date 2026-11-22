@@ -110,3 +110,21 @@ export async function saveDesignerSettings(_prev: ActionState, form: FormData): 
   refresh();
   return { ok: true };
 }
+
+/** Questions & answers shown under the print studio (admins only). Empty rows are dropped. */
+export async function saveDesignFaq(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const session = await assertAdmin();
+  const col = (k: string) => form.getAll(k).map((v) => str(v).trim());
+  const [qa, aa, qe, ae] = [col("q_ar"), col("a_ar"), col("q_en"), col("a_en")];
+  const items = qa
+    .map((q, i) => ({ q_ar: q.slice(0, 200), a_ar: (aa[i] ?? "").slice(0, 1200), q_en: (qe[i] ?? "").slice(0, 200), a_en: (ae[i] ?? "").slice(0, 1200) }))
+    .filter((i) => i.q_ar && i.a_ar)
+    .slice(0, 20);
+  if (qa.some((q, i) => q && !(aa[i] ?? "").trim())) return { ok: false, error: "validation", fields: { a_ar: "required" } };
+  const supabase = await createClient();
+  const { error } = await supabase.from("website_settings").upsert({ key: "design_faq", value: { items }, updated_by: session.userId }, { onConflict: "key" });
+  if (error) return dbError(error);
+  await logActivity("designer.faq_updated", "settings", "design_faq", { items: items.length });
+  refresh();
+  return { ok: true };
+}

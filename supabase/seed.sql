@@ -984,7 +984,7 @@ insert into public.homepage_sections (key, title_ar, title_en, sort_order, data)
   ('newsletter', 'كن أول من يعرف', 'Be the first to know', 9, '{}'::jsonb);
 insert into public.website_settings (key, value) values
   ('brand', '{"name":"TPAC","tagline_ar":"ستريت وير عراقي بهوية عربية","tagline_en":"Iraqi streetwear with an Arabic identity","logo_url":"/brand/tpac-logo-black.png"}'::jsonb),
-  ('contact', '{"phone":"9647700000000","whatsapp":"9647700000000","email":"hello@thetpac.com","address_ar":"بغداد، العراق","address_en":"Baghdad, Iraq","hours_ar":"السبت – الخميس، ١٠ص – ١٠م","hours_en":"Sat – Thu, 10am – 10pm"}'::jsonb),
+  ('contact', '{"phone":"9647700000000","whatsapp":"9647734194129","email":"hello@thetpac.com","address_ar":"بغداد، العراق","address_en":"Baghdad, Iraq","hours_ar":"السبت – الخميس، ١٠ص – ١٠م","hours_en":"Sat – Thu, 10am – 10pm"}'::jsonb),
   ('social', '{"instagram":"https://instagram.com/thetpac","tiktok":"","facebook":"","snapchat":""}'::jsonb),
   ('checkout', '{"min_order_total":10000,"allow_guest_checkout":true,"online_payment_enabled":false}'::jsonb),
   ('currency', '{"code":"IQD","symbol_ar":"د.ع","symbol_en":"IQD"}'::jsonb),

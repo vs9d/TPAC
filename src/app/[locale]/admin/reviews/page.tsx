@@ -8,7 +8,7 @@ import { resolvePhotos } from "@/lib/data/reviews";
 import { PageHeader, Card, Pill, Empty } from "@/components/admin/ui";
 import { AdminForm, Input, Select, Textarea, Checkbox, Submit } from "@/components/admin/form";
 import { MediaUrlInput } from "@/components/admin/media-upload";
-import { moderateReview, addTestimonial } from "@/lib/actions/admin/catalog";
+import { moderateReview, addTestimonial, importTestimonials } from "@/lib/actions/admin/catalog";
 import { formatDate } from "@/lib/format";
 
 type Row = { id: string; avatar_url: string | null; label: string | null; rating: number; body: string | null; author_name: string | null; author_city: string | null; photos: string[]; source: string; is_verified: boolean; is_featured: boolean; is_approved: boolean; created_at: string; product: { id: string; name_ar: string; name_en: string } | null };
@@ -50,6 +50,26 @@ export default async function AdminReviews({ params, searchParams }: { params: P
           ))}
         </>}
       />
+
+      <Card title={t("استيراد آراء حقيقية دفعة وحدة", "Import real reviews in one go")}>
+        <AdminForm action={importTestimonials} resetOnSuccess className="space-y-3">
+          <p className="text-sm text-mute">{t("انسخ آراء زبائنك الحقيقية (من رسائل الإنستغرام أو الواتساب) — كل رأي بسطر. الصيغة: الاسم | النجوم | التصنيف | النص. الاسم والنجوم والتصنيف اختيارية. الآراء المضافة سابقاً تُتخطّى تلقائياً.", "Paste your customers' real reviews (from Instagram or WhatsApp messages) — one per line. Format: name | stars | label | text. Name, stars and label are optional. Reviews already added are skipped.")}</p>
+          <pre className="overflow-x-auto rounded-xl bg-bone p-3 text-xs leading-relaxed text-mute" dir="rtl">{"علي | 5 | هوديات | القماش ثقيل والطباعة نظيفة\nسارة | 5 | تيشيرتات | وصل بيومين والمقاس مضبوط\nكلش حلو التغليف"}</pre>
+          <textarea name="lines" rows={8} className="field text-sm" dir="auto" required placeholder={t("سطر لكل رأي…", "One review per line…")} />
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block">
+              <span className="label">{t("المصدر", "Source")}</span>
+              <select name="source" className="field h-10" defaultValue="instagram">
+                <option value="instagram">Instagram</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="tiktok">TikTok</option>
+                <option value="other">{t("أخرى", "Other")}</option>
+              </select>
+            </label>
+            <Submit>{t("استيراد", "Import")}</Submit>
+          </div>
+        </AdminForm>
+      </Card>
 
       <Card title={t("إضافة رأي يدوياً (مثلاً لقطة شاشة من إنستغرام أو واتساب)", "Add a testimonial manually (e.g. an Instagram / WhatsApp screenshot)")}>
         <AdminForm action={addTestimonial} resetOnSuccess className="grid gap-3 sm:grid-cols-4">

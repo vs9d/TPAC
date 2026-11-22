@@ -9,7 +9,8 @@ import { AdminForm, Input, Textarea, Checkbox, Submit, ConfirmSubmit } from "@/c
 import { saveGarmentType, savePrintLocation } from "@/lib/actions/admin/catalog";
 import { PodImages } from "@/components/admin/printing/pod-images";
 import { normType, type ProductTypeRow } from "@/lib/print-config";
-import { saveDesignerOption, deleteDesignerOption, saveDesignerTier, deleteDesignerTier, saveDesignerSettings } from "@/lib/actions/admin/designer";
+import { saveDesignerOption, deleteDesignerOption, saveDesignerTier, deleteDesignerTier, saveDesignerSettings, saveDesignFaq } from "@/lib/actions/admin/designer";
+import { faqFrom } from "@/lib/design-faq";
 import { cn } from "@/lib/format";
 import type { Color, DesignerOptionRow, DesignerSettings, DesignerTierRow, GarmentTypeRow, PrintLocationRow, Size } from "@/lib/types";
 
@@ -37,6 +38,7 @@ export default async function AdminCustomizer({ params, searchParams }: { params
     supabase.from("custom_designs").select("id", { count: "exact", head: true }).gte("created_at", weekAgo),
     supabase.from("orders").select("id", { count: "exact", head: true }).eq("has_custom_items", true),
   ]);
+  const faqRow = tab === "settings" ? (await supabase.from("website_settings").select("value").eq("key", "design_faq").maybeSingle()).data : null;
   const podTypes = tab === "images" && g?.length
     ? (((await supabase.from("product_types").select("*, product_type_views(*, product_print_areas(*))").in("code", (g as GarmentTypeRow[]).map((x) => x.code))).data as ProductTypeRow[]) ?? []).map(normType)
     : [];
@@ -223,6 +225,23 @@ export default async function AdminCustomizer({ params, searchParams }: { params
             <Textarea name="notice_en" label={t("تنبيه قبل التأكيد (إنجليزي)", "Notice before confirming (EN)")} defaultValue={settings.notice_en} rows={2} dir="ltr" />
             <Submit>{t("حفظ", "Save")}</Submit>
             <p className="text-xs text-mute">{t("متاح للمدير فقط.", "Admins only.")}</p>
+          </AdminForm>
+        </Card>
+      )}
+
+      {tab === "settings" && (
+        <Card title={t("الأسئلة المتكررة تحت صفحة «صمّم قطعتك»", "FAQ under “Design your piece”")}>
+          <AdminForm action={saveDesignFaq} className="space-y-4">
+            <p className="text-sm text-mute">{t("راجع الأجوبة وعدّلها حسب سياسة متجرك. اترك السؤال فارغاً لحذفه، والصفوف الفارغة بالأسفل لإضافة أسئلة جديدة.", "Review the answers against your shop's policy. Clear a question to remove it; use the empty rows to add new ones.")}</p>
+            {[...faqFrom(faqRow?.value, settings), ...Array.from({ length: 3 }, () => ({ q_ar: "", a_ar: "", q_en: "", a_en: "" }))].map((f, i) => (
+              <div key={i} className="grid gap-2 rounded-2xl border border-line p-3 sm:grid-cols-2">
+                <Input id={`faq-q-ar-${i}`} name="q_ar" label={`${i + 1} · ${t("السؤال (عربي)", "Question (AR)")}`} defaultValue={f.q_ar} dir="rtl" />
+                <Input id={`faq-q-en-${i}`} name="q_en" label={t("السؤال (إنجليزي)", "Question (EN)")} defaultValue={f.q_en} dir="ltr" />
+                <Textarea id={`faq-a-ar-${i}`} name="a_ar" label={t("الجواب (عربي)", "Answer (AR)")} defaultValue={f.a_ar} rows={2} dir="rtl" />
+                <Textarea id={`faq-a-en-${i}`} name="a_en" label={t("الجواب (إنجليزي)", "Answer (EN)")} defaultValue={f.a_en} rows={2} dir="ltr" />
+              </div>
+            ))}
+            <Submit>{t("حفظ الأسئلة", "Save questions")}</Submit>
           </AdminForm>
         </Card>
       )}

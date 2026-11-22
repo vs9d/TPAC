@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { assertStaff } from "@/lib/auth";
 import { categorySchema, collectionSchema, colorSchema, sizeSchema, inventoryAdjustSchema, fieldErrors } from "@/lib/validation";
 import { bool, str, dbError, logActivity, baghdadIso, type ActionState } from "./common";
+import { parseTestimonialLines } from "@/lib/reviews-import";
 
 const refresh = () => revalidatePath("/[locale]", "layout");
 
@@ -186,4 +187,29 @@ export async function addTestimonial(_prev: ActionState, form: FormData): Promis
   await logActivity("review.testimonial_added", "review", null, { author, source });
   revalidatePath("/[locale]/reviews", "page");
   return { ok: true };
+}
+
+/** Bulk import of REAL customer reviews (copied from Instagram / WhatsApp messages). Lines already imported are skipped. */
+export async function importTestimonials(_prev: ActionState, form: FormData): Promise<ActionState> {
+  await assertStaff();
+  const source = str(form.get("source"));
+  const { rows, errors } = parseTestimonialLines(str(form.get("lines")).slice(0, 200_000));
+  if (!rows.length) return { ok: false, error: "validation", fields: { lines: "required" } };
+  if (rows.length > 300) return { ok: false, error: "validation", fields: { lines: "max" } };
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from("reviews").select("body").in("body", rows.map((r) => r.body));
+  const seen = new Set((existing ?? []).map((e) => e.body as string));
+  const fresh = rows.filter((r) => !seen.has(r.body) && (seen.add(r.body), true));
+  if (fresh.length) {
+    const { error } = await supabase.from("reviews").insert(fresh.map((r) => ({
+      ...r,
+      source: ["instagram", "whatsapp", "tiktok", "site", "other"].includes(source) ? source : "other",
+      is_approved: true,
+    })));
+    if (error) return dbError(error);
+  }
+  await logActivity("review.testimonials_imported", "review", null, { added: fresh.length, skipped: rows.length - fresh.length, invalid: errors.length });
+  revalidatePath("/[locale]/reviews", "page");
+  const msg = [`${fresh.length} added`, rows.length - fresh.length ? `${rows.length - fresh.length} already there` : "", errors.length ? `lines skipped: ${errors.slice(0, 10).join(", ")}` : ""].filter(Boolean).join(" · ");
+  return { ok: true, message: msg };
 }

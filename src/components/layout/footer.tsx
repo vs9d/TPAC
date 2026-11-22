@@ -1,3 +1,4 @@
+import { whatsappNumber } from "@/lib/whatsapp";
 import Link from "next/link";
 import Image from "next/image";
 import type { Locale } from "@/lib/i18n/config";
@@ -10,7 +11,7 @@ import { NewsletterForm } from "@/components/home/newsletter-form";
 export function Footer({ locale, dict, settings, categories }: { locale: Locale; dict: Dict; settings: SiteSettings; categories: NavCategory[] }) {
   const L = (p: string) => `/${locale}${p}`;
   const s = settings.social;
-  const wa = settings.contact.whatsapp;
+  const wa = whatsappNumber(settings.contact.whatsapp);
   return (
     <footer className="mt-20 rounded-t-[2.5rem] bg-night text-snow md:mt-28 md:rounded-t-[3.5rem]">
       <div className="container-x grid grid-cols-1 gap-12 py-16 md:grid-cols-12">
