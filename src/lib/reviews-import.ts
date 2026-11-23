@@ -3,7 +3,8 @@ export function parseTestimonialLines(raw: string) {
   const out: { author_name: string; rating: number; label: string | null; body: string }[] = [];
   const errors: number[] = [];
   raw.split(/\r?\n/).forEach((line, i) => {
-    const l = line.trim();
+    // a numbered list ("1. …", "١- …", "12) …") is fine: the number is dropped
+    const l = line.trim().replace(/^[\d٠-٩]{1,4}\s*[.)\-–:،]\s*/, "").trim();
     if (!l) return;
     const parts = l.split("|").map((p) => p.trim());
     const body = parts[parts.length - 1] ?? "";

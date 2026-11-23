@@ -197,8 +197,12 @@ export async function importTestimonials(_prev: ActionState, form: FormData): Pr
   if (!rows.length) return { ok: false, error: "validation", fields: { lines: "required" } };
   if (rows.length > 300) return { ok: false, error: "validation", fields: { lines: "max" } };
   const supabase = await createClient();
-  const { data: existing } = await supabase.from("reviews").select("body").in("body", rows.map((r) => r.body));
-  const seen = new Set((existing ?? []).map((e) => e.body as string));
+  // reviews already added are skipped (checked in small batches: a long list would not fit in one request URL)
+  const seen = new Set<string>();
+  for (let i = 0; i < rows.length; i += 20) {
+    const { data: existing } = await supabase.from("reviews").select("body").in("body", rows.slice(i, i + 20).map((r) => r.body));
+    for (const e of existing ?? []) seen.add(e.body as string);
+  }
   const fresh = rows.filter((r) => !seen.has(r.body) && (seen.add(r.body), true));
   if (fresh.length) {
     const { error } = await supabase.from("reviews").insert(fresh.map((r) => ({
@@ -206,7 +210,11 @@ export async function importTestimonials(_prev: ActionState, form: FormData): Pr
       source: ["instagram", "whatsapp", "tiktok", "site", "other"].includes(source) ? source : "other",
       is_approved: true,
     })));
-    if (error) return dbError(error);
+    if (error) {
+      // the reviews page columns (label, source …) come from add-reviews-page.sql
+      if (error.code === "42703" || error.code === "PGRST204" || /column/i.test(error.message ?? "")) return { ok: false, error: "قاعدة البيانات ناقصها أعمدة صفحة الآراء — شغّل ملف supabase/add-reviews-page.sql بـ SQL Editor وجرّب مرة ثانية." };
+      return dbError(error);
+    }
   }
   await logActivity("review.testimonials_imported", "review", null, { added: fresh.length, skipped: rows.length - fresh.length, invalid: errors.length });
   revalidatePath("/[locale]/reviews", "page");

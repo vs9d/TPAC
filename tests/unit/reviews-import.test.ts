@@ -15,3 +15,13 @@ describe("bulk review import", () => {
     expect(parseTestimonialLines("حسين | المقاس مضبوط").rows[0]).toEqual({ author_name: "حسين", rating: 5, label: null, body: "المقاس مضبوط" });
   });
 });
+
+describe("numbered lists", () => {
+  it("drops the line numbers", async () => {
+    const { parseTestimonialLines } = await import("@/lib/reviews-import");
+    const { rows, errors } = parseTestimonialLines("1. علي | 5 | هوديات | الهودي كلش حلو.\n12) سارة | 4 | تيشيرتات | وصل بيومين.\n١٠- نص فقط");
+    expect(errors).toEqual([]);
+    expect(rows.map((r) => [r.author_name, r.rating, r.label])).toEqual([["علي", 5, "هوديات"], ["سارة", 4, "تيشيرتات"], ["زبون TPAC", 5, null]]);
+    expect(rows[2]!.body).toBe("نص فقط");
+  });
+});

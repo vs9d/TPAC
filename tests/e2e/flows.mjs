@@ -1035,6 +1035,17 @@ await flow("collections: admin uploads a cover photo from the device → shown i
   assert.ok(obj, "file stored");
   await page.goto(`${BASE}/en/collections`);
   await page.locator(`img[src*="collections%2F"], img[src*="/collections/"]`).first().waitFor({ timeout: 15000 });
+
+  // reviews import: a numbered list of 100 lines goes in at once, and again is skipped
+  const lines = Array.from({ length: 100 }, (_, i) => `${i + 1}. مختبر ${i + 1} | 5 | اختبار | سطر اختبار الاستيراد رقم ${i + 1} للتأكد من أن القائمة المرقمة الطويلة تدخل كاملة.`).join("\n");
+  for (const expected of ["100 added", "100 already there"]) {
+    await page.goto(`${BASE}/en/admin/reviews`);
+    await page.locator("textarea[name=lines]").fill(lines);
+    await page.getByRole("button", { name: "Import", exact: true }).click();
+    await page.getByText(expected).first().waitFor({ timeout: 20000 });
+  }
+  const imported = await one("select count(*)::int n, count(*) filter (where author_name like '1%')::int numbered from reviews where label = 'اختبار'");
+  assert.deepEqual([imported.n, imported.numbered], [100, 0], "line numbers dropped from the names");
   await page.screenshot({ path: `${SHOTS}/collections-cover.png` });
 });
 
