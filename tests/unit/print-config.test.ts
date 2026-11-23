@@ -72,3 +72,28 @@ describe("mapDesigns (same artwork on another garment)", async () => {
     expect(mapDesigns(back, [{ ...(design(0, 0, 1, 1) as object), area_id: "hba" } as never], tee)).toEqual([]);
   });
 });
+
+describe("copyToView (front + back in one photo)", async () => {
+  const { copyToView } = await import("@/lib/print-config");
+  const area = (id: string, view_id: string, code: string, x: number, y: number, width: number, height: number) => ({ id, view_id, code, name_ar: code, name_en: code, x, y, width, height, max_width_cm: 30, max_height_cm: 40, sort_order: 0, is_active: true });
+  const view = (id: string, code: string, areas: ReturnType<typeof area>[]) => ({ id, code, name_ar: code, name_en: code, mockup_url: null, mockup_path: null, mockup_width: 1000, mockup_height: 1000, color_mockups: {}, sort_order: 0, is_active: true, product_print_areas: areas });
+  const combo = view("c", "combo", [area("cb", "c", "combo_back", 0.2, 0.4, 0.4, 0.4), area("cc", "c", "combo_chest", 0.7, 0.2, 0.1, 0.1)]);
+  const type = { id: "t", product_type_views: [
+    view("f", "front", [area("ff", "f", "front", 0.3, 0.3, 0.4, 0.3), area("fl", "f", "left_chest", 0.55, 0.3, 0.1, 0.1), area("fx", "f", "free", 0, 0, 1, 1)]),
+    view("b", "back", [area("bb", "b", "back", 0.3, 0.3, 0.4, 0.5)]),
+    combo,
+  ] } as never;
+
+  it("puts back and chest artwork on the matching spots, skips the hidden front print", () => {
+    const out = copyToView(type, [
+      { area_id: "bb", x: 0, y: 0, width: 1, height: 1 },        // whole back area → whole combo back spot
+      { area_id: "ff", x: 0.25, y: 0.25, width: 0.5, height: 0.5 }, // big front print → no spot
+      { area_id: "fx", x: 0.56, y: 0.31, width: 0.08, height: 0.08 }, // free logo on the left chest → chest spot
+    ], combo as never);
+    expect(out.map((o) => o.index)).toEqual([0, 2]);
+    expect(out[0]!.rect.x).toBeCloseTo(0.2, 3);
+    expect(out[0]!.rect.width).toBeCloseTo(0.4, 3);
+    expect(out[1]!.rect.x + out[1]!.rect.width / 2).toBeCloseTo(0.75, 3);
+    expect(out[1]!.rect.y + out[1]!.rect.height / 2).toBeCloseTo(0.25, 3);
+  });
+});

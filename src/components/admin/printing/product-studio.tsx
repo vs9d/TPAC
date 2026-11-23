@@ -1,12 +1,12 @@
 "use client";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { AlignCenterHorizontal, AlignCenterVertical, ArrowUpToLine, Eraser, Expand, ImagePlus, Loader2, Move, Paintbrush, Plus, RefreshCw, ScanLine, Trash2, Undo2 } from "lucide-react";
+import { AlignCenterHorizontal, AlignCenterVertical, ArrowUpToLine, Copy, Eraser, Expand, ImagePlus, Loader2, Move, Paintbrush, Plus, RefreshCw, ScanLine, Trash2, Undo2 } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { adminT } from "@/lib/admin-i18n";
 import { toast } from "@/components/ui/toast";
 import { checkImageFile, extOf, imageSize, uploadProductImage } from "@/lib/admin-upload";
 import { composeProductImage } from "@/lib/compose";
-import { absolute, clampRect, designCm, fitArtwork, mockupFor, normArea, resizeDesign, viewAspect, type PrintAreaRow, type ProductDesignRow, type ProductTypeRow, type TypeViewRow } from "@/lib/print-config";
+import { absolute, clampRect, copyToView, designCm, fitArtwork, mockupFor, normArea, resizeDesign, viewAspect, type PrintAreaRow, type ProductDesignRow, type ProductTypeRow, type TypeViewRow } from "@/lib/print-config";
 import { discardPrintFile, ensureFreeArea } from "@/lib/actions/admin/printing";
 import { cn } from "@/lib/format";
 import type { Color } from "@/lib/types";
@@ -115,10 +115,12 @@ export const ProductStudio = forwardRef<StudioHandle, {
     printEnabled: () => enabled,
     generate: async (pid, colorIds, onProgress) => {
       const active = designs.filter((d) => !disabled.includes(d.area_id));
-      const byView = views.filter((v) => active.some((d) => areaById(d.area_id)?.v.id === v.id));
+      // a "front + back in one photo" view becomes the cover photo
+      const byView = views.filter((v) => active.some((d) => areaById(d.area_id)?.v.id === v.id)).sort((a, b) => Number(b.code === "combo") - Number(a.code === "combo"));
       // one photo per chosen colour; with no colour chosen, one photo (drawn in the first colour) for all colours
       const cols: { c: Color | null; store: string | null }[] = colorIds.length ? colors.filter((c) => colorIds.includes(c.id)).slice(0, 6).map((c) => ({ c, store: c.id })) : [{ c: palette[0] ?? null, store: null }];
-      const jobs = cols.flatMap(({ c, store }) => byView.slice(0, 4).map((v) => ({ c, store, v })));
+      const perColour = Math.max(1, Math.min(5, Math.floor(24 / cols.length)));
+      const jobs = cols.flatMap(({ c, store }) => byView.slice(0, perColour).map((v) => ({ c, store, v })));
       const out: GeneratedImage[] = [];
       let done = 0;
       onProgress?.(0, jobs.length);
@@ -147,7 +149,8 @@ export const ProductStudio = forwardRef<StudioHandle, {
   const patch = (key: string, p: Partial<Draft>) => setDesigns((list) => list.map((d) => (d.key === key ? { ...d, ...p } : d)));
   const remove = (key: string) => {
     const d = designs.find((x) => x.key === key);
-    if (d?.artwork_path && uploaded.current.includes(d.artwork_path)) void discardPrintFile(d.artwork_path);
+    const shared = d?.artwork_path && designs.some((x) => x.key !== key && x.artwork_path === d.artwork_path);
+    if (d?.artwork_path && !shared && uploaded.current.includes(d.artwork_path)) void discardPrintFile(d.artwork_path);
     setDesigns((list) => list.filter((x) => x.key !== key));
     if (selKey === key) setSelKey("");
   };
@@ -203,7 +206,7 @@ export const ProductStudio = forwardRef<StudioHandle, {
       const up = await uploadProductImage(r.blob, `products/${productId}/art/${crypto.randomUUID()}.png`, "image/png");
       uploaded.current.push(up.path);
       if (!originals.current[sel.key]) originals.current[sel.key] = { artwork_url: sel.artwork_url, artwork_path: sel.artwork_path, artwork_width: sel.artwork_width, artwork_height: sel.artwork_height };
-      else if (sel.artwork_path && sel.artwork_path !== originals.current[sel.key]!.artwork_path && uploaded.current.includes(sel.artwork_path)) void discardPrintFile(sel.artwork_path);
+      else if (sel.artwork_path && sel.artwork_path !== originals.current[sel.key]!.artwork_path && uploaded.current.includes(sel.artwork_path) && !designs.some((x) => x.key !== sel.key && x.artwork_path === sel.artwork_path)) void discardPrintFile(sel.artwork_path);
       patch(sel.key, { artwork_url: up.url, artwork_path: up.path, artwork_width: r.width, artwork_height: r.height });
       setSwatches(await colorsOf(up.url).catch(() => []));
       toast.success(t("تم تعديل التصميم", "Artwork updated"));
@@ -221,6 +224,21 @@ export const ProductStudio = forwardRef<StudioHandle, {
     patch(sel.key, o);
     delete originals.current[sel.key];
     void colorsOf(o.artwork_url).then(setSwatches, () => setSwatches([]));
+  };
+
+  /** fills a combined view ("front + back in one photo") with the artwork already placed on the other views */
+  const copyHere = async () => {
+    const others = designs.filter((d) => areaById(d.area_id)?.v.id !== view.id);
+    const mapped = copyToView(type, others, view);
+    if (!mapped.length) { toast.info(t("ماكو تصميم على الظهر أو الصدر حتى ينسخ — صمّم الأمام والخلف أولاً، أو ضع التصميم هنا يدوياً.", "No artwork on the back or chest to copy — design the front and back first, or place artwork here by hand.")); return; }
+    if (viewDesigns.length && !confirm(t("تستبدل التصاميم الموجودة بهذه الصورة؟", "Replace the artwork already on this photo?"))) return;
+    const area = await getFreeArea(view);
+    if (!area) return;
+    const added: Draft[] = mapped.map(({ index, rect }) => ({ ...others[index]!, key: crypto.randomUUID(), id: undefined, area_id: area.id, ...rect }));
+    setDesigns((list) => [...list.filter((d) => areaById(d.area_id)?.v.id !== view.id), ...added]);
+    setMode("free");
+    setSelKey(added[0]!.key);
+    toast.success(t(`انسخ ${added.length} تصميم — عدّل مكانها إذا تحب`, `Copied ${added.length} design(s) — adjust them if you like`));
   };
 
   const toggleArea = (id: string) => setDisabled((d) => (d.includes(id) ? d.filter((x) => x !== id) : [...d, id]));
@@ -311,6 +329,13 @@ export const ProductStudio = forwardRef<StudioHandle, {
             {t("الطباعة مفعّلة لهذا المنتج", "Printing enabled for this product")}
             <input type="checkbox" className="size-5 accent-[var(--color-pine)]" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
           </label>
+
+          {view.code === "combo" && (
+            <div className="rounded-2xl border border-amber/40 bg-amber/5 p-3">
+              <p className="text-xs text-mute">{t("صورة وحدة بيها الظهر والأمام — تصير الصورة الرئيسية للمنتج إذا حطيت عليها تصميم.", "One photo with the back and the front — it becomes the product's main photo once it has artwork.")}</p>
+              <button type="button" disabled={busy || !enabled} onClick={copyHere} className="btn btn-outline btn-sm mt-2 w-full"><Copy className="size-4" /> {t("انسخ تصميم الأمام والخلف هنا", "Copy the front & back artwork here")}</button>
+            </div>
+          )}
 
           {mode === "free" ? (
             <div className="space-y-2">

@@ -147,18 +147,53 @@ export function mapDesigns(src: ProductTypeRow, designs: ProductDesignRow[], dst
     const B = anchorArea(dv);
     const R = absolute(area, d);
     if (!A || !B) { out.push({ view: dv, source: d, rect: clampRect(R) }); continue; }
-    const relW = R.width / A.width;
-    const cx = (R.x + R.width / 2 - A.x) / A.width;
-    const cy = (R.y + R.height / 2 - A.y) / A.height;
-    // keep the artwork's real proportions on the new photo
-    const ratio = (R.height * sv.mockup_height) / (R.width * sv.mockup_width);
-    let width = relW * B.width;
-    let height = (width * dv.mockup_width * ratio) / dv.mockup_height;
-    if (height > 1) { width *= 1 / height; height = 1; }
-    if (width > 1) { height /= width; width = 1; }
-    const x = B.x + cx * B.width - width / 2;
-    const y = B.y + cy * B.height - height / 2;
-    out.push({ view: dv, source: d, rect: clampRect({ x, y, width, height }) });
+    out.push({ view: dv, source: d, rect: carry(R, A, sv, B, dv) });
   }
+  return out;
+}
+
+/** Moves a rectangle (fractions of the source photo) from area A of one photo to area B of another: same spot, same proportions. */
+function carry(R: Rect, A: Rect, sv: Pick<TypeViewRow, "mockup_width" | "mockup_height">, B: Rect, dv: Pick<TypeViewRow, "mockup_width" | "mockup_height">): Rect {
+  const relW = R.width / A.width;
+  const cx = (R.x + R.width / 2 - A.x) / A.width;
+  const cy = (R.y + R.height / 2 - A.y) / A.height;
+  // keep the artwork's real proportions on the new photo
+  const ratio = (R.height * sv.mockup_height) / (R.width * sv.mockup_width);
+  let width = relW * B.width;
+  let height = (width * dv.mockup_width * ratio) / dv.mockup_height;
+  if (height > 1) { width *= 1 / height; height = 1; }
+  if (width > 1) { height /= width; width = 1; }
+  return clampRect({ x: B.x + cx * B.width - width / 2, y: B.y + cy * B.height - height / 2, width, height });
+}
+
+/** The print spot of a "front + back in one photo" view that matches an area of another view (back → combo_back, left chest → combo_chest …). */
+const comboCode = (code: string) => `combo_${code === "left_chest" ? "chest" : code}`;
+
+/**
+ * Copies the artwork of the other views onto a combined view (e.g. the hoodie's "front + back in one photo"):
+ * each design goes to the matching spot (back → back, left chest → left chest); a freely placed design is matched
+ * by the smallest print area its centre falls in. Designs with no matching spot (e.g. a big front print hidden
+ * behind the other garment) are left out. Returns rectangles as fractions of the combined photo.
+ */
+export function copyToView(type: ProductTypeRow, designs: { area_id: string; x: number; y: number; width: number; height: number }[], target: TypeViewRow) {
+  const views = (type.product_type_views ?? []).filter((v) => v.is_active && v.id !== target.id);
+  const spots = (target.product_print_areas ?? []).filter((a) => a.is_active);
+  const out: { index: number; rect: Rect }[] = [];
+  designs.forEach((d, index) => {
+    const sv = views.find((v) => (v.product_print_areas ?? []).some((a) => a.id === d.area_id));
+    const area = sv?.product_print_areas?.find((a) => a.id === d.area_id);
+    if (!sv || !area) return;
+    const R = absolute(area, d);
+    let A: PrintAreaRow | undefined = area.code === "free" ? undefined : area;
+    if (!A) {
+      const cx = R.x + R.width / 2, cy = R.y + R.height / 2;
+      A = (sv.product_print_areas ?? [])
+        .filter((a) => a.is_active && a.code !== "free" && cx >= a.x && cx <= a.x + a.width && cy >= a.y && cy <= a.y + a.height)
+        .sort((a, b) => a.width * a.height - b.width * b.height)[0] ?? anchorArea(sv) ?? undefined;
+    }
+    const B = A && spots.find((s) => s.code === comboCode(A!.code));
+    if (!A || !B) return;
+    out.push({ index, rect: carry(R, A, sv, B, target) });
+  });
   return out;
 }

@@ -902,6 +902,50 @@ await flow("hoodie photos: 5 colours × front / back / both sleeves, sleeve desi
   assert.equal((await one("select count(*)::int n from storage.objects where name = $1", [d.config.previews.right])).n, 1);
 });
 
+await flow("t-shirt photos + hoodie front-and-back photo: studio sleeves, copy artwork, cover photo", async (page) => {
+  await db.query(readFileSync(new URL("../../supabase/add-tee-photos.sql", import.meta.url), "utf8"));
+  // customers: the t-shirt studio uses the new photos, sleeves on their own photos
+  const front = page.waitForResponse((r) => /\/mockups\/tee-[a-z]+-front\.webp/.test(r.url()) && r.status() === 200, { timeout: 20000 });
+  await page.goto(`${BASE}/en/design?garment=tshirt`);
+  await front;
+  const sleeve = page.waitForResponse((r) => /\/mockups\/tee-[a-z]+-right\.webp/.test(r.url()) && r.status() === 200, { timeout: 20000 });
+  await page.getByRole("tab", { name: "Right sleeve" }).click();
+  await sleeve;
+  for (const c of ["Black", "White", "Heather grey", "Navy", "Maroon", "Brown"]) await page.getByRole("radio", { name: c, exact: true }).waitFor();
+
+  // admin: hoodie with a back print → copied onto the "front + back" photo, which becomes the cover
+  const email = `combo${Date.now()}@thetpac.com`;
+  await page.goto(`${BASE}/en/account/register`);
+  await page.fill("#full_name", "Combo Admin");
+  await page.fill("#email", email);
+  await page.fill("#phone", "07700000097");
+  await page.fill("#password", "admin-pass-2026");
+  await page.fill("#confirm", "admin-pass-2026");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.waitForURL(/account$/);
+  await db.query("update customer_profiles set role = 'admin' where email = $1", [email]);
+  const hoodie = (await one("select id from product_types where code = 'hoodie'")).id;
+  await page.goto(`${BASE}/en/admin/products/new?type=${hoodie}`);
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await page.locator("input[accept='image/png,image/jpeg,image/webp,image/avif']").setInputFiles(`${SHOTS}/art.png`);
+  await page.getByText(/Print size: (≈ )?\d/).waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: /Front \+ back \(one photo\)/ }).click();
+  await page.getByRole("button", { name: "Copy the front & back artwork here" }).click();
+  await page.getByText("Copied 1 design(s)").waitFor();
+  await page.screenshot({ path: `${SHOTS}/combo-studio.png` });
+  await page.fill("#name_ar", "هودي أمام وخلف");
+  await openMore(page);
+  await page.fill("#name_en", "E2E Combo Hoodie");
+  await page.getByRole("button", { name: "Create product", exact: true }).click();
+  await page.waitForURL(/admin\/products\/[0-9a-f-]{36}$/, { timeout: 60000 });
+  const pid = page.url().split("/").pop();
+  const rows = (await db.query("select v.code view, d.artwork_path from product_designs d join product_print_areas a on a.id = d.area_id join product_type_views v on v.id = a.view_id where d.product_id = $1 order by d.sort_order", [pid])).rows;
+  assert.deepEqual(rows.map((r) => r.view).sort(), ["back", "combo"]);
+  assert.equal(rows[0].artwork_path, rows[1].artwork_path, "same artwork file, no copy");
+  const cover = await one("select v.code from product_images i join product_type_views v on v.id = i.view_id where i.product_id = $1 order by i.sort_order limit 1", [pid]);
+  assert.equal(cover.code, "combo", "the front + back photo is the cover");
+});
+
 await flow("collections: admin uploads a cover photo from the device → shown in the store", async (page) => {
   const email = `col${Date.now()}@thetpac.com`;
   await page.goto(`${BASE}/en/account/register`);
