@@ -4,7 +4,7 @@ import { CheckCircle2, FileUp, Loader2, X } from "lucide-react";
 import { useI18n, fmt } from "@/components/i18n-provider";
 import { submitBulkRequest } from "@/lib/actions/bulk";
 import { uploadArtwork, ACCEPT_BULK } from "@/lib/upload-client";
-import { BULK_PRODUCT_TYPES, BULK_SIZES } from "@/lib/validation";
+import { QUOTE_PRODUCT_TYPES } from "@/lib/validation";
 import { normalizeIraqiPhone } from "@/lib/phone";
 
 export function BulkForm() {
@@ -15,13 +15,13 @@ export function BulkForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
-  const [sizes, setSizes] = useState<Record<string, string>>({});
 
   if (done)
     return (
-      <div className="flex flex-col items-center gap-4 border border-ink p-10 text-center">
+      <div className="flex flex-col items-center gap-4 rounded-[1.75rem] border border-line bg-bone p-10 text-center" role="status">
         <CheckCircle2 className="size-12 text-pine" strokeWidth={1.4} />
         <p className="text-lg font-semibold">{fmt(dict.bulk.success, { n: done })}</p>
+        <p className="display text-3xl tabular-nums" dir="ltr" data-testid="quote-ref">{done}</p>
       </div>
     );
 
@@ -45,8 +45,9 @@ export function BulkForm() {
     const fd = new FormData(e.currentTarget);
     const phone = String(fd.get("phone") ?? "");
     const errs: Record<string, string> = {};
-    for (const k of ["organization_name", "contact_name", "estimated_quantity"]) if (!String(fd.get(k) ?? "").trim()) errs[k] = "required";
+    for (const k of ["organization_name", "contact_name", "quantity_min", "quantity_max", "preferred_color"]) if (!String(fd.get(k) ?? "").trim()) errs[k] = "required";
     if (!normalizeIraqiPhone(phone)) errs.phone = "phone";
+    if (!errs.quantity_min && !errs.quantity_max && Number(fd.get("quantity_max")) < Number(fd.get("quantity_min"))) errs.quantity_max = "quantity_range";
     setErrors(errs);
     if (Object.keys(errs).length) return;
     setFormError(null);
@@ -57,9 +58,9 @@ export function BulkForm() {
         phone,
         email: fd.get("email") || undefined,
         product_type: fd.get("product_type"),
-        estimated_quantity: fd.get("estimated_quantity"),
-        size_breakdown: Object.fromEntries(Object.entries(sizes).filter(([, v]) => v && Number(v) > 0).map(([k, v]) => [k, Number(v)])),
-        printing_requirements: fd.get("printing_requirements") || undefined,
+        quantity_min: fd.get("quantity_min"),
+        quantity_max: fd.get("quantity_max"),
+        preferred_color: fd.get("preferred_color"),
         notes: fd.get("notes") || undefined,
         artwork_ids: files.map((f) => f.id),
       });
@@ -75,35 +76,28 @@ export function BulkForm() {
   return (
     <form onSubmit={submit} noValidate className="grid gap-5 sm:grid-cols-2">
       {formError && <p className="bg-danger/10 p-3 text-sm text-danger sm:col-span-2" role="alert">{formError}</p>}
-      <div className="sm:col-span-2"><label className="label" htmlFor="b-org">{dict.bulk.organization}</label><input id="b-org" name="organization_name" className="field" required maxLength={200} aria-invalid={!!errors.organization_name} />{fe("organization_name")}</div>
-      <div><label className="label" htmlFor="b-contact">{dict.bulk.contactName}</label><input id="b-contact" name="contact_name" className="field" required autoComplete="name" />{fe("contact_name")}</div>
+      <div><label className="label" htmlFor="b-contact">{dict.bulk.contactName}</label><input id="b-contact" name="contact_name" className="field" required autoComplete="name" aria-invalid={!!errors.contact_name} />{fe("contact_name")}</div>
       <div><label className="label" htmlFor="b-phone">{dict.bulk.phone}</label><input id="b-phone" name="phone" type="tel" dir="ltr" className="field" required placeholder="07xx xxx xxxx" autoComplete="tel" aria-invalid={!!errors.phone} />{fe("phone")}</div>
-      <div><label className="label" htmlFor="b-email">{dict.bulk.email} ({dict.common.optional})</label><input id="b-email" name="email" type="email" dir="ltr" className="field" autoComplete="email" />{fe("email")}</div>
-      <div>
-        <label className="label" htmlFor="b-type">{dict.bulk.productType}</label>
-        <select id="b-type" name="product_type" className="field" defaultValue="tshirt">
-          {BULK_PRODUCT_TYPES.map((t) => <option key={t} value={t}>{dict.bulk.productTypes[t]}</option>)}
-        </select>
-      </div>
-      <div className="sm:col-span-2"><label className="label" htmlFor="b-qty">{dict.bulk.estimatedQuantity}</label><input id="b-qty" name="estimated_quantity" type="number" min={1} max={100000} inputMode="numeric" className="field" required aria-invalid={!!errors.estimated_quantity} />{fe("estimated_quantity")}<p className="mt-1 text-xs text-mute">{dict.bulk.minQty}</p></div>
+      <div className="sm:col-span-2"><label className="label" htmlFor="b-org">{dict.bulk.organization}</label><input id="b-org" name="organization_name" className="field" required maxLength={200} aria-invalid={!!errors.organization_name} />{fe("organization_name")}</div>
+      <div><label className="label" htmlFor="b-qmin">{dict.bulk.quantityFrom}</label><input id="b-qmin" name="quantity_min" type="number" min={1} max={100000} inputMode="numeric" className="field" required aria-invalid={!!errors.quantity_min} />{fe("quantity_min")}</div>
+      <div><label className="label" htmlFor="b-qmax">{dict.bulk.quantityTo}</label><input id="b-qmax" name="quantity_max" type="number" min={1} max={100000} inputMode="numeric" className="field" required aria-invalid={!!errors.quantity_max} />{fe("quantity_max")}</div>
       <fieldset className="sm:col-span-2">
-        <legend className="label">{dict.bulk.sizes}</legend>
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-          {BULK_SIZES.map((s) => (
-            <label key={s} className="text-center text-xs font-semibold">
-              {s}
-              <input type="number" min={0} inputMode="numeric" value={sizes[s] ?? ""} onChange={(e) => setSizes((x) => ({ ...x, [s]: e.target.value }))} className="field mt-1 h-10 px-1 text-center" aria-label={`${dict.bulk.sizes} ${s}`} />
+        <legend className="label">{dict.bulk.productType}</legend>
+        <div className="mt-1 grid grid-cols-3 gap-2">
+          {QUOTE_PRODUCT_TYPES.map((t, i) => (
+            <label key={t} className="relative cursor-pointer">
+              <input type="radio" name="product_type" value={t} defaultChecked={i === 0} className="peer sr-only" />
+              <span className="flex h-12 items-center justify-center rounded-2xl border border-line text-sm font-bold transition peer-checked:border-ink peer-checked:bg-ink peer-checked:text-paper peer-focus-visible:ring-2 peer-focus-visible:ring-pine">{dict.bulk.productTypes[t]}</span>
             </label>
           ))}
         </div>
-        <p className="mt-1 text-xs text-mute">{dict.bulk.sizesHint}</p>
       </fieldset>
-      <div className="sm:col-span-2"><label className="label" htmlFor="b-print">{dict.bulk.printing}</label><textarea id="b-print" name="printing_requirements" rows={3} className="field" placeholder={dict.bulk.printingHint} maxLength={4000} /></div>
+      <div className="sm:col-span-2"><label className="label" htmlFor="b-color">{dict.bulk.preferredColor}</label><input id="b-color" name="preferred_color" className="field" required maxLength={120} placeholder={dict.bulk.preferredColorHint} aria-invalid={!!errors.preferred_color} />{fe("preferred_color")}</div>
       <div className="sm:col-span-2">
-        <p className="label">{dict.bulk.artwork}</p>
+        <p className="label">{dict.bulk.logo}</p>
         <label className={`flex cursor-pointer items-center justify-center gap-2 border border-dashed border-ink/40 p-6 text-sm hover:border-ink ${files.length >= 5 || uploading ? "pointer-events-none opacity-50" : ""}`}>
           {uploading ? <Loader2 className="size-5 animate-spin" /> : <FileUp className="size-5" />}
-          {dict.bulk.artwork}
+          {dict.bulk.logo}
           <input type="file" multiple accept={ACCEPT_BULK} className="sr-only" onChange={(e) => { void onFiles(e.target.files); e.target.value = ""; }} />
         </label>
         <p className="mt-1 text-xs text-mute">{dict.bulk.artworkHint}</p>
@@ -118,7 +112,7 @@ export function BulkForm() {
           </ul>
         )}
       </div>
-      <div className="sm:col-span-2"><label className="label" htmlFor="b-notes">{dict.bulk.notes}</label><textarea id="b-notes" name="notes" rows={3} className="field" maxLength={4000} /></div>
+      <div className="sm:col-span-2"><label className="label" htmlFor="b-notes">{dict.bulk.notes} ({dict.common.optional})</label><textarea id="b-notes" name="notes" rows={3} className="field" maxLength={4000} /></div>
       <button disabled={pending || uploading} className="btn btn-primary h-14 sm:col-span-2">{pending ? <Loader2 className="size-4 animate-spin" /> : dict.bulk.submit}</button>
     </form>
   );

@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ShoppingCart, Package, Boxes, Users, Building2, Tag, Megaphone, Home, Settings, Bell, History, MessageSquare, Star, Palette, Menu, X, Store, Layers, Shirt, Brush, Frame } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Package, Boxes, Users, Building2, Tag, Megaphone, Home, Settings, Bell, History, MessageSquare, Star, Palette, Menu, X, Store, Layers, Shirt, Brush, Frame, Images, MessageCircle } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { adminT } from "@/lib/admin-i18n";
 import { cn } from "@/lib/format";
@@ -20,7 +20,7 @@ export function AdminShell({ children, role, name, badges }: { children: React.R
       label: t("المبيعات", "Sales"),
       items: [
         { href: `${base}/orders`, label: t("الطلبات", "Orders"), icon: ShoppingCart, badge: badges.orders },
-        { href: `${base}/bulk`, label: t("طلبات الجملة", "Bulk requests"), icon: Building2, badge: badges.bulk },
+        { href: `${base}/bulk`, label: t("طلبات عروض الأسعار", "Quotation requests"), icon: Building2, badge: badges.bulk },
         { href: `${base}/customers`, label: t("العملاء", "Customers"), icon: Users },
       ],
     },
@@ -40,7 +40,8 @@ export function AdminShell({ children, role, name, badges }: { children: React.R
     {
       label: t("التسويق", "Marketing"),
       items: [
-        { href: `${base}/discounts`, label: t("أكواد الخصم", "Discount codes"), icon: Tag },
+        { href: `${base}/discounts`, label: t("الكوبونات والخصومات", "Coupons & discounts"), icon: Tag },
+        { href: `${base}/portfolio`, label: t("أعمالنا والعملاء السابقين", "Portfolio & clients"), icon: Images },
         { href: `${base}/marketing`, label: t("البانرات والحملات", "Banners & campaigns"), icon: Megaphone },
         { href: `${base}/homepage`, label: t("الصفحة الرئيسية", "Homepage"), icon: Home },
       ],
@@ -49,6 +50,7 @@ export function AdminShell({ children, role, name, badges }: { children: React.R
       label: t("النظام", "System"),
       items: [
         { href: `${base}/notifications`, label: t("الإشعارات", "Notifications"), icon: Bell, badge: badges.notifications },
+        { href: `${base}/whatsapp`, label: t("إشعارات الواتساب", "WhatsApp notifications"), icon: MessageCircle, adminOnly: true },
         { href: `${base}/inquiries`, label: t("الاستفسارات", "Inquiries"), icon: MessageSquare },
         { href: `${base}/activity`, label: t("سجل النشاط", "Activity log"), icon: History },
         { href: `${base}/settings`, label: t("الإعدادات", "Settings"), icon: Settings, adminOnly: true },

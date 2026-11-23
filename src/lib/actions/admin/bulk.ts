@@ -14,7 +14,18 @@ export async function updateBulkRequest(_prev: ActionState, form: FormData): Pro
   const status = str(form.get("status"));
   if (!STATUSES.includes(status)) return { ok: false, error: "validation" };
   const supabase = await createClient();
-  const { error } = await supabase.from("bulk_order_requests").update({ status, admin_notes: str(form.get("admin_notes")).slice(0, 4000) || null }).eq("id", id);
+  const money = (k: string) => {
+    const v = str(form.get(k)).trim();
+    if (!v) return null;
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) && n >= 0 && n <= 100_000_000 ? n : NaN;
+  };
+  const unit = money("quoted_unit_price");
+  const qty = money("quoted_quantity");
+  if (Number.isNaN(unit) || Number.isNaN(qty) || qty === 0) return { ok: false, error: "validation" };
+  const patch: Record<string, unknown> = { status, admin_notes: str(form.get("admin_notes")).slice(0, 4000) || null };
+  if (form.has("quoted_unit_price")) Object.assign(patch, { quoted_unit_price: unit, quoted_quantity: qty });
+  const { error } = await supabase.from("bulk_order_requests").update(patch).eq("id", id).neq("status", "converted");
   if (error) return dbError(error);
   await logActivity("bulk_request.updated", "bulk_request", id, { status });
   revalidatePath(`/[locale]/admin/bulk/${id}`, "page");
@@ -92,4 +103,33 @@ export async function deletePricingRule(_prev: ActionState, form: FormData): Pro
   const supabase = await createClient();
   const { error } = await supabase.from("bulk_pricing_rules").delete().eq("id", str(form.get("id")));
   return error ? dbError(error) : { ok: true };
+}
+
+/**
+ * Approved request with a quoted price → a real order: an approved quotation (one line: product × quantity at the
+ * quoted price per piece) is created and converted by the same database function as itemised quotations.
+ */
+export async function convertRequestToOrder(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const session = await assertStaff();
+  const id = str(form.get("id"));
+  const supabase = await createClient();
+  const { data: r } = await supabase.from("bulk_order_requests").select("id, status, product_type, organization_name, preferred_color, quoted_unit_price, quoted_quantity, quantity_max, estimated_quantity").eq("id", id).maybeSingle();
+  if (!r) return { ok: false, error: "not_found" };
+  if (r.status !== "approved") return { ok: false, error: "quotation_not_approved" };
+  const qty = (r.quoted_quantity ?? r.quantity_max ?? r.estimated_quantity) as number;
+  if (r.quoted_unit_price == null || !qty) return { ok: false, error: "سجّل سعر القطعة والكمية أولاً" };
+  const names: Record<string, string> = { hoodie: "هودي", tshirt: "تيشيرت", sweatshirt: "سويتر", oversized: "تيشيرت أوفرسايز", longsleeve: "تيشيرت أكمام طويلة", polo: "بولو", other: "منتج" };
+  const description = `${names[r.product_type] ?? r.product_type} — ${r.organization_name}${r.preferred_color ? ` — ${r.preferred_color}` : ""}`.slice(0, 300);
+  const total = r.quoted_unit_price * qty;
+  const { data: q, error } = await supabase.from("quotations").insert({
+    bulk_request_id: id, items: [{ description, quantity: qty, unit_price: r.quoted_unit_price }],
+    subtotal: total, discount: 0, delivery_fee: 0, total, status: "approved", created_by: session.userId,
+  }).select("id").single();
+  if (error || !q) return dbError(error);
+  const { data, error: cErr } = await supabase.rpc("convert_quotation_to_order", { p_quotation_id: q.id });
+  if (cErr) return dbError(cErr);
+  await logActivity("bulk_request.converted", "bulk_request", id, { order_id: (data as { order_id: string }).order_id, total });
+  revalidatePath("/[locale]/admin", "layout");
+  const locale = str(form.get("locale")) === "en" ? "en" : "ar";
+  redirect(`/${locale}/admin/orders/${(data as { order_id: string }).order_id}`);
 }

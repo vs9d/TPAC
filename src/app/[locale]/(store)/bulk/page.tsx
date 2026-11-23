@@ -2,10 +2,9 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { isLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n";
-import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/env";
 import { BulkForm } from "@/components/bulk/bulk-form";
-import { formatIQD, formatNumber } from "@/lib/format";
+import Link from "next/link";
+import { getPortfolio } from "@/lib/data/portfolio";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
@@ -18,13 +17,7 @@ export default async function BulkPage({ params }: { params: Promise<{ locale: s
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const dict = getDictionary(locale);
-  let rules: { product_type: string; min_quantity: number; max_quantity: number | null; unit_price: number }[] = [];
-  if (isSupabaseConfigured()) {
-    const supabase = await createClient();
-    const { data } = await supabase.from("bulk_pricing_rules").select("product_type, min_quantity, max_quantity, unit_price").eq("is_active", true).order("product_type").order("min_quantity");
-    rules = data ?? [];
-  }
-  const byType = rules.reduce<Record<string, typeof rules>>((m, r) => ((m[r.product_type] ??= []).push(r), m), {});
+  const { clients } = await getPortfolio();
   return (
     <div>
       <section className="bg-ink text-paper">
@@ -44,25 +37,21 @@ export default async function BulkPage({ params }: { params: Promise<{ locale: s
       </section>
       <div className="container-x grid gap-14 py-14 md:py-20 lg:grid-cols-12">
         <div className="lg:col-span-5">
-          <h2 className="display text-3xl">{dict.bulk.pricingTitle}</h2>
-          <p className="mt-2 text-sm text-mute">{dict.bulk.pricingNote}</p>
-          <div className="mt-6 space-y-6">
-            {Object.entries(byType).map(([type, tiers]) => (
-              <div key={type}>
-                <p className="mb-2 font-semibold">{dict.bulk.productTypes[type] ?? type}</p>
-                <table className="w-full text-sm">
-                  <tbody>
-                    {tiers.map((t) => (
-                      <tr key={t.min_quantity} className="border-b border-line">
-                        <td className="py-2 tabular-nums">{formatNumber(t.min_quantity, locale)}{t.max_quantity ? `–${formatNumber(t.max_quantity, locale)}` : "+"} {dict.common.pieces}</td>
-                        <td className="py-2 text-end font-semibold tabular-nums">{formatIQD(t.unit_price, locale)} <span className="text-xs font-normal text-mute">/ {dict.bulk.perPiece}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ))}
-          </div>
+          <h2 className="display text-3xl">{locale === "ar" ? "اشتغلنا ويا" : "We've worked with"}</h2>
+          <p className="mt-2 text-sm text-mute">{dict.bulk.noPriceNote}</p>
+          {clients.length > 0 && (
+            <ul className="mt-6 grid grid-cols-3 gap-3">
+              {clients.slice(0, 9).map((c) => (
+                <li key={c.id} className="relative grid aspect-[4/3] place-items-center rounded-2xl border border-line bg-paper p-3" title={locale === "ar" ? c.name_ar : c.name_en ?? c.name_ar}>
+                  {c.logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={c.logo_url} alt={locale === "ar" ? c.name_ar : c.name_en ?? c.name_ar} className="absolute inset-3 h-[calc(100%-1.5rem)] w-[calc(100%-1.5rem)] object-contain dark:invert" loading="lazy" />
+                  ) : <span className="text-center text-xs font-bold">{locale === "ar" ? c.name_ar : c.name_en ?? c.name_ar}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link href={`/${locale}/portfolio`} className="btn btn-outline mt-6">{locale === "ar" ? "شوف أعمالنا السابقة" : "See our previous work"}</Link>
         </div>
         <div className="lg:col-span-7">
           <h2 className="display mb-6 text-3xl">{dict.bulk.formTitle}</h2>

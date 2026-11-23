@@ -298,20 +298,25 @@ await flow("designer pro: template, shape, layers, undo/redo, sizes, options, qu
 
 await flow("bulk: university request with artwork", async (page) => {
   await page.goto(`${BASE}/ar/bulk`);
-  await page.fill("#b-org", "جامعة بغداد — كلية الهندسة");
+  assert.equal(await page.getByText("للقطعة").count(), 0, "no public price list");
   await page.fill("#b-contact", "مصطفى");
   await page.fill("#b-phone", "07701231234");
-  await page.selectOption("#b-type", "hoodie");
-  await page.fill("#b-qty", "150");
-  await page.getByLabel("توزيع المقاسات M").fill("60");
-  await page.getByLabel("توزيع المقاسات L").fill("90");
+  await page.fill("#b-org", "جامعة بغداد — كلية الهندسة");
+  await page.fill("#b-qmin", "200");
+  await page.fill("#b-qmax", "150");
+  await page.locator("label:has(input[value=hoodie])").click();
+  await page.fill("#b-color", "كحلي مع شعار ذهبي");
+  await page.getByRole("button", { name: "إرسال الطلب" }).click();
+  await page.getByText("الكمية \"إلى\" لازم تكون أكبر").waitFor();
+  await page.fill("#b-qmax", "250");
   writeFileSync(`${SHOTS}/logo.pdf`, "%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF");
   await page.locator("input[type=file]").setInputFiles(`${SHOTS}/logo.pdf`);
   await page.getByText("logo.pdf").waitFor();
   await page.getByRole("button", { name: "إرسال الطلب" }).click();
-  await page.getByText(/تم استلام طلبك برقم BR-\d+/).waitFor();
-  const r = await one("select b.size_breakdown, b.estimated_quantity, (select count(*)::int from uploaded_artwork a where a.bulk_request_id = b.id) files from bulk_order_requests b order by created_at desc limit 1");
-  assert.deepEqual(r, { size_breakdown: { M: 60, L: 90 }, estimated_quantity: 150, files: 1 });
+  const ref = (await page.getByTestId("quote-ref").innerText()).trim();
+  assert.match(ref, /^BR-\d+$/);
+  const r = await one("select b.request_number, b.product_type, b.quantity_min, b.quantity_max, b.estimated_quantity, b.preferred_color, (select count(*)::int from uploaded_artwork a where a.bulk_request_id = b.id) files from bulk_order_requests b order by created_at desc limit 1");
+  assert.deepEqual(r, { request_number: ref, product_type: "hoodie", quantity_min: 200, quantity_max: 250, estimated_quantity: 250, preferred_color: "كحلي مع شعار ذهبي", files: 1 });
 });
 
 await flow("security: customers are kept out of admin; uploads are verified", async (page) => {
@@ -417,7 +422,7 @@ await flow("admin: dashboard, order workflow, stock, product, settings, quotatio
   assert.equal(conv.status, "confirmed");
   assert.ok(conv.total > 0);
 
-  for (const p of ["customers", "products", "categories", "attributes", "customizer", "discounts", "marketing", "homepage", "notifications", "inquiries", "activity", "reviews", "bulk/pricing"]) {
+  for (const p of ["customers", "products", "categories", "attributes", "customizer", "discounts", "marketing", "homepage", "notifications", "inquiries", "activity", "reviews", "bulk/pricing", "portfolio", "whatsapp"]) {
     const r = await page.goto(`${BASE}/ar/admin/${p}`);
     assert.equal(r.status(), 200, p);
   }
@@ -1001,6 +1006,224 @@ await flow("size finder + suggested description + product face colour + sizes S�
   await page.goto(`${BASE}/en/product/${p.slug}`);
   await page.getByText("Colour: White").waitFor();
   await page.getByRole("link", { name: /Find your size from your height/ }).waitFor();
+});
+
+async function becomeAdmin(page, tag) {
+  // many test sign-ups from one address would hit the site's sign-up rate limit
+  await db.query("delete from rate_limits");
+  const email = `${tag}${Date.now()}@thetpac.com`;
+  await page.goto(`${BASE}/en/account/register`);
+  await page.fill("#full_name", `${tag} admin`);
+  await page.fill("#email", email);
+  await page.fill("#phone", `0770${String(Date.now()).slice(-7)}`);
+  await page.fill("#password", "admin-pass-2026");
+  await page.fill("#confirm", "admin-pass-2026");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.waitForURL(/account$/);
+  await db.query("update customer_profiles set role = 'admin' where email = $1", [email]);
+}
+const waitFor = async (sql, params, test, ms = 15000) => {
+  const end = Date.now() + ms;
+  for (;;) {
+    const row = await one(sql, params);
+    if (row && test(row)) return row;
+    if (Date.now() > end) throw new Error(`timed out waiting for ${sql} → ${JSON.stringify(row)}`);
+    await new Promise((r) => setTimeout(r, 250));
+  }
+};
+
+await flow("quotation: request → under review → price → approved → order", async (page) => {
+  await page.goto(`${BASE}/ar/bulk`);
+  await page.fill("#b-contact", "زينب");
+  await page.fill("#b-phone", "07801112222");
+  await page.fill("#b-org", "شركة الرافدين");
+  await page.fill("#b-qmin", "100");
+  await page.fill("#b-qmax", "120");
+  await page.locator("label:has(input[value=tshirt])").click();
+  await page.fill("#b-color", "أبيض");
+  await page.getByRole("button", { name: "إرسال الطلب" }).click();
+  const ref = (await page.getByTestId("quote-ref").innerText()).trim();
+  const req = await one("select id from bulk_order_requests where request_number = $1", [ref]);
+  await becomeAdmin(page, "quote");
+  await page.goto(`${BASE}/ar/admin/bulk`);
+  await page.getByRole("link", { name: ref }).waitFor();
+  await page.goto(`${BASE}/ar/admin/bulk/${req.id}`);
+  const follow = page.locator("form:has(input[name=quoted_unit_price])");
+  await follow.locator("select[name=status]").selectOption("contacted");
+  await follow.getByRole("button", { name: "حفظ" }).click();
+  await waitFor("select status from bulk_order_requests where id = $1", [req.id], (r) => r.status === "contacted");
+  await page.reload();
+  await follow.locator("select[name=status]").selectOption("approved");
+  await follow.locator("input[name=quoted_unit_price]").fill("15000");
+  await follow.locator("input[name=quoted_quantity]").fill("120");
+  await follow.getByRole("button", { name: "حفظ" }).click();
+  await page.getByText("١٬٨٠٠٬٠٠٠").first().waitFor();
+  const wa = await page.getByRole("link", { name: "أرسل العرض على الواتساب" }).getAttribute("href");
+  assert.ok(wa.startsWith("https://wa.me/9647801112222?text=") && decodeURIComponent(wa).includes("سعر القطعة"), "WhatsApp message carries the quote");
+  await page.getByRole("button", { name: "تحويل إلى طلب" }).click();
+  await page.waitForURL(/admin\/orders\/[0-9a-f-]{36}$/);
+  const o = await one("select o.source, o.status, o.total, i.quantity, i.unit_price from orders o join order_items i on i.order_id = o.id where o.id = $1", [page.url().split("/").pop()]);
+  assert.deepEqual(o, { source: "bulk", status: "confirmed", total: 1800000, quantity: 120, unit_price: 15000 });
+  assert.equal((await one("select status from bulk_order_requests where id = $1", [req.id])).status, "converted");
+});
+
+await flow("portfolio: real clients' logos, admin project with photos, filters, gallery", async (page) => {
+  await db.query(readFileSync(new URL("../../supabase/add-portfolio-clients.sql", import.meta.url), "utf8"));
+  await page.goto(`${BASE}/ar/portfolio`);
+  assert.equal(await page.locator('ul[aria-label="عملاؤنا"] li').count(), 8, "only the named, visible clients");
+  await page.getByText("صور المشاريع جاية قريباً.").waitFor();
+  const png = async (color, name) => {
+    const b64 = await page.evaluate((c) => { const k = document.createElement("canvas"); k.width = 1200; k.height = 900; const x = k.getContext("2d"); x.fillStyle = c; x.fillRect(0, 0, 1200, 900); x.fillStyle = "#fff"; x.fillRect(400, 300, 400, 300); return k.toDataURL("image/png").split(",")[1]; }, color);
+    writeFileSync(`${SHOTS}/${name}.png`, Buffer.from(b64, "base64"));
+    return `${SHOTS}/${name}.png`;
+  };
+  const photos = [await png("#1d3b5a", "proj1"), await png("#7a2a2a", "proj2")];
+  await becomeAdmin(page, "folio");
+  await page.goto(`${BASE}/ar/admin/portfolio`);
+  const form = page.locator("form:has(input[name=photos_json])").last();
+  await form.locator("input[name=title_ar]").fill("هوديات تخرج دفعة ٢٠٢٦");
+  await form.locator("select[name=client_id]").selectOption({ label: "IFMSA-Iraq" });
+  await form.locator("select[name=category]").selectOption("organization");
+  await form.locator("textarea[name=description_ar]").fill("٣٠٠ هودي بشعار المنظمة.");
+  await form.getByLabel("صور المشروع").setInputFiles(photos);
+  await page.waitForFunction(() => JSON.parse([...document.querySelectorAll("input[name=photos_json]")].pop().value).length === 2, null, { timeout: 20000 });
+  await form.getByText("مشروع مميّز").click();
+  await form.getByRole("button", { name: "إضافة" }).click();
+  const pr = await waitFor("select id, photos, is_featured, category from portfolio_projects order by created_at desc limit 1", [], (r) => !!r);
+  assert.equal(pr.photos.length, 2);
+  assert.ok(pr.photos.every((x) => x.path.startsWith("portfolio/")) && pr.is_featured && pr.category === "organization");
+  await page.goto(`${BASE}/ar/portfolio?category=organization`);
+  await page.getByRole("link", { name: /هوديات تخرج دفعة ٢٠٢٦/ }).click();
+  await page.waitForURL(/portfolio\/[0-9a-f-]{36}$/);
+  await page.getByText("٣٠٠ هودي بشعار المنظمة.").waitFor();
+  await page.getByRole("button", { name: /هوديات تخرج دفعة ٢٠٢٦ — 1/ }).click();
+  await page.getByRole("dialog").waitFor();
+  await page.keyboard.press("Escape");
+  await page.getByRole("dialog").waitFor({ state: "detached" });
+  await page.goto(`${BASE}/ar/portfolio?category=company`);
+  assert.equal(await page.getByRole("link", { name: /هوديات تخرج دفعة ٢٠٢٦/ }).count(), 0, "category filter");
+  await page.goto(`${BASE}/ar/portfolio`);
+  await page.screenshot({ path: `${SHOTS}/portfolio.png`, fullPage: true });
+});
+
+await flow("WhatsApp: opt-in at checkout → status messages via Cloud API, dedupe, retry, receipts, resend", async (page) => {
+  const http = await import("node:http");
+  const { createHmac } = await import("node:crypto");
+  const sent = [];
+  let failNext = false;
+  const mock = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      if (failNext) { failNext = false; res.writeHead(503, { "content-type": "application/json" }); return res.end(JSON.stringify({ error: { message: "temporarily unavailable", code: 131000 } })); }
+      const j = JSON.parse(body || "{}");
+      sent.push({ path: req.url, auth: req.headers.authorization, ...j });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ messages: [{ id: `wamid.e2e${sent.length}` }] }));
+    });
+  });
+  await new Promise((r) => mock.listen(4099, "127.0.0.1", r));
+  try {
+    // customer checks out with the WhatsApp box ticked
+    await page.goto(`${BASE}/ar/product/baghdad-oversized-tee`);
+    await page.locator('[role=radiogroup][aria-label="اختر المقاس"] [role=radio]:not([data-disabled=true])').first().click();
+    await page.getByRole("button", { name: "أضف إلى السلة" }).click();
+    await page.getByRole("dialog", { name: "سلة التسوق" }).waitFor();
+    await page.getByRole("link", { name: "إتمام الطلب" }).click();
+    await page.waitForURL(/checkout/);
+    await page.fill("#customer_name", "سارة محمد");
+    await page.fill("#phone", "0771 234 5679");
+    await page.selectOption("#governorate", "baghdad");
+    await page.fill("#city", "الكرادة");
+    await page.fill("#address_line", "شارع ٦٢");
+    const opt = page.getByRole("checkbox", { name: /أرسلولي تحديثات الطلب على الواتساب/ });
+    assert.equal(await opt.isChecked(), false, "opt-in is never pre-ticked");
+    await opt.check();
+    await page.getByRole("button", { name: "تأكيد الطلب" }).click();
+    await page.waitForURL(/checkout\/success\?order=TP\d+/);
+    const num = new URL(page.url()).searchParams.get("order");
+    const order = await one("select id, whatsapp_opt_in from orders where order_number = $1", [num]);
+    assert.equal(order.whatsapp_opt_in, true);
+    await page.waitForTimeout(800);
+    assert.equal((await one("select count(*)::int n from notifications where channel = 'whatsapp' and order_id = $1", [order.id])).n, 0, "'received' is off by default");
+
+    await becomeAdmin(page, "wa");
+    const setStatus = async (value) => {
+      await page.goto(`${BASE}/ar/admin/orders/${order.id}`);
+      const f = page.locator("form:has(textarea[name=note])");
+      await f.locator("select[name=status]").selectOption(value);
+      await f.getByRole("button", { name: "تحديث" }).click();
+      await waitFor("select status from orders where id = $1", [order.id], (r) => r.status === value);
+    };
+    // confirmed → one template message to +964
+    await setStatus("confirmed");
+    const n1 = await waitFor("select * from notifications where channel = 'whatsapp' and order_id = $1 and event = 'order.confirmed'", [order.id], (r) => r.status === "sent");
+    assert.equal(n1.recipient, "+9647712345679");
+    assert.equal(n1.provider_message_id, "wamid.e2e1");
+    const m1 = sent[0];
+    assert.equal(m1.path, "/123456/messages");
+    assert.equal(m1.auth, "Bearer e2e-token");
+    assert.deepEqual([m1.to, m1.type, m1.template.name, m1.template.language.code], ["9647712345679", "template", "order_update", "ar"]);
+    const params = m1.template.components[0].parameters.map((p) => p.text);
+    assert.equal(params[0], "سارة محمد");
+    assert.equal(params[1], num);
+    assert.ok(params[2].includes("تم تأكيد طلبك من TPAC بنجاح") && !params[2].includes("\n"), "message as one-line variable");
+
+    // temporary failure → queued retry with back-off → the retry endpoint sends it
+    failNext = true;
+    await setStatus("preparing");
+    const n2 = await waitFor("select * from notifications where channel = 'whatsapp' and order_id = $1 and event = 'order.preparing'", [order.id], (r) => r.attempts === 1);
+    assert.equal(n2.status, "pending");
+    assert.ok(new Date(n2.next_attempt_at) > new Date(), "retry is scheduled");
+    assert.equal((await page.request.get(`${BASE}/api/cron/notifications`)).status(), 403, "retry endpoint needs the secret");
+    await db.query("update notifications set next_attempt_at = now() - interval '1 minute' where id = $1", [n2.id]);
+    const cron = await page.request.get(`${BASE}/api/cron/notifications`, { headers: { authorization: "Bearer e2e-cron" } });
+    assert.equal(cron.status(), 200);
+    const n2b = await waitFor("select * from notifications where id = $1", [n2.id], (r) => r.status === "sent");
+    assert.equal(n2b.attempts, 2);
+
+    // delivery receipts (signed webhook)
+    const payload = JSON.stringify({ entry: [{ changes: [{ value: { statuses: [{ id: "wamid.e2e1", status: "delivered" }] } }] }] });
+    const sig = `sha256=${createHmac("sha256", "e2e-app-secret").update(payload).digest("hex")}`;
+    assert.equal((await page.request.post(`${BASE}/api/whatsapp/webhook`, { data: payload, headers: { "content-type": "application/json", "x-hub-signature-256": "sha256=bad" } })).status(), 401);
+    assert.equal((await page.request.post(`${BASE}/api/whatsapp/webhook`, { data: payload, headers: { "content-type": "application/json", "x-hub-signature-256": sig } })).status(), 200);
+    assert.equal((await one("select provider_status from notifications where id = $1", [n1.id])).provider_status, "delivered");
+    const verify = await page.request.get(`${BASE}/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=e2e-verify&hub.challenge=42`);
+    assert.equal(await verify.text(), "42");
+
+    // dashboard: edit the "preparing" text, then resend from the order page (no dedupe for manual resends)
+    await page.goto(`${BASE}/ar/admin/whatsapp`);
+    await page.getByText("wamid", { exact: false }).count();
+    await page.locator("#wa-preparing-text").fill("مرحباً {customer_name}، طلبك #{order_number} بالتجهيز ✂️");
+    await page.getByRole("button", { name: "حفظ" }).click();
+    await page.getByText("تم الحفظ").first().waitFor();
+    await page.goto(`${BASE}/ar/admin/orders/${order.id}`);
+    await page.getByRole("button", { name: "أرسل رسالة الحالة الحالية" }).click();
+    await page.getByText("انرسلت ✅").first().waitFor();
+    const last = sent[sent.length - 1].template.components[0].parameters.map((p) => p.text);
+    assert.equal(last[2], `مرحباً سارة محمد، طلبك #${num} بالتجهيز ✂️`);
+    assert.equal((await one("select count(*)::int n from notifications where order_id = $1 and event = 'order.preparing'", [order.id])).n, 2);
+    // the automatic message for a status is sent once only
+    assert.equal((await one("select count(*)::int n from notifications where dedupe_key = $1", [`order:${order.id}:confirmed`])).n, 1);
+    // customers who did not opt in never get a message
+    assert.equal((await one("select count(*)::int n from notifications n join orders o on o.id = n.order_id where n.channel = 'whatsapp' and not o.whatsapp_opt_in")).n, 0);
+    await page.goto(`${BASE}/ar/admin/whatsapp`);
+    await page.screenshot({ path: `${SHOTS}/whatsapp-admin.png`, fullPage: true });
+  } finally {
+    mock.close();
+  }
+});
+
+await flow("coupons: usage statistics and who used each code", async (page) => {
+  const used = await one("select c.code, count(u.*)::int n from discount_codes c join discount_usage u on u.discount_code_id = c.id group by c.code order by n desc limit 1");
+  await becomeAdmin(page, "coupon");
+  await page.goto(`${BASE}/ar/admin/discounts`);
+  await page.getByText("مرات الاستخدام").first().waitFor();
+  if (used) {
+    await page.locator("summary", { hasText: used.code }).click();
+    await page.locator("details[open] table tbody tr").first().waitFor();
+    assert.ok((await page.locator("details[open] table tbody tr").count()) >= 1, "customers who used the code are listed");
+  }
 });
 
 await flow("collections: admin uploads a cover photo from the device → shown in the store", async (page) => {

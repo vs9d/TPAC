@@ -50,12 +50,19 @@ describe("checkout validation", () => {
 });
 
 describe("bulk request validation", () => {
+  const base = { organization_name: "University of Baghdad", contact_name: "Sara", phone: "07801234567", product_type: "hoodie", preferred_color: "أسود", quantity_min: "100", quantity_max: "150" };
   it("coerces quantities and filters size breakdown keys", () => {
-    const r = bulkRequestSchema.safeParse({ organization_name: "University of Baghdad", contact_name: "Sara", phone: "07801234567", product_type: "hoodie", estimated_quantity: "120", size_breakdown: { M: "40", L: "80" } });
+    const r = bulkRequestSchema.safeParse({ ...base, size_breakdown: { M: "40", L: "80" } });
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.estimated_quantity).toBe(120);
-    expect(bulkRequestSchema.safeParse({ organization_name: "X", contact_name: "Y", phone: "07801234567", product_type: "spaceship", estimated_quantity: 5 }).success).toBe(false);
-    expect(bulkRequestSchema.safeParse({ organization_name: "X", contact_name: "Y", phone: "07801234567", product_type: "tshirt", estimated_quantity: 5, size_breakdown: { HUGE: 4 } }).success).toBe(false);
+    if (r.success) expect([r.data.quantity_min, r.data.quantity_max]).toEqual([100, 150]);
+    expect(bulkRequestSchema.safeParse({ ...base, product_type: "spaceship" }).success).toBe(false);
+    expect(bulkRequestSchema.safeParse({ ...base, size_breakdown: { HUGE: 4 } }).success).toBe(false);
+  });
+  it("needs a colour and a sensible quantity range", () => {
+    expect(bulkRequestSchema.safeParse({ ...base, preferred_color: " " }).success).toBe(false);
+    const r = bulkRequestSchema.safeParse({ ...base, quantity_min: 200, quantity_max: 50 });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.issues[0]!.path).toEqual(["quantity_max"]);
   });
 });
 

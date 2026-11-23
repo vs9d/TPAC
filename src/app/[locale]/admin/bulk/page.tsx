@@ -20,10 +20,10 @@ export default async function AdminBulk({ params, searchParams }: { params: Prom
   if (status) q = q.eq("status", status);
   const { data } = await q;
   const statuses = ["new", "contacted", "quoted", "approved", "rejected", "converted"];
-  const label: Record<string, string> = { new: t("جديد", "New"), contacted: t("تم التواصل", "Contacted"), quoted: t("أُرسل عرض", "Quoted"), approved: t("موافق عليه", "Approved"), rejected: t("مرفوض", "Rejected"), converted: t("تحوّل لطلب", "Converted") };
+  const label: Record<string, string> = { new: t("طلب جديد", "New request"), contacted: t("قيد المراجعة", "Under review"), quoted: t("تم إرسال العرض", "Quotation sent"), approved: t("موافق عليه", "Approved"), rejected: t("مرفوض", "Rejected"), converted: t("تحوّل لطلب", "Converted") };
   return (
     <div>
-      <PageHeader title={t("طلبات الجامعات والشركات", "University & bulk requests")} actions={<Link href={`/${locale}/admin/bulk/pricing`} className="btn btn-outline btn-sm">{t("قواعد التسعير", "Pricing rules")}</Link>} />
+      <PageHeader title={t("طلبات عروض الأسعار", "Quotation requests")} subtitle={t("الجامعات والشركات والطلبات بالجملة", "Universities, companies and bulk orders")} actions={<Link href={`/${locale}/admin/bulk/pricing`} className="btn btn-outline btn-sm">{t("قواعد التسعير", "Pricing rules")}</Link>} />
       <div className="mb-4 flex flex-wrap gap-2">
         <Link href="?" className={`btn btn-sm ${!status ? "btn-primary" : "btn-outline"}`}>{t("الكل", "All")}</Link>
         {statuses.map((s) => <Link key={s} href={`?status=${s}`} className={`btn btn-sm ${status === s ? "btn-primary" : "btn-outline"}`}>{label[s]}</Link>)}
@@ -38,7 +38,7 @@ export default async function AdminBulk({ params, searchParams }: { params: Prom
                   <td><Link href={`/${locale}/admin/bulk/${r.id}`} className="font-semibold hover:underline" dir="ltr">{r.request_number}</Link></td>
                   <td>{r.organization_name}<span className="block text-xs text-mute">{r.contact_name} · <span dir="ltr">{formatIraqiPhone(r.phone)}</span></span></td>
                   <td>{dict.bulk.productTypes[r.product_type] ?? r.product_type}</td>
-                  <td className="tabular-nums">{formatNumber(r.estimated_quantity, locale)}</td>
+                  <td className="tabular-nums">{r.quantity_min ? `${formatNumber(r.quantity_min, locale)}–${formatNumber(r.quantity_max ?? r.quantity_min, locale)}` : formatNumber(r.estimated_quantity, locale)}{r.preferred_color && <span className="block text-xs text-mute">{r.preferred_color}</span>}</td>
                   <td><Pill tone={BULK_TONE[r.status]}>{label[r.status]}</Pill></td>
                   <td className="text-xs text-mute">{formatDate(r.created_at, locale)}</td>
                 </tr>

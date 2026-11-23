@@ -34,6 +34,7 @@ export function CheckoutForm({ zones, addresses, prefill, signedIn, onlinePaymen
     delivery_method: "standard" as "standard" | "express" | "pickup",
     payment_method: "cod" as "cod" | "online",
     save_address: !addresses.length,
+    whatsapp_opt_in: false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -89,6 +90,7 @@ export function CheckoutForm({ zones, addresses, prefill, signedIn, onlinePaymen
         payment_method: f.payment_method,
         discount_code: discountCode || undefined,
         save_address: signedIn && f.save_address,
+        whatsapp_opt_in: f.whatsapp_opt_in,
         locale,
       });
       if (res.ok) {
@@ -181,6 +183,13 @@ export function CheckoutForm({ zones, addresses, prefill, signedIn, onlinePaymen
               {err("address_line")}
             </div>
             <div className="sm:col-span-2">{field("delivery_notes", `${dict.checkout.instructions} (${dict.common.optional})`, { placeholder: dict.checkout.instructionsHint, maxLength: 500 })}</div>
+            <label className="flex items-start gap-3 rounded-2xl border border-line p-3 text-sm sm:col-span-2">
+              <input type="checkbox" name="whatsapp_opt_in" className="mt-0.5 size-5 shrink-0 accent-[var(--color-pine)]" checked={f.whatsapp_opt_in} onChange={(e) => set("whatsapp_opt_in", e.target.checked)} />
+              <span>
+                <span className="block font-semibold">{locale === "ar" ? "أرسلولي تحديثات الطلب على الواتساب" : "Send me order updates on WhatsApp"}</span>
+                <span className="block text-xs text-mute">{locale === "ar" ? "تأكيد الطلب، التجهيز، الشحن والتسليم — على نفس رقم الهاتف. تگدر توقفها بأي وقت بمراسلتنا." : "Confirmation, preparation, shipping and delivery — to this phone number. Message us any time to stop them."}</span>
+              </span>
+            </label>
             {signedIn && (
               <label className="flex items-center gap-3 text-sm sm:col-span-2">
                 <input type="checkbox" className="size-4 accent-ink" checked={f.save_address} onChange={(e) => set("save_address", e.target.checked)} /> {dict.checkout.saveAddress}

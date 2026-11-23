@@ -25,7 +25,10 @@ export async function submitBulkRequest(input: unknown): Promise<BulkResult> {
       phone: d.phone,
       email: d.email ?? null,
       product_type: d.product_type,
-      estimated_quantity: d.estimated_quantity,
+      estimated_quantity: d.quantity_max,
+      quantity_min: d.quantity_min,
+      quantity_max: d.quantity_max,
+      preferred_color: d.preferred_color,
       size_breakdown: sizes,
       printing_requirements: d.printing_requirements ?? null,
       notes: d.notes ?? null,
@@ -40,6 +43,6 @@ export async function submitBulkRequest(input: unknown): Promise<BulkResult> {
     // only attach freshly uploaded, unattached bulk artwork
     await db.from("uploaded_artwork").update({ bulk_request_id: data.id }).in("id", d.artwork_ids).is("bulk_request_id", null).is("custom_design_id", null).like("storage_path", "uploads/bulk/%");
   }
-  after(() => notifyAdmin("bulk_request.created", `طلب جملة جديد ${data.request_number}`, `${d.organization_name} — ${d.contact_name} — ${d.estimated_quantity}`, `/ar/admin/bulk/${data.id}`));
+  after(() => notifyAdmin("bulk_request.created", `طلب جملة جديد ${data.request_number}`, `${d.organization_name} — ${d.contact_name} — ${d.quantity_min}–${d.quantity_max}`, `/ar/admin/bulk/${data.id}`));
   return { ok: true, request_number: data.request_number };
 }

@@ -25,6 +25,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     entry("/reviews", undefined, 0.7),
     entry("/track", undefined, 0.3),
     entry("/size-finder", undefined, 0.5),
+    entry("/portfolio", undefined, 0.7),
     entry("/contact", undefined, 0.4),
     ...PAGE_SLUGS.map((s) => entry(`/pages/${s}`, undefined, 0.3)),
   ];

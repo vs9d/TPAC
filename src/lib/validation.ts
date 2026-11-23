@@ -64,6 +64,8 @@ export const checkoutSchema = z.object({
   payment_method: z.enum(["cod", "online"]),
   discount_code: z.string().trim().max(32).optional(),
   save_address: z.boolean().optional(),
+  /** explicit opt-in to WhatsApp order updates (unchecked by default) */
+  whatsapp_opt_in: z.boolean().optional(),
   locale: z.enum(["ar", "en"]),
 });
 export type CheckoutInput = z.input<typeof checkoutSchema>;
@@ -128,18 +130,25 @@ export const reviewSchema = z.object({
 export const BULK_PRODUCT_TYPES = ["tshirt", "oversized", "hoodie", "sweatshirt", "longsleeve", "polo", "other"] as const;
 export const BULK_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"] as const;
 
-export const bulkRequestSchema = z.object({
-  organization_name: requiredText(200),
-  contact_name: requiredText(120),
-  phone: phoneSchema,
-  email: optionalEmail,
-  product_type: z.enum(BULK_PRODUCT_TYPES),
-  estimated_quantity: z.coerce.number().int().min(1, "quantity").max(100000, "quantity"),
-  size_breakdown: z.partialRecord(z.enum(BULK_SIZES), z.coerce.number().int().min(0).max(100000)).default({}),
-  printing_requirements: trimmed(4000).optional(),
-  notes: trimmed(4000).optional(),
-  artwork_ids: z.array(uuid).max(5).default([]),
-});
+/** Product types offered on the quotation form (older requests may hold any BULK_PRODUCT_TYPES value). */
+export const QUOTE_PRODUCT_TYPES = ["hoodie", "tshirt", "sweatshirt"] as const;
+
+export const bulkRequestSchema = z
+  .object({
+    organization_name: requiredText(200),
+    contact_name: requiredText(120),
+    phone: phoneSchema,
+    email: optionalEmail,
+    product_type: z.enum(BULK_PRODUCT_TYPES),
+    quantity_min: z.coerce.number().int().min(1, "quantity").max(100000, "quantity"),
+    quantity_max: z.coerce.number().int().min(1, "quantity").max(100000, "quantity"),
+    preferred_color: requiredText(120),
+    size_breakdown: z.partialRecord(z.enum(BULK_SIZES), z.coerce.number().int().min(0).max(100000)).default({}),
+    printing_requirements: trimmed(4000).optional(),
+    notes: trimmed(4000).optional(),
+    artwork_ids: z.array(uuid).max(5).default([]),
+  })
+  .refine((d) => d.quantity_max >= d.quantity_min, { path: ["quantity_max"], message: "quantity_range" });
 
 /* -------------------------- designer --------------------------- */
 

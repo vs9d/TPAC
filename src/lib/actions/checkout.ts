@@ -54,6 +54,8 @@ export async function placeOrder(input: unknown): Promise<CheckoutResult> {
     return { ok: false, error: code, details: code === "cart_invalid" ? msg.replace(/^cart_invalid:\s*/, "") : undefined };
   }
   const order = result as { order_id: string; order_number: string };
+  // consent is recorded on the order before any notification is queued
+  if (data.whatsapp_opt_in) await createAdminClient().from("orders").update({ whatsapp_opt_in: true }).eq("id", order.order_id);
 
   if (session && data.save_address) {
     const supabase = await createClient();

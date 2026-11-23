@@ -8,21 +8,21 @@ import { uploadProductImage } from "@/lib/admin-upload";
 import { cn } from "@/lib/format";
 
 /** Shrinks a photo (iPhone HEIC/JPEG/PNG …) to a web-friendly JPEG, max `max` px on the long side. */
-async function toWebImage(file: File, max = 2000): Promise<Blob> {
+export async function toWebImage(file: File, max = 2000, png = false): Promise<Blob> {
   const bmp = await createImageBitmap(file);
   const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
   const c = document.createElement("canvas");
   c.width = Math.round(bmp.width * k);
   c.height = Math.round(bmp.height * k);
   c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
-  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("jpeg"))), "image/jpeg", 0.86));
+  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("image"))), png ? "image/png" : "image/jpeg", 0.86));
 }
 
 /**
  * Image picker for admin forms: upload from the phone's photo library / files (or paste a link).
  * Submits the public URL in a hidden input named `name`.
  */
-export function ImageField({ name, label, defaultValue, folder, className }: { name: string; label: string; defaultValue?: string | null; folder: string; className?: string }) {
+export function ImageField({ name, label, defaultValue, folder, className, transparent = false }: { name: string; label: string; defaultValue?: string | null; folder: string; className?: string; /** keep transparency (logos): PNG instead of JPEG */ transparent?: boolean }) {
   const { locale } = useI18n();
   const t = adminT(locale);
   const [url, setUrl] = useState(defaultValue ?? "");
@@ -45,8 +45,9 @@ export function ImageField({ name, label, defaultValue, folder, className }: { n
     if (file.size > 25 * 1024 * 1024) { toast.error(t("الصورة كبيرة جداً (الحد ٢٥ ميغا)", "Image too large (25 MB max)")); return; }
     setBusy(true);
     try {
-      const blob = await toWebImage(file);
-      const up = await uploadProductImage(blob, `${folder}/${crypto.randomUUID()}.jpg`, "image/jpeg");
+      const png = transparent && file.type !== "image/jpeg";
+      const blob = await toWebImage(file, png ? 1200 : 2000, png);
+      const up = await uploadProductImage(blob, `${folder}/${crypto.randomUUID()}.${png ? "png" : "jpg"}`, png ? "image/png" : "image/jpeg");
       setUrl(up.url);
       toast.success(t("تم رفع الصورة — اضغط حفظ", "Image uploaded — press Save"));
     } catch (e) {
@@ -66,7 +67,7 @@ export function ImageField({ name, label, defaultValue, folder, className }: { n
         <button type="button" onClick={() => input.current?.click()} disabled={busy} className="relative grid aspect-[16/10] w-44 place-items-center overflow-hidden rounded-2xl border border-dashed border-line bg-bone text-mute transition hover:border-ink">
           {url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={url} alt="" className="absolute inset-0 size-full object-cover" />
+            <img src={url} alt="" className={cn("absolute inset-0 size-full", transparent ? "object-contain p-3" : "object-cover")} />
           ) : (
             <span className="flex flex-col items-center gap-1 text-xs font-semibold"><ImagePlus className="size-6" /> {t("اختر صورة", "Choose image")}</span>
           )}

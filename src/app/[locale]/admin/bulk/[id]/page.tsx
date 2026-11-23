@@ -7,9 +7,9 @@ import { adminT } from "@/lib/admin-i18n";
 import { createClient } from "@/lib/supabase/server";
 import { signedUrls } from "@/lib/storage";
 import { PageHeader, Card, Pill, BULK_TONE } from "@/components/admin/ui";
-import { AdminForm, Select, Textarea, Submit } from "@/components/admin/form";
+import { AdminForm, Input, Select, Textarea, Submit } from "@/components/admin/form";
 import { QuotationEditor, type QuotationData } from "@/components/admin/quotation-editor";
-import { updateBulkRequest, convertQuotation } from "@/lib/actions/admin/bulk";
+import { updateBulkRequest, convertQuotation, convertRequestToOrder } from "@/lib/actions/admin/bulk";
 import { formatDate, formatIQD, formatNumber } from "@/lib/format";
 import { formatIraqiPhone } from "@/lib/phone";
 
@@ -34,13 +34,19 @@ export default async function AdminBulkDetail({ params }: { params: Promise<{ lo
     quantity: x.quantity,
     unit_price: (unit as number | null) ?? 0,
   }));
-  const wa = `https://wa.me/${r.phone}?text=${encodeURIComponent(`مرحباً ${r.contact_name}، بخصوص طلبكم ${r.request_number} من TPAC`)}`;
+  const label: Record<string, string> = { new: t("طلب جديد", "New request"), contacted: t("قيد المراجعة", "Under review"), quoted: t("تم إرسال العرض", "Quotation sent"), approved: t("موافق عليه", "Approved"), rejected: t("مرفوض", "Rejected"), converted: t("تحوّل لطلب", "Converted") };
+  const qty = (r.quoted_quantity ?? r.quantity_max ?? r.estimated_quantity) as number;
+  const quotedTotal = r.quoted_unit_price != null ? r.quoted_unit_price * qty : null;
+  const waText = quotedTotal != null
+    ? `مرحباً ${r.contact_name} ❤️\nبخصوص طلب عرض السعر ${r.request_number} من TPAC:\n${dict.bulk.productTypes[r.product_type] ?? r.product_type} — ${formatNumber(qty, "ar")} قطعة\nسعر القطعة: ${formatIQD(r.quoted_unit_price, "ar")}\nالمجموع: ${formatIQD(quotedTotal, "ar")}`
+    : `مرحباً ${r.contact_name}، بخصوص طلب عرض السعر ${r.request_number} من TPAC`;
+  const wa = `https://wa.me/${r.phone}?text=${encodeURIComponent(waText)}`;
   return (
     <div className="space-y-6">
       <PageHeader
         title={`${r.request_number} — ${r.organization_name}`}
         subtitle={formatDate(r.created_at, locale, true)}
-        actions={<><Pill tone={BULK_TONE[r.status]}>{r.status}</Pill><a href={wa} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm"><MessageCircle className="size-4" /> WhatsApp</a><a href={`tel:+${r.phone}`} className="btn btn-outline btn-sm">{t("اتصال", "Call")}</a></>}
+        actions={<><Pill tone={BULK_TONE[r.status]}>{label[r.status] ?? r.status}</Pill><a href={wa} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm"><MessageCircle className="size-4" /> WhatsApp</a><a href={`tel:+${r.phone}`} className="btn btn-outline btn-sm">{t("اتصال", "Call")}</a></>}
       />
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">
@@ -50,7 +56,8 @@ export default async function AdminBulkDetail({ params }: { params: Promise<{ lo
               <div><dt className="text-xs text-mute">{dict.bulk.phone}</dt><dd dir="ltr" className="text-start font-semibold">{formatIraqiPhone(r.phone)}</dd></div>
               <div><dt className="text-xs text-mute">{dict.bulk.email}</dt><dd>{r.email ?? "—"}</dd></div>
               <div><dt className="text-xs text-mute">{dict.bulk.productType}</dt><dd>{dict.bulk.productTypes[r.product_type]}</dd></div>
-              <div><dt className="text-xs text-mute">{dict.bulk.estimatedQuantity}</dt><dd className="font-semibold">{formatNumber(r.estimated_quantity, locale)}</dd></div>
+              <div><dt className="text-xs text-mute">{t("الكمية المتوقعة", "Expected quantity")}</dt><dd className="font-semibold tabular-nums">{r.quantity_min ? `${formatNumber(r.quantity_min, locale)} – ${formatNumber(r.quantity_max ?? r.quantity_min, locale)}` : formatNumber(r.estimated_quantity, locale)}</dd></div>
+              <div><dt className="text-xs text-mute">{dict.bulk.preferredColor}</dt><dd className="font-semibold">{r.preferred_color ?? "—"}</dd></div>
               <div><dt className="text-xs text-mute">{t("السعر المقترح للقطعة (حسب القواعد)", "Suggested unit price (rules)")}</dt><dd>{unit ? formatIQD(unit as number, locale) : "—"}</dd></div>
               <div className="sm:col-span-2"><dt className="text-xs text-mute">{dict.bulk.sizes}</dt><dd className="flex flex-wrap gap-2">{sizes.length ? sizes.map(([s, q]) => <Pill key={s}>{s}: {q}</Pill>) : "—"}</dd></div>
               <div className="sm:col-span-2"><dt className="text-xs text-mute">{dict.bulk.printing}</dt><dd className="whitespace-pre-line">{r.printing_requirements ?? "—"}</dd></div>
@@ -81,10 +88,24 @@ export default async function AdminBulkDetail({ params }: { params: Promise<{ lo
         <Card title={t("المتابعة", "Follow-up")}>
           <AdminForm action={updateBulkRequest} className="space-y-3">
             <input type="hidden" name="id" value={id} />
-            <Select name="status" label={t("الحالة", "Status")} defaultValue={r.status === "converted" ? "approved" : r.status} options={["new", "contacted", "quoted", "approved", "rejected"].map((s) => ({ value: s, label: s }))} />
+            <Select name="status" label={t("الحالة", "Status")} defaultValue={r.status === "converted" ? "approved" : r.status} options={["new", "contacted", "quoted", "approved", "rejected"].map((s) => ({ value: s, label: label[s]! }))} />
+            <div className="grid grid-cols-2 gap-3">
+              <Input name="quoted_unit_price" type="number" min={0} step={250} inputMode="numeric" label={t("سعر القطعة (د.ع)", "Price per piece (IQD)")} defaultValue={r.quoted_unit_price ?? ""} />
+              <Input name="quoted_quantity" type="number" min={1} inputMode="numeric" label={t("الكمية", "Quantity")} defaultValue={r.quoted_quantity ?? r.quantity_max ?? r.estimated_quantity} />
+            </div>
+            {quotedTotal != null && <p className="rounded-xl bg-bone p-3 text-sm">{t("المجموع:", "Total:")} <b className="tabular-nums">{formatIQD(quotedTotal, locale)}</b></p>}
             <Textarea name="admin_notes" label={t("ملاحظات داخلية", "Internal notes")} defaultValue={r.admin_notes ?? ""} rows={5} />
             <Submit>{t("حفظ", "Save")}</Submit>
           </AdminForm>
+          <a href={wa} target="_blank" rel="noopener noreferrer" className="btn btn-outline mt-4 w-full"><MessageCircle className="size-4" /> {quotedTotal != null ? t("أرسل العرض على الواتساب", "Send the quote on WhatsApp") : t("راسل على الواتساب", "Message on WhatsApp")}</a>
+          {r.status === "approved" && quotedTotal != null && (
+            <AdminForm action={convertRequestToOrder} className="mt-3">
+              <input type="hidden" name="id" value={id} />
+              <input type="hidden" name="locale" value={locale} />
+              <Submit variant="accent" className="w-full">{t("تحويل إلى طلب", "Convert to order")}</Submit>
+            </AdminForm>
+          )}
+          {r.status === "approved" && quotedTotal == null && <p className="mt-3 text-xs text-mute">{t("سجّل سعر القطعة حتى تگدر تحوّله لطلب.", "Enter the price per piece to convert it into an order.")}</p>}
         </Card>
       </div>
     </div>

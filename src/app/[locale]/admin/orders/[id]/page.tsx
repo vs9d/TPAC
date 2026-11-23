@@ -10,6 +10,7 @@ import { signedUrls } from "@/lib/storage";
 import { PageHeader, Card, Pill, STATUS_TONE } from "@/components/admin/ui";
 import { AdminForm, Select, Textarea, Input, Submit } from "@/components/admin/form";
 import { updateOrderStatus, addOrderNote, updateOrderDetails } from "@/lib/actions/admin/orders";
+import { setOrderWhatsAppOptIn, sendOrderWhatsApp } from "@/lib/actions/admin/whatsapp";
 import { nextStatuses } from "@/lib/order-status";
 import { groupDesigns, optionNames, optionList, previewPaths, type DesignRow } from "@/lib/design-admin";
 import { formatIQD, formatDate } from "@/lib/format";
@@ -28,11 +29,13 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ l
   const supabase = await createClient();
   const { data: order } = await supabase.from("orders").select("*").eq("id", id).maybeSingle<Order>();
   if (!order) notFound();
-  const [{ data: items }, { data: history }, { data: notes }] = await Promise.all([
+  const [{ data: items }, { data: history }, { data: notes }, { data: waLog }] = await Promise.all([
     supabase.from("order_items").select("*").eq("order_id", id).returns<OrderItem[]>(),
     supabase.from("order_status_history").select("*").eq("order_id", id).order("created_at").returns<StatusHistory[]>(),
     supabase.from("order_notes").select("id, body, created_at, author_id").eq("order_id", id).order("created_at", { ascending: false }),
+    supabase.from("notifications").select("id, event, status, provider_status, error, created_at").eq("order_id", id).eq("channel", "whatsapp").order("created_at", { ascending: false }).limit(20),
   ]);
+  const optIn = (order as Order & { whatsapp_opt_in?: boolean }).whatsapp_opt_in ?? false;
   const authorIds = [...new Set((notes ?? []).map((n) => n.author_id).filter(Boolean))];
   const { data: authors } = authorIds.length ? await supabase.from("customer_profiles").select("id, full_name").in("id", authorIds) : { data: [] };
   const authorName = new Map((authors ?? []).map((a) => [a.id, a.full_name as string | null]));
@@ -179,6 +182,31 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ l
               <Select name="payment_status" label={t("حالة الدفع", "Payment status")} defaultValue={order.payment_status} options={["unpaid", "pending", "paid", "refunded", "failed"].map((v) => ({ value: v, label: v }))} />
               <Submit variant="outline">{t("حفظ", "Save")}</Submit>
             </AdminForm>
+          </Card>
+
+          <Card title={t("إشعارات الواتساب", "WhatsApp updates")}>
+            <AdminForm action={setOrderWhatsAppOptIn} className="flex flex-wrap items-center justify-between gap-2">
+              <input type="hidden" name="order_id" value={order.id} />
+              <input type="hidden" name="whatsapp_opt_in" value={optIn ? "" : "1"} />
+              <span className="text-sm">{optIn ? t("الزبون موافق على رسائل الواتساب ✅", "Customer opted in ✅") : t("الزبون ما وافق على رسائل الواتساب", "Customer has not opted in")}</span>
+              <button className="btn btn-outline btn-sm">{optIn ? t("إلغاء الموافقة", "Remove opt-in") : t("وافق بالتلفون", "Agreed by phone")}</button>
+            </AdminForm>
+            {optIn && (
+              <AdminForm action={sendOrderWhatsApp} className="mt-3">
+                <input type="hidden" name="order_id" value={order.id} />
+                <Submit variant="outline"><MessageCircle className="size-4" /> {t("أرسل رسالة الحالة الحالية", "Send the current status message")}</Submit>
+              </AdminForm>
+            )}
+            {!!waLog?.length && (
+              <ul className="mt-4 space-y-2 text-xs">
+                {waLog.map((n) => (
+                  <li key={n.id} className="flex flex-wrap items-center justify-between gap-2 border-s-2 border-pine ps-3">
+                    <span>{n.event.replace("order.", "")} · {formatDate(n.created_at, locale, true)}{n.error && <span className="block text-danger" dir="ltr">{n.error}</span>}</span>
+                    <Pill tone={n.status === "failed" ? "bad" : n.status === "pending" ? "warn" : n.status === "skipped" ? "neutral" : "good"}>{n.status === "sent" ? (n.provider_status === "read" ? t("مقروءة", "Read") : n.provider_status === "delivered" ? t("وصلت", "Delivered") : t("انرسلت", "Sent")) : n.status === "pending" ? t("بالانتظار", "Pending") : n.status === "failed" ? t("فشل", "Failed") : t("ما انرسلت", "Not sent")}</Pill>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
 
           <Card title={t("ملاحظات داخلية", "Internal notes")}>

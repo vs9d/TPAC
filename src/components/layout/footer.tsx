@@ -50,6 +50,7 @@ export function Footer({ locale, dict, settings, categories }: { locale: Locale;
             <li><Link href={L("/reviews")} className="hover:text-amber">{dict.reviews.navLabel}</Link></li>
             <li><Link href={L("/design")} className="hover:text-amber">{dict.nav.customDesign}</Link></li>
             <li><Link href={L("/bulk")} className="hover:text-amber">{dict.nav.bulk}</Link></li>
+            <li><Link href={L("/portfolio")} className="hover:text-amber">{locale === "ar" ? "أعمالنا" : "Our work"}</Link></li>
             <li><Link href={L("/pages/privacy")} className="hover:text-amber">{dict.footer.privacy}</Link></li>
             <li><Link href={L("/pages/terms")} className="hover:text-amber">{dict.footer.terms}</Link></li>
           </ul>

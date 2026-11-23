@@ -4,6 +4,7 @@ import { formatIQD } from "@/lib/format";
 import { publicEnv } from "@/lib/env";
 import { sendEmail, emailConfigured } from "./email";
 import { sendWhatsAppTemplate, whatsappConfigured } from "./whatsapp";
+import { enqueueOrderWhatsApp, processWhatsAppQueue } from "./whatsapp-queue";
 import type { Order, SiteSettings } from "@/lib/types";
 
 type Channel = "email" | "whatsapp";
@@ -67,6 +68,7 @@ async function dispatch(msg: Message): Promise<void> {
       await sendEmail({ to: msg.recipient, subject: msg.title, text: `${msg.body}${msg.link ? `\n\n${msg.link}` : ""}` });
     } else {
       await sendWhatsAppTemplate({ to: msg.recipient, params: msg.params ?? [msg.title, msg.body] });
+      // (admin alerts use the general template)
     }
     await db.from("notifications").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", row.id);
   } catch (e) {
@@ -123,10 +125,9 @@ export async function notifyOrder(orderId: string, event: "created" | "status_ch
       if (settings.customer_email && order.email) {
         tasks.push(dispatch({ audience: "customer", channel: "email", event: ev, recipient: order.email, title, body, link: trackUrl, orderId, userId: order.user_id }));
       }
-      if (settings.customer_whatsapp) {
-        tasks.push(dispatch({ audience: "customer", channel: "whatsapp", event: ev, recipient: order.phone, title, body, orderId, userId: order.user_id, params: [order.customer_name, order.order_number, status[l]] }));
-      }
     }
+    // WhatsApp: own queue (opt-in, one message per status, retries, editable templates) — see whatsapp-queue.ts
+    tasks.push(enqueueOrderWhatsApp(orderId, order.status).then(() => processWhatsAppQueue(10)).then(() => undefined));
 
     if (event === "created" && settings.admin_new_order) {
       const admin = adminRecipients(settings);
