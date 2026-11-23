@@ -27,7 +27,11 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
     for (const v of product.product_variants) if (v.color) m.set(v.color.id, v.color);
     return [...m.values()].sort((a, b) => a.sort_order - b.sort_order);
   }, [product]);
-  const [colorId, setColorId] = useState<string | null>(colors[0]?.id ?? null);
+  // the page opens on the product's cover colour (the colour of its first photo, chosen by the admin)
+  const [colorId, setColorId] = useState<string | null>(() => {
+    const cover = product.product_images.find((im) => im.color_id && colors.some((c) => c.id === im.color_id))?.color_id;
+    return cover ?? colors[0]?.id ?? null;
+  });
   const [size, setSize] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
   const [guide, setGuide] = useState(false);
@@ -246,6 +250,9 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
                 );
               })}
             </div>
+            <Link href={`/${locale}/size-finder?product=${garment === "hoodie" || garment === "sweatshirt" ? garment : "tshirt"}`} className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-pine hover:underline">
+              <Ruler className="size-4" /> {locale === "ar" ? "ما تعرف قياسك؟ اعرفه بثواني من طولك ووزنك" : "Not sure? Find your size from your height and weight"}
+            </Link>
             <p className="mt-3 h-5 text-sm" aria-live="polite">
               {variant &&
                 (stock <= 0 ? (

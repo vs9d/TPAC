@@ -7,7 +7,7 @@ import { adminT } from "@/lib/admin-i18n";
 import { AdminForm, Input, Textarea, Select, Checkbox, Submit, Field } from "./form";
 import { ImagePicker } from "./image-picker";
 import { saveProduct } from "@/lib/actions/admin/products";
-import { slugify, TEXT_PRESETS } from "@/lib/product-tools";
+import { DESCRIPTION_PRESETS, slugify, TEXT_PRESETS } from "@/lib/product-tools";
 import { toast } from "@/components/ui/toast";
 import type { Category, Collection, Color, Product, Size } from "@/lib/types";
 import type { ProductTypeRow } from "@/lib/print-config";
@@ -160,7 +160,25 @@ export function ProductForm({ product, categories, collections, selectedCollecti
             hint={L("اختياري — يُستخدم العربي إذا تُرك فارغاً، ومنه يُكتب الرابط", "Optional — falls back to the Arabic title; the URL is made from it")}
             onChange={(e) => { if (creating && !slugTouched.current) setValue("slug", slugify(e.target.value)); }}
           />
-          <Textarea name="description_ar" label={L("الوصف", "Description")} defaultValue={product?.description_ar ?? ""} rows={5} dir="rtl" placeholder={L("القماش، القَصّة، الطباعة، ونصيحة المقاس…", "Fabric, fit, print, sizing tip…")} />
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-mute">{L("وصف مقترح:", "Suggested description:")}</span>
+            {[...DESCRIPTION_PRESETS].sort((a, b) => Number((b.types as readonly string[]).includes(printType?.code ?? "")) - Number((a.types as readonly string[]).includes(printType?.code ?? ""))).map((p) => (
+              <button
+                type="button"
+                key={p.key}
+                onClick={() => {
+                  const cur = (document.getElementById("description_ar") as HTMLTextAreaElement | null)?.value.trim();
+                  if (cur && cur !== p.ar && !confirm(L("يستبدل الوصف الحالي؟", "Replace the current description?"))) return;
+                  setValue("description_ar", p.ar);
+                  setValue("description_en", p.en);
+                }}
+                className={(p.types as readonly string[]).includes(printType?.code ?? "") ? "chip h-9 border-pine text-xs font-bold" : "chip h-9 text-xs"}
+              >
+                {locale === "ar" ? p.label_ar : p.label_en}
+              </button>
+            ))}
+          </div>
+          <Textarea name="description_ar" label={L("الوصف", "Description")} defaultValue={product?.description_ar ?? ""} rows={8} dir="rtl" placeholder={L("القماش، القَصّة، الطباعة، ونصيحة المقاس…", "Fabric, fit, print, sizing tip…")} />
           <Textarea name="description_en" label={L("الوصف بالإنجليزي", "English description")} defaultValue={product?.description_en ?? ""} rows={3} dir="ltr" />
         </div>
 

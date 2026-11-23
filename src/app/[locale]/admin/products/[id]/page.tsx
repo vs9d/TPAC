@@ -61,7 +61,7 @@ export default async function EditProduct({ params }: { params: Promise<{ locale
       <ProductForm product={product} categories={(categories as Category[]) ?? []} collections={(collections as Collection[]) ?? []} selectedCollections={(pc ?? []).map((x) => x.collection_id)} sizes={(sizes as Size[]) ?? []} colors={(colors as Color[]) ?? []} />
       {types.length > 0 && (
         <Card title={t("الطباعة والموك أب (التصميم الرسمي)", "Printing & mockup (official artwork)")}>
-          <ProductPrintingPanel productId={id} typeId={product.product_type_id ?? null} printEnabled={product.print_enabled ?? true} disabledAreas={product.disabled_print_area_ids ?? []} designs={((designRows as ProductDesignRow[]) ?? []).map(normDesign)} types={types} colors={(colors as Color[]) ?? []} variantColorIds={variantColorIds} />
+          <ProductPrintingPanel productId={id} typeId={product.product_type_id ?? null} printEnabled={product.print_enabled ?? true} disabledAreas={product.disabled_print_area_ids ?? []} designs={((designRows as ProductDesignRow[]) ?? []).map(normDesign)} types={types} colors={(colors as Color[]) ?? []} variantColorIds={variantColorIds} coverColorId={((images as ProductImage[]) ?? []).find((im) => im.color_id)?.color_id ?? null} />
         </Card>
       )}
       {sourceType && (

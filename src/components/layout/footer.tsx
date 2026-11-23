@@ -37,6 +37,7 @@ export function Footer({ locale, dict, settings, categories }: { locale: Locale;
             <li><Link href={L("/track")} className="hover:text-amber">{dict.nav.track}</Link></li>
             <li><Link href={L("/pages/shipping")} className="hover:text-amber">{dict.footer.shipping}</Link></li>
             <li><Link href={L("/pages/returns")} className="hover:text-amber">{dict.footer.returns}</Link></li>
+            <li><Link href={L("/size-finder")} className="hover:text-amber">{locale === "ar" ? "اعرف قياسك" : "Find your size"}</Link></li>
             <li><Link href={L("/pages/size-guide")} className="hover:text-amber">{dict.footer.sizeGuide}</Link></li>
             <li><Link href={L("/pages/faq")} className="hover:text-amber">{dict.footer.faq}</Link></li>
             <li><Link href={L("/contact")} className="hover:text-amber">{dict.nav.contact}</Link></li>

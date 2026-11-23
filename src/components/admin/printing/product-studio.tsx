@@ -1,6 +1,6 @@
 "use client";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { AlignCenterHorizontal, AlignCenterVertical, ArrowUpToLine, Copy, Eraser, Expand, ImagePlus, Loader2, Move, Paintbrush, Plus, RefreshCw, ScanLine, Trash2, Undo2 } from "lucide-react";
+import { AlignCenterHorizontal, AlignCenterVertical, ArrowUpToLine, Copy, Eraser, Expand, ImagePlus, Loader2, Move, Paintbrush, Plus, RefreshCw, ScanLine, Star, Trash2, Undo2 } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { adminT } from "@/lib/admin-i18n";
 import { toast } from "@/components/ui/toast";
@@ -20,6 +20,8 @@ export interface DesignDraft {
 type Draft = DesignDraft & { key: string };
 export interface GeneratedImage { url: string; storage_path: string; color_id: string | null; view_id: string }
 export interface StudioHandle {
+  /** the colour chosen as the product's face (its photos come first) */
+  coverColor: () => string | null;
   designs: () => DesignDraft[];
   disabledAreas: () => string[];
   printEnabled: () => boolean;
@@ -39,8 +41,8 @@ const strip = ({ key: _k, ...d }: Draft): DesignDraft => { void _k; return d; };
  */
 export const ProductStudio = forwardRef<StudioHandle, {
   type: ProductTypeRow; colors: Color[]; productId: string; previewColorIds?: string[];
-  initialDesigns?: ProductDesignRow[]; initialDisabled?: string[]; initialEnabled?: boolean;
-}>(function ProductStudio({ type, colors, productId, previewColorIds, initialDesigns = [], initialDisabled = [], initialEnabled = true }, ref) {
+  initialDesigns?: ProductDesignRow[]; initialDisabled?: string[]; initialEnabled?: boolean; initialCover?: string | null;
+}>(function ProductStudio({ type, colors, productId, previewColorIds, initialDesigns = [], initialDisabled = [], initialEnabled = true, initialCover = null }, ref) {
   const { locale } = useI18n();
   const t = adminT(locale);
   const views = useMemo(() => (type.product_type_views ?? []).filter((v) => v.is_active), [type]);
@@ -76,6 +78,8 @@ export const ProductStudio = forwardRef<StudioHandle, {
     return list.length ? list : colors.slice(0, 1);
   }, [colors, previewColorIds, type.default_color_ids]);
   const [colorId, setColorId] = useState(palette[0]?.id ?? "");
+  // the colour shown first in the store (the product's "face"); its photos are generated first
+  const [coverId, setCoverId] = useState<string>(initialCover ?? "");
   const color = colors.find((c) => c.id === colorId) ?? palette[0] ?? null;
   useEffect(() => {
     if (!palette.some((c) => c.id === colorId)) setColorId(palette[0]?.id ?? "");
@@ -110,6 +114,7 @@ export const ProductStudio = forwardRef<StudioHandle, {
   };
 
   useImperativeHandle(ref, () => ({
+    coverColor: () => coverId || null,
     designs: () => designs.filter((d) => !disabled.includes(d.area_id)).map(strip),
     disabledAreas: () => disabled,
     printEnabled: () => enabled,
@@ -118,7 +123,8 @@ export const ProductStudio = forwardRef<StudioHandle, {
       // a "front + back in one photo" view becomes the cover photo
       const byView = views.filter((v) => active.some((d) => areaById(d.area_id)?.v.id === v.id)).sort((a, b) => Number(b.code === "combo") - Number(a.code === "combo"));
       // one photo per chosen colour; with no colour chosen, one photo (drawn in the first colour) for all colours
-      const cols: { c: Color | null; store: string | null }[] = colorIds.length ? colors.filter((c) => colorIds.includes(c.id)).slice(0, 6).map((c) => ({ c, store: c.id })) : [{ c: palette[0] ?? null, store: null }];
+      const chosen = colors.filter((c) => colorIds.includes(c.id)).sort((a, b) => Number(b.id === coverId) - Number(a.id === coverId));
+      const cols: { c: Color | null; store: string | null }[] = chosen.length ? chosen.slice(0, 6).map((c) => ({ c, store: c.id })) : [{ c: colors.find((c) => c.id === coverId) ?? palette[0] ?? null, store: null }];
       const perColour = Math.max(1, Math.min(5, Math.floor(24 / cols.length)));
       const jobs = cols.flatMap(({ c, store }) => byView.slice(0, perColour).map((v) => ({ c, store, v })));
       const out: GeneratedImage[] = [];
@@ -135,7 +141,7 @@ export const ProductStudio = forwardRef<StudioHandle, {
       }
       return out;
     },
-  }), [designs, disabled, enabled, views, colors, palette, type.garment_shape, allAreas]);
+  }), [designs, disabled, enabled, views, colors, palette, type.garment_shape, allAreas, coverId]);
 
   if (!view) return <p className="text-sm text-mute">{t("هذا النوع بلا زوايا — أضفها من «أنواع المنتجات».", "This type has no views — add them under Product types.")}</p>;
   const aspect = viewAspect(view);
@@ -268,8 +274,17 @@ export const ProductStudio = forwardRef<StudioHandle, {
           <button type="button" role="tab" aria-selected={mode === "free"} onClick={() => { setMode("free"); setSelKey(""); }} className={cn("flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition", mode === "free" ? "bg-pine text-white dark:text-night" : "hover:bg-bone")}><Move className="size-4" /> {t("حر — أي مكان", "Free — anywhere")}</button>
           <button type="button" role="tab" aria-selected={mode === "areas"} onClick={() => setMode("areas")} className={cn("flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition", mode === "areas" ? "bg-pine text-white dark:text-night" : "hover:bg-bone")}><ScanLine className="size-4" /> {t("مناطق الطباعة", "Print areas")}</button>
         </div>
-        <div className="flex items-center gap-1.5">
-          {palette.map((c) => <button key={c.id} type="button" onClick={() => setColorId(c.id)} aria-label={locale === "ar" ? c.name_ar : c.name_en} aria-pressed={c.id === color?.id} className={cn("size-7 rounded-full border", c.id === color?.id ? "ring-2 ring-pine ring-offset-2" : "border-ink/20")} style={{ background: c.hex }} />)}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {palette.map((c) => (
+            <button key={c.id} type="button" onClick={() => setColorId(c.id)} aria-label={locale === "ar" ? c.name_ar : c.name_en} aria-pressed={c.id === color?.id} className={cn("relative size-7 rounded-full border", c.id === color?.id ? "ring-2 ring-pine ring-offset-2" : "border-ink/20")} style={{ background: c.hex }}>
+              {c.id === (coverId || palette[0]?.id) && <Star className="absolute -end-1.5 -top-1.5 size-3.5 fill-amber text-amber" aria-hidden />}
+            </button>
+          ))}
+          {color && (
+            <button type="button" onClick={() => setCoverId(color.id)} aria-pressed={color.id === (coverId || palette[0]?.id)} className={cn("ms-1 flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-bold transition", color.id === (coverId || palette[0]?.id) ? "border-amber bg-amber/10 text-ink" : "border-line hover:border-ink")}>
+              <Star className={cn("size-3.5", color.id === (coverId || palette[0]?.id) && "fill-amber text-amber")} /> {color.id === (coverId || palette[0]?.id) ? t("واجهة المنتج", "Product face") : t("اجعله واجهة المنتج", "Make it the product face")}
+            </button>
+          )}
         </div>
       </div>
 

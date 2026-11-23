@@ -126,7 +126,7 @@ export const reviewSchema = z.object({
 });
 
 export const BULK_PRODUCT_TYPES = ["tshirt", "oversized", "hoodie", "sweatshirt", "longsleeve", "polo", "other"] as const;
-export const BULK_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL"] as const;
+export const BULK_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"] as const;
 
 export const bulkRequestSchema = z.object({
   organization_name: requiredText(200),

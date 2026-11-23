@@ -1,13 +1,16 @@
 "use client";
 import { useI18n } from "@/components/i18n-provider";
 
+import { SIZE_CHARTS, type SizeRow } from "@/lib/size-chart";
+
+const rows = (list: SizeRow[]): Record<string, [number, number, number]> => Object.fromEntries(list.map((r) => [r.size, [r.width, r.length, r.sleeve]]));
 // Garment measurements in cm: [chest width (flat), body length, sleeve length]
 const CHARTS: Record<string, Record<string, [number, number, number]>> = {
-  tshirt: { S: [49, 69, 20], M: [52, 72, 21], L: [55, 74, 22], XL: [58, 76, 23], XXL: [61, 78, 24] },
-  oversized: { S: [56, 70, 23], M: [59, 72, 24], L: [62, 74, 25], XL: [65, 76, 26], XXL: [68, 78, 27] },
-  longsleeve: { S: [49, 69, 61], M: [52, 72, 62], L: [55, 74, 63], XL: [58, 76, 64], XXL: [61, 78, 65] },
-  hoodie: { S: [54, 68, 62], M: [57, 70, 63], L: [60, 72, 64], XL: [63, 74, 65], XXL: [66, 76, 66] },
-  sweatshirt: { S: [53, 66, 61], M: [56, 68, 62], L: [59, 70, 63], XL: [62, 72, 64], XXL: [65, 74, 65] },
+  tshirt: rows(SIZE_CHARTS.tshirt),
+  oversized: { S: [56, 70, 23], M: [59, 72, 24], L: [62, 74, 25], XL: [65, 76, 26], XXL: [68, 78, 27], "3XL": [71, 80, 28], "4XL": [74, 82, 29], "5XL": [77, 84, 30] },
+  longsleeve: { S: [49, 69, 61], M: [52, 72, 62], L: [55, 74, 63], XL: [58, 76, 64], XXL: [61, 78, 65], "3XL": [64, 80, 66], "4XL": [67, 82, 67], "5XL": [70, 84, 68] },
+  hoodie: rows(SIZE_CHARTS.hoodie),
+  sweatshirt: rows(SIZE_CHARTS.sweatshirt),
 };
 
 export function SizeGuideTable({ garment }: { garment: string }) {

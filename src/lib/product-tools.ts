@@ -92,6 +92,80 @@ export const IMPORT_TEMPLATE =
     .join("\n") +
   "\n";
 
+/** Ready descriptions the admin can drop into a product (hoodie, t-shirt …); matched to the product type by code. */
+export const DESCRIPTION_PRESETS = [
+  {
+    key: "hoodie", types: ["hoodie", "sweatshirt"], label_ar: "وصف هودي", label_en: "Hoodie description",
+    ar: `دفء، راحة، وجودة بتفاصيل تستحقها!
+
+مصنوع من قماش قطني شتوي عالي الجودة، بخامة مريحة ودافئة تناسب أجواء الشتاء في العراق، مع قصة توفر لك الراحة بالاستخدام اليومي.
+
+ويتميز بطباعة فائقة الدقة والوضوح، بألوان وتفاصيل تحافظ على جمالية التصميم.
+
+المميزات:
+
+• قماش قطني شتوي عالي الجودة.
+• دافئ ومناسب لأجواء الشتاء العراقي.
+• ملمس مريح للاستخدام اليومي.
+• طباعة عالية الدقة بتفاصيل واضحة.
+• جودة واهتمام بأدق التفاصيل.
+
+TPAC — الحلو يلبس حلو.`,
+    en: `Warmth, comfort and quality in every detail!
+
+Made from high-quality winter cotton fabric — soft, warm and made for Iraqi winters, with a cut that keeps you comfortable every day.
+
+Printed in ultra-high definition, with colours and details that keep the design looking its best.
+
+Features:
+
+• High-quality winter cotton fabric.
+• Warm and made for the Iraqi winter.
+• Comfortable feel for everyday wear.
+• High-definition print with crisp details.
+• Quality and care in every detail.
+
+TPAC — الحلو يلبس حلو.`,
+  },
+  {
+    key: "tshirt", types: ["tshirt", "oversized", "longsleeve"], label_ar: "وصف تيشيرت", label_en: "T-shirt description",
+    ar: `تيشيرت TPAC 👕
+
+بساطة، راحة، وجودة بكل تفصيلة!
+
+تيشيرت مصنوع من قماش قطني عالي الجودة، ناعم ومريح على الجسم، مناسب للاستخدام اليومي ويوفر لك الراحة طوال اليوم.
+
+يتميز بطباعة عالية الدقة والوضوح، مع تفاصيل وألوان تبرز جمال التصميم وتمنحه مظهراً مميزاً.
+
+المميزات:
+
+• قماش قطني عالي الجودة.
+• ملمس ناعم ومريح.
+• مناسب للاستخدام اليومي.
+• طباعة فائقة الدقة والوضوح.
+• جودة واهتمام بأدق التفاصيل.
+
+TPAC — الحلو يلبس حلو.`,
+    en: `TPAC T-shirt 👕
+
+Simple, comfortable, quality in every detail!
+
+Made from high-quality cotton — soft and comfortable on the skin, made for everyday wear and comfortable all day long.
+
+Printed in high definition, with details and colours that bring out the design and give it a standout look.
+
+Features:
+
+• High-quality cotton fabric.
+• Soft, comfortable feel.
+• Made for everyday wear.
+• Ultra-high-definition print.
+• Quality and care in every detail.
+
+TPAC — الحلو يلبس حلو.`,
+  },
+] as const;
+
 export const TEXT_PRESETS = {
   material: [
     { key: "cotton240", label_ar: "قطن ثقيل ٢٤٠غ", label_en: "Heavy cotton 240 GSM", ar: "قطن ١٠٠٪ ثقيل بوزن ٢٤٠ غرام، ياقة مضلّعة سميكة، ومعالج ضد الانكماش.", en: "100% heavyweight cotton, 240 GSM, thick ribbed collar, pre-shrunk." },

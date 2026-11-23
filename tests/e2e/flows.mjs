@@ -946,6 +946,63 @@ await flow("t-shirt photos + hoodie front-and-back photo: studio sleeves, copy a
   assert.equal(cover.code, "combo", "the front + back photo is the cover");
 });
 
+await flow("size finder + suggested description + product face colour + sizes S→5XL", async (page) => {
+  // customer: height + weight + fit → TPAC size from the chart
+  await page.goto(`${BASE}/ar/size-finder`);
+  await page.getByLabel("الطول (سم)").fill("175");
+  await page.getByLabel("الوزن (كغ)").fill("75");
+  await page.getByRole("button", { name: "اعرف قياسي" }).click();
+  assert.equal((await page.getByTestId("size-result").innerText()).trim(), "M");
+  await page.getByRole("radio", { name: /واسع/ }).click();
+  assert.equal((await page.getByTestId("size-result").innerText()).trim(), "L", "a looser fit goes a size up");
+  await page.getByRole("radio", { name: /أطفال/ }).click();
+  await page.getByLabel("الطول (سم)").fill("104");
+  await page.getByLabel("الوزن (كغ)").fill("17");
+  await page.getByRole("radio", { name: /طبيعي/ }).click();
+  await page.getByRole("button", { name: "اعرف قياسي" }).click();
+  assert.equal((await page.getByTestId("size-result").innerText()).trim(), "4 سنوات");
+  await page.screenshot({ path: `${SHOTS}/size-finder.png`, fullPage: true });
+
+  // admin: S→5XL, the hoodie description in one tap, white as the product's face
+  await db.query(readFileSync(new URL("../../supabase/add-sizes-5xl.sql", import.meta.url), "utf8"));
+  const email = `face${Date.now()}@thetpac.com`;
+  await page.goto(`${BASE}/en/account/register`);
+  await page.fill("#full_name", "Face Admin");
+  await page.fill("#email", email);
+  await page.fill("#phone", "07700000096");
+  await page.fill("#password", "admin-pass-2026");
+  await page.fill("#confirm", "admin-pass-2026");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.waitForURL(/account$/);
+  await db.query("update customer_profiles set role = 'admin' where email = $1", [email]);
+  const hoodie = (await one("select id from product_types where code = 'hoodie'")).id;
+  await page.goto(`${BASE}/en/admin/products/new?type=${hoodie}`);
+  for (const sz of ["S", "3XL", "4XL", "5XL"]) assert.ok(await page.locator(`input[name=qs_sizes][value="${sz}"]`).isChecked(), `${sz} on by default`);
+  await page.getByRole("button", { name: "Hoodie description" }).click();
+  assert.match(await page.inputValue("#description_ar"), /^دفء، راحة، وجودة/);
+  assert.match(await page.inputValue("#description_en"), /TPAC — الحلو يلبس حلو\.$/);
+  await page.locator("input[accept='image/png,image/jpeg,image/webp,image/avif']").setInputFiles(`${SHOTS}/art.png`);
+  await page.getByText(/Print size: (≈ )?\d/).waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: "White", exact: true }).click();
+  await page.getByRole("button", { name: "Make it the product face" }).click();
+  await page.getByRole("button", { name: "Product face" }).waitFor();
+  await page.fill("#name_ar", "هودي الواجهة البيضاء");
+  await openMore(page);
+  await page.fill("#name_en", "E2E White Face Hoodie");
+  await page.getByRole("button", { name: "Create product", exact: true }).click();
+  await page.waitForURL(/admin\/products\/[0-9a-f-]{36}$/, { timeout: 60000 });
+  const pid = page.url().split("/").pop();
+  const first = await one("select c.code from product_images i join colors c on c.id = i.color_id where i.product_id = $1 order by i.sort_order limit 1", [pid]);
+  assert.equal(first.code, "white", "white photos come first");
+  const v = await one("select count(distinct size_code)::int sizes, max(size_code) filter (where size_code = '5XL') x from product_variants where product_id = $1", [pid]);
+  assert.equal(v.sizes, 8);
+  const p = await one("select slug, description_ar from products where id = $1", [pid]);
+  assert.match(p.description_ar, /المميزات:/);
+  await page.goto(`${BASE}/en/product/${p.slug}`);
+  await page.getByText("Colour: White").waitFor();
+  await page.getByRole("link", { name: /Find your size from your height/ }).waitFor();
+});
+
 await flow("collections: admin uploads a cover photo from the device → shown in the store", async (page) => {
   const email = `col${Date.now()}@thetpac.com`;
   await page.goto(`${BASE}/en/account/register`);

@@ -11,9 +11,9 @@ import type { Color } from "@/lib/types";
 import { ProductStudio, type StudioHandle } from "./product-studio";
 
 /** Printing tab of an existing product: template, official artwork, enabled areas; saving regenerates the photos. */
-export function ProductPrintingPanel({ productId, typeId, printEnabled, disabledAreas, designs, types, colors, variantColorIds }: {
+export function ProductPrintingPanel({ productId, typeId, printEnabled, disabledAreas, designs, types, colors, variantColorIds, coverColorId = null }: {
   productId: string; typeId: string | null; printEnabled: boolean; disabledAreas: string[]; designs: ProductDesignRow[];
-  types: ProductTypeRow[]; colors: Color[]; variantColorIds: string[];
+  types: ProductTypeRow[]; colors: Color[]; variantColorIds: string[]; coverColorId?: string | null;
 }) {
   const { locale } = useI18n();
   const t = adminT(locale);
@@ -63,7 +63,7 @@ export function ProductPrintingPanel({ productId, typeId, printEnabled, disabled
         <button type="button" onClick={save} disabled={pending} className="btn btn-brand h-11">{pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} {t("حفظ الطباعة والصور", "Save printing & photos")}</button>
       </div>
       {type ? (
-        <ProductStudio key={type.id} ref={studio} type={type} colors={colors} productId={productId} previewColorIds={variantColorIds} initialDesigns={type.id === typeId ? designs : []} initialDisabled={type.id === typeId ? disabledAreas : []} initialEnabled={printEnabled} />
+        <ProductStudio key={type.id} ref={studio} type={type} colors={colors} productId={productId} previewColorIds={variantColorIds} initialDesigns={type.id === typeId ? designs : []} initialDisabled={type.id === typeId ? disabledAreas : []} initialEnabled={printEnabled} initialCover={coverColorId} />
       ) : (
         <p className="rounded-2xl bg-bone p-4 text-sm text-mute">{t("هذا المنتج بدون قالب طباعة — صوره هي الصور العادية فقط. اختر نوعاً لوضع التصميم على موك أب.", "This product has no print template — it only shows its regular photos. Choose a type to place artwork on a mockup.")}</p>
       )}

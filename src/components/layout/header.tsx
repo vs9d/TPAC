@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Menu, Search, ShoppingBag, User, X, Heart, Paintbrush, Building2, Star, PackageSearch, LayoutDashboard } from "lucide-react";
+import { ArrowLeft, ArrowRight, Menu, Search, ShoppingBag, User, X, Heart, Paintbrush, Building2, Star, PackageSearch, LayoutDashboard, Ruler } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { useCart, cartCount } from "@/components/cart/store";
 import { Logo } from "@/components/ui/logo";
@@ -57,6 +57,7 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
     { href: L("/design"), label: dict.nav.customDesign, match: "/design", brand: true },
     { href: L("/bulk"), label: dict.nav.bulk, match: "/bulk" },
     { href: L("/reviews"), label: dict.reviews.navLabel, match: "/reviews" },
+    { href: L("/size-finder"), label: locale === "ar" ? "اعرف قياسك" : "Find your size", match: "/size-finder", wide: true },
   ];
   const active = (m: string) => (m === "new=1" ? false : pathname.includes(m));
 
@@ -79,6 +80,7 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
                 aria-current={active(item.match) ? "page" : undefined}
                 className={cn(
                   "rounded-full px-3.5 py-2 text-[0.85rem] font-semibold transition-colors",
+                  "wide" in item && item.wide && "hidden xl:inline-flex",
                   item.brand ? "bg-pine-soft text-pine hover:bg-pine hover:text-white dark:hover:text-night" : "hover:bg-bone",
                   active(item.match) && !item.brand && "bg-bone",
                 )}
@@ -143,6 +145,7 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
                     { href: L("/design"), label: dict.nav.customDesign, icon: Paintbrush, brand: true },
                     { href: L("/bulk"), label: dict.nav.bulk, icon: Building2 },
                     { href: L("/reviews"), label: dict.reviews.navLabel, icon: Star },
+                    { href: L("/size-finder"), label: locale === "ar" ? "اعرف قياسك" : "Find your size", icon: Ruler },
                     { href: L("/track"), label: dict.nav.track, icon: PackageSearch },
                   ].map((item) => (
                     <li key={item.href}>
