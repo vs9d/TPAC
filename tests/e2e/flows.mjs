@@ -146,7 +146,11 @@ await flow("account: register → order → history → reorder → favourites",
   await page.goto(`${BASE}/en/account/favorites`);
   await page.getByText("Essential Hoodie").waitFor();
   // cart persisted to the account
-  const saved = await one("select count(*)::int n from cart_items ci join carts c on c.id = ci.cart_id join auth.users u on u.id = c.user_id where u.email = $1", [email]);
+  let saved = { n: 0 };
+  for (let i = 0; i < 30 && saved.n !== 1; i++) {
+    saved = await one("select count(*)::int n from cart_items ci join carts c on c.id = ci.cart_id join auth.users u on u.id = c.user_id where u.email = $1", [email]);
+    if (saved.n !== 1) await page.waitForTimeout(250);
+  }
   assert.equal(saved.n, 1);
   await page.screenshot({ path: `${SHOTS}/account-favs.png`, fullPage: true });
 });
@@ -896,6 +900,41 @@ await flow("hoodie photos: 5 colours × front / back / both sleeves, sleeve desi
   assert.ok(d.config.previews?.right?.endsWith("/right.jpg"), "sleeve preview stored");
   assert.deepEqual(d.config.areas.sleeve.cm, { width: 8, height: 28 }, "the sleeve's own print size");
   assert.equal((await one("select count(*)::int n from storage.objects where name = $1", [d.config.previews.right])).n, 1);
+});
+
+await flow("collections: admin uploads a cover photo from the device → shown in the store", async (page) => {
+  const email = `col${Date.now()}@thetpac.com`;
+  await page.goto(`${BASE}/en/account/register`);
+  await page.fill("#full_name", "Collections Admin");
+  await page.fill("#email", email);
+  await page.fill("#phone", "07700000098");
+  await page.fill("#password", "admin-pass-2026");
+  await page.fill("#confirm", "admin-pass-2026");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.waitForURL(/account$/);
+  await db.query("update customer_profiles set role = 'admin' where email = $1", [email]);
+  const b64 = await page.evaluate(() => {
+    const c = document.createElement("canvas"); c.width = 2400; c.height = 1500;
+    const x = c.getContext("2d"); x.fillStyle = "#0e1a2b"; x.fillRect(0, 0, 2400, 1500); x.fillStyle = "#E3963C"; x.beginPath(); x.arc(1800, 400, 220, 0, 7); x.fill();
+    return c.toDataURL("image/png").split(",")[1];
+  });
+  const file = `${SHOTS}/collection.png`;
+  writeFileSync(file, Buffer.from(b64, "base64"));
+  const col = await one("select id, slug, name_en from collections order by sort_order limit 1");
+  await page.goto(`${BASE}/en/admin/categories`);
+  const box = page.locator("details").filter({ has: page.locator("summary", { hasText: col.name_en }) });
+  await box.locator("summary").click();
+  await box.getByLabel("Collection image", { exact: true }).setInputFiles(file);
+  await page.getByText("Image uploaded — press Save").waitFor({ timeout: 20000 });
+  await box.getByRole("button", { name: "Save", exact: true }).click();
+  let saved;
+  for (let i = 0; i < 40 && !saved?.startsWith("http"); i++) { await page.waitForTimeout(250); saved = (await one("select image_url from collections where id = $1", [col.id])).image_url; }
+  assert.match(saved ?? "", /\/storage\/v1\/object\/public\/product-images\/collections\/[0-9a-f-]{36}\.jpg$/, "uploaded photo saved on the collection");
+  const obj = await one("select name from storage.objects where name = $1", [saved.split("/product-images/")[1]]);
+  assert.ok(obj, "file stored");
+  await page.goto(`${BASE}/en/collections`);
+  await page.locator(`img[src*="collections%2F"], img[src*="/collections/"]`).first().waitFor({ timeout: 15000 });
+  await page.screenshot({ path: `${SHOTS}/collections-cover.png` });
 });
 
 console.log(results.join("\n"));

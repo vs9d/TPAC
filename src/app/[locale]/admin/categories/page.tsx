@@ -4,6 +4,7 @@ import { adminT } from "@/lib/admin-i18n";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader, Card } from "@/components/admin/ui";
 import { AdminForm, Input, Textarea, Select, Checkbox, Submit } from "@/components/admin/form";
+import { ImageField } from "@/components/admin/image-field";
 import { saveCategory, deleteCategory, saveCollection, deleteCollection } from "@/lib/actions/admin/catalog";
 import type { Category, Collection } from "@/lib/types";
 import { toBaghdadInput } from "@/lib/format";
@@ -23,7 +24,7 @@ export default async function AdminCategories({ params }: { params: Promise<{ lo
         <Input name="name_ar" label={t("الاسم (عربي)", "Name (AR)")} defaultValue={c?.name_ar} required />
         <Input name="name_en" label={t("الاسم (إنجليزي)", "Name (EN)")} defaultValue={c?.name_en} required />
         <Input name="slug" label="Slug" defaultValue={c?.slug} required dir="ltr" />
-        <Input name="image_url" label={t("رابط الصورة", "Image URL")} defaultValue={c?.image_url ?? ""} dir="ltr" className="sm:col-span-2" />
+        <ImageField name="image_url" folder="categories" label={t("صورة الفئة", "Category image")} defaultValue={c?.image_url} className="sm:col-span-2" />
         <Select name="parent_id" label={t("الفئة الأم", "Parent")} defaultValue={c?.parent_id ?? ""} options={[{ value: "", label: "—" }, ...categories.filter((x) => x.id !== c?.id).map((x) => ({ value: x.id, label: locale === "ar" ? x.name_ar : x.name_en }))]} />
         <Textarea name="description_ar" label={t("الوصف (عربي)", "Description (AR)")} defaultValue={c?.description_ar ?? ""} rows={2} />
         <Textarea name="description_en" label={t("الوصف (إنجليزي)", "Description (EN)")} defaultValue={c?.description_en ?? ""} rows={2} />
@@ -41,7 +42,7 @@ export default async function AdminCategories({ params }: { params: Promise<{ lo
         <Input name="name_ar" label={t("الاسم (عربي)", "Name (AR)")} defaultValue={c?.name_ar} required />
         <Input name="name_en" label={t("الاسم (إنجليزي)", "Name (EN)")} defaultValue={c?.name_en} required />
         <Input name="slug" label="Slug" defaultValue={c?.slug} required dir="ltr" />
-        <Input name="image_url" label={t("رابط الصورة", "Image URL")} defaultValue={c?.image_url ?? ""} dir="ltr" className="sm:col-span-3" />
+        <ImageField name="image_url" folder="collections" label={t("صورة المجموعة", "Collection image")} defaultValue={c?.image_url} className="sm:col-span-3" />
         <Textarea name="description_ar" label={t("الوصف (عربي)", "Description (AR)")} defaultValue={c?.description_ar ?? ""} rows={2} />
         <Textarea name="description_en" label={t("الوصف (إنجليزي)", "Description (EN)")} defaultValue={c?.description_en ?? ""} rows={2} />
         <div className="space-y-2">
