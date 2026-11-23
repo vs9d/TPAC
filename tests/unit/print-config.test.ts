@@ -45,3 +45,30 @@ describe("print geometry", () => {
     expect(mockupFor({ ...v, mockup_url: null, color_mockups: {} }, null, null)).toBeNull();
   });
 });
+
+describe("mapDesigns (same artwork on another garment)", async () => {
+  const { mapDesigns } = await import("@/lib/print-config");
+  const view = (id: string, code: string, area: { id: string; code: string; x: number; y: number; width: number; height: number }, w = 600, h = 700) => ({
+    id, code, name_ar: code, name_en: code, mockup_url: null, mockup_path: null, mockup_width: w, mockup_height: h, color_mockups: {}, sort_order: 0, is_active: true,
+    product_print_areas: [{ ...area, view_id: id, name_ar: area.code, name_en: area.code, max_width_cm: 30, max_height_cm: 40, sort_order: 0, is_active: true }],
+  });
+  const type = (id: string, views: ReturnType<typeof view>[]) => ({ id, code: id, name_ar: id, name_en: id, description_ar: null, description_en: null, garment_shape: null, default_price: 0, default_sizes: [], default_color_ids: [], category_id: null, sort_order: 0, is_active: true, product_type_views: views }) as never;
+  const hoodie = type("h", [view("hf", "front", { id: "ha", code: "front", x: 0.3, y: 0.3, width: 0.4, height: 0.2 })]);
+  const tee = type("t", [view("tf", "front", { id: "ta", code: "front", x: 0.25, y: 0.2, width: 0.5, height: 0.5 })]);
+  const design = (x: number, y: number, width: number, height: number) => ({ id: "d", product_id: "p", area_id: "ha", artwork_url: "/a.png", artwork_path: null, artwork_width: 100, artwork_height: 100, x, y, width, height, sort_order: 0 }) as never;
+
+  it("keeps the spot relative to the matching print area", () => {
+    const [m] = mapDesigns(hoodie, [design(0.25, 0.25, 0.5, 0.5)], tee);
+    expect(m!.view.id).toBe("tf");
+    // centre of the hoodie's front area → centre of the tee's front area
+    expect(m!.rect.x + m!.rect.width / 2).toBeCloseTo(0.5, 3);
+    expect(m!.rect.y + m!.rect.height / 2).toBeCloseTo(0.45, 3);
+    // same proportions as before (same mockup size)
+    expect(m!.rect.height / m!.rect.width).toBeCloseTo((0.5 * 0.2) / (0.5 * 0.4), 3);
+  });
+
+  it("skips views the other garment lacks", () => {
+    const back = type("h2", [view("hb", "back", { id: "hba", code: "back", x: 0.3, y: 0.3, width: 0.4, height: 0.4 })]);
+    expect(mapDesigns(back, [{ ...(design(0, 0, 1, 1) as object), area_id: "hba" } as never], tee)).toEqual([]);
+  });
+});

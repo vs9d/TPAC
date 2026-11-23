@@ -13,6 +13,7 @@ import { ConfirmSubmit } from "@/components/admin/form";
 import { DuplicateButton } from "@/components/admin/duplicate-button";
 import { StockGrid } from "@/components/admin/stock-grid";
 import { ProductPrintingPanel } from "@/components/admin/printing/product-printing-panel";
+import { GarmentLinks, type GarmentLink } from "@/components/admin/printing/garment-links";
 import { normDesign, normType, type ProductDesignRow, type ProductTypeRow } from "@/lib/print-config";
 import type { Category, Collection, Color, Product, ProductImage, Size, Variant } from "@/lib/types";
 
@@ -37,6 +38,10 @@ export default async function EditProduct({ params }: { params: Promise<{ locale
     supabase.from("product_designs").select("*").eq("product_id", id).order("sort_order"),
   ]);
   const types = ((typeRows as ProductTypeRow[]) ?? []).map(normType);
+  const group = (product as Product & { design_group?: string | null }).design_group ?? null;
+  const { data: linkRows } = await supabase.from("products").select("id, slug, base_price, is_published, type_id:product_type_id").or(group ? `design_group.eq.${group},id.eq.${group}` : `design_group.eq.${id}`).neq("id", id);
+  const links = ((linkRows as GarmentLink[] | null) ?? []).filter((l) => l.type_id);
+  const sourceType = types.find((x) => x.id === product.product_type_id);
   const variantColorIds = [...new Set(((variants as Variant[]) ?? []).map((v) => v.color_id))];
   return (
     <div className="space-y-6">
@@ -57,6 +62,11 @@ export default async function EditProduct({ params }: { params: Promise<{ locale
       {types.length > 0 && (
         <Card title={t("الطباعة والموك أب (التصميم الرسمي)", "Printing & mockup (official artwork)")}>
           <ProductPrintingPanel productId={id} typeId={product.product_type_id ?? null} printEnabled={product.print_enabled ?? true} disabledAreas={product.disabled_print_area_ids ?? []} designs={((designRows as ProductDesignRow[]) ?? []).map(normDesign)} types={types} colors={(colors as Color[]) ?? []} variantColorIds={variantColorIds} />
+        </Card>
+      )}
+      {sourceType && (
+        <Card title={t("نفس التصميم على قطعة ثانية", "Same design on another garment")}>
+          <GarmentLinks productId={id} sourceType={sourceType} designs={((designRows as ProductDesignRow[]) ?? []).map(normDesign)} types={types} colors={(colors as Color[]) ?? []} colorIds={variantColorIds} links={links} />
         </Card>
       )}
       <Card title={t("الصور", "Images")}><ProductImages productId={id} images={(images as ProductImage[]) ?? []} colors={(colors as Color[]) ?? []} /></Card>

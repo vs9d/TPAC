@@ -70,7 +70,7 @@ export default async function NewProduct({ params, searchParams }: { params: Pro
         subtitle={chosen ? t("ارفع التصميم وضعه على القطعة، ثم الاسم والسعر والمقاسات والألوان، واحفظ.", "Upload the artwork and place it, then name, price, sizes and colours — and save.") : t("كل شي بشاشة وحدة: المعلومات والصور والمقاسات والألوان والكمية.", "Everything on one screen: details, photos, sizes, colours and stock.")}
         actions={types.length ? <Link href={`/${locale}/admin/products/new`} className="btn btn-outline btn-sm">{t("تغيير النوع", "Change type")}</Link> : undefined}
       />
-      <ProductForm key={chosen?.id ?? "plain"} printType={chosen} categories={(categories as Category[]) ?? []} collections={(collections as Collection[]) ?? []} selectedCollections={[]} sizes={(sizes as Size[]) ?? []} colors={colorList} />
+      <ProductForm key={chosen?.id ?? "plain"} printType={chosen} otherTypes={types} categories={(categories as Category[]) ?? []} collections={(collections as Collection[]) ?? []} selectedCollections={[]} sizes={(sizes as Size[]) ?? []} colors={colorList} />
     </div>
   );
 }

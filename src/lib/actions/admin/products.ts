@@ -183,7 +183,8 @@ export async function deleteProduct(form: FormData) {
 }
 
 /** Clones a product (details, collections, images, variants) as an unpublished draft. */
-async function cloneProduct(supabase: SB, id: string, copyStock: boolean): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+async function cloneProduct(supabase: SB, id: string, copyStock: boolean, opts: { media?: boolean; patch?: Record<string, unknown> } = {}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const media = opts.media ?? true;
   const { data: p } = await supabase.from("products").select("*").eq("id", id).maybeSingle();
   if (!p) return { ok: false, error: "not_found" };
   const { data: slugs } = await supabase.from("products").select("slug").like("slug", `${String(p.slug).replace(/-copy(-\d+)?$/, "")}-copy%`);
@@ -192,7 +193,7 @@ async function cloneProduct(supabase: SB, id: string, copyStock: boolean): Promi
   void _id; void _c; void _u; void _p; void _s;
   const { data: created, error } = await supabase
     .from("products")
-    .insert({ ...rest, slug, name_ar: `${p.name_ar} (نسخة)`, name_en: `${p.name_en} (copy)`, is_published: false, is_featured: false, sales_count: 0, published_at: null })
+    .insert({ ...rest, slug, name_ar: `${p.name_ar} (نسخة)`, name_en: `${p.name_en} (copy)`, is_published: false, is_featured: false, sales_count: 0, published_at: null, ...opts.patch })
     .select("id")
     .single();
   if (error || !created) return { ok: false, error: error?.code === "23505" ? "duplicate" : "generic" };
@@ -200,7 +201,7 @@ async function cloneProduct(supabase: SB, id: string, copyStock: boolean): Promi
 
   const [{ data: cols }, { data: imgs }, { data: variants }] = await Promise.all([
     supabase.from("product_collections").select("collection_id, sort_order").eq("product_id", id),
-    supabase.from("product_images").select("*").eq("product_id", id).order("sort_order"),
+    media ? supabase.from("product_images").select("*").eq("product_id", id).order("sort_order") : Promise.resolve({ data: [] as Record<string, unknown>[] }),
     supabase.from("product_variants").select("size_code, color_id, price_override, is_active, color:colors(code), inventory(quantity, low_stock_threshold)").eq("product_id", id),
   ]);
   if (cols?.length) await supabase.from("product_collections").insert(cols.map((c) => ({ product_id: newId, collection_id: c.collection_id, sort_order: c.sort_order })));
@@ -222,7 +223,7 @@ async function cloneProduct(supabase: SB, id: string, copyStock: boolean): Promi
   }
 
   // Official artwork placed on the printing template: own copies of the files, same positions.
-  const { data: designs } = await supabase.from("product_designs").select("*").eq("product_id", id).order("sort_order");
+  const { data: designs } = media ? await supabase.from("product_designs").select("*").eq("product_id", id).order("sort_order") : { data: [] };
   for (const d of designs ?? []) {
     let url = d.artwork_url as string;
     let path: string | null = null;
@@ -560,4 +561,65 @@ export async function importProducts(_prev: ActionState, form: FormData): Promis
   await logActivity("product.imported", "product", null, { created, errors: report.length - created });
   revalidateCatalog();
   return { ok: true, message: `${created}`, extra: JSON.stringify(report) };
+}
+
+/* ------------------------------------------------------------------ same design on another garment */
+
+const linkSchema = z.object({
+  product_id: z.string().regex(UUID),
+  type_id: z.string().regex(UUID),
+  price: z.number().int().min(0).max(100_000_000),
+  enabled: z.boolean(),
+});
+
+/**
+ * «متوفر أيضاً كـ»: offers this product's artwork on another garment (hoodie ⇄ t-shirt …) as its own product with
+ * the admin's price. The first time it creates the sibling (same texts, sizes, colours and stock, no photos — the
+ * client then places the artwork and generates the photos); later it only changes the price / shows or hides it.
+ */
+export async function linkGarment(input: unknown): Promise<{ ok: true; id: string; slug: string; created: boolean; root?: boolean } | { ok: false; error: string }> {
+  await assertStaff();
+  const p = linkSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: "validation" };
+  const v = p.data;
+  const supabase = await createClient();
+  const [{ data: src, error: sErr }, { data: type }] = await Promise.all([
+    supabase.from("products").select("id, slug, name_ar, name_en, product_type_id, design_group, product_type:product_types(name_ar, name_en)").eq("id", v.product_id).maybeSingle(),
+    supabase.from("product_types").select("id, code, name_ar, name_en").eq("id", v.type_id).maybeSingle(),
+  ]);
+  if (sErr?.message?.includes("design_group")) return { ok: false, error: "needs_sql" };
+  if (!src || !type) return { ok: false, error: "not_found" };
+  if (src.product_type_id === type.id) return { ok: false, error: "same_type" };
+  const group = (src.design_group as string | null) ?? src.id;
+  if (!src.design_group) await supabase.from("products").update({ design_group: group }).eq("id", src.id);
+
+  const { data: existing } = await supabase.from("products").select("id, slug").eq("design_group", group).eq("product_type_id", type.id).neq("id", src.id).limit(1).maybeSingle();
+  if (existing) {
+    const { error } = await supabase.from("products").update({ base_price: v.price, is_published: v.enabled, ...(v.enabled ? { published_at: new Date().toISOString() } : {}) }).eq("id", existing.id);
+    if (error) return { ok: false, error: "generic" };
+    await logActivity("product.garment_link", "product", existing.id, { from: src.id, price: v.price, enabled: v.enabled });
+    revalidateCatalog(existing.slug);
+    revalidateCatalog(src.slug);
+    return { ok: true, id: existing.id, slug: existing.slug, created: false, root: existing.id === group };
+  }
+  if (!v.enabled) return { ok: false, error: "not_found" };
+
+  const srcType = (Array.isArray(src.product_type) ? src.product_type[0] : src.product_type) as { name_ar: string; name_en: string } | null;
+  const rename = (name: string, from?: string, to?: string) => (from && to && name.includes(from) ? name.replace(from, to) : `${name} — ${to ?? ""}`.trim());
+  const base = `${String(src.slug).slice(0, 60)}-${slugify(type.code.replace(/_/g, "-")) || "item"}`;
+  const { data: taken } = await supabase.from("products").select("slug").like("slug", `${base}%`);
+  const slug = uniqueSlug(base, new Set((taken ?? []).map((x) => x.slug as string)));
+  const r = await cloneProduct(supabase, src.id, true, {
+    media: false,
+    patch: {
+      slug, product_type_id: type.id, base_price: v.price, compare_at_price: null, design_group: group,
+      name_ar: rename(src.name_ar, srcType?.name_ar, type.name_ar), name_en: rename(src.name_en, srcType?.name_en, type.name_en),
+      is_published: true, published_at: new Date().toISOString(), disabled_print_area_ids: [],
+    },
+  });
+  if (!r.ok) return r;
+  await supabase.from("product_variants").update({ price_override: null }).eq("product_id", r.id);
+  await logActivity("product.garment_link", "product", r.id, { from: src.id, price: v.price, created: true });
+  revalidateCatalog(src.slug);
+  return { ok: true, id: r.id, slug, created: true };
 }

@@ -116,3 +116,49 @@ export const absolute = (area: Rect, d: Rect): Rect => ({ x: area.x + d.x * area
 
 /** Code for types / views / areas: lowercase latin, digits, "-" and "_" (underscores are kept: placement codes like left_chest rely on them). */
 export const slugCode = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9_]+/g, "-").replace(/^[-_]+|[-_]+$/g, "").slice(0, 40);
+
+/** The main print area of a view, used to carry a design from one garment to another (front ↔ front, sleeve ↔ sleeve). */
+const ANCHOR: Record<string, string[]> = { front: ["front"], back: ["back"], right: ["sleeve"], left: ["sleeve_left"], sleeve: ["sleeve"] };
+export function anchorArea(view: TypeViewRow): PrintAreaRow | null {
+  const list = (view.product_print_areas ?? []).filter((a) => a.is_active && a.code !== "free");
+  for (const code of ANCHOR[view.code] ?? []) {
+    const a = list.find((x) => x.code === code);
+    if (a) return a;
+  }
+  return list[0] ?? null;
+}
+
+export interface MappedDesign { view: TypeViewRow; source: ProductDesignRow; rect: Rect }
+/**
+ * Places the artwork of one garment on another: the same spot relative to the matching print area
+ * (e.g. the centre of the hoodie's chest → the centre of the t-shirt's chest), same proportions,
+ * as fractions of the target mockup (i.e. inside its whole-garment "free" area). Views the target lacks are skipped.
+ */
+export function mapDesigns(src: ProductTypeRow, designs: ProductDesignRow[], dst: ProductTypeRow): MappedDesign[] {
+  const out: MappedDesign[] = [];
+  const srcViews = (src.product_type_views ?? []).filter((v) => v.is_active);
+  const dstViews = (dst.product_type_views ?? []).filter((v) => v.is_active);
+  for (const d of designs) {
+    const sv = srcViews.find((v) => (v.product_print_areas ?? []).some((a) => a.id === d.area_id));
+    const area = sv?.product_print_areas?.find((a) => a.id === d.area_id);
+    const dv = sv && dstViews.find((v) => v.code === sv.code);
+    if (!sv || !area || !dv) continue;
+    const A = anchorArea(sv);
+    const B = anchorArea(dv);
+    const R = absolute(area, d);
+    if (!A || !B) { out.push({ view: dv, source: d, rect: clampRect(R) }); continue; }
+    const relW = R.width / A.width;
+    const cx = (R.x + R.width / 2 - A.x) / A.width;
+    const cy = (R.y + R.height / 2 - A.y) / A.height;
+    // keep the artwork's real proportions on the new photo
+    const ratio = (R.height * sv.mockup_height) / (R.width * sv.mockup_width);
+    let width = relW * B.width;
+    let height = (width * dv.mockup_width * ratio) / dv.mockup_height;
+    if (height > 1) { width *= 1 / height; height = 1; }
+    if (width > 1) { height /= width; width = 1; }
+    const x = B.x + cx * B.width - width / 2;
+    const y = B.y + cy * B.height - height / 2;
+    out.push({ view: dv, source: d, rect: clampRect({ x, y, width, height }) });
+  }
+  return out;
+}

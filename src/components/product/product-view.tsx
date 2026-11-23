@@ -170,6 +170,22 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
             {product.compare_at_price && product.compare_at_price > price && <s className="text-base text-mute">{formatIQD(product.compare_at_price, locale)}</s>}
           </p>
 
+          {!!product.garment_options?.length && product.product_type && (
+            <div className="mt-6">
+              <p className="mb-3 text-sm font-semibold">{locale === "ar" ? "نفس التصميم على:" : "Same design on:"}</p>
+              <div className="flex flex-wrap gap-2" role="list" aria-label={locale === "ar" ? "نوع القطعة" : "Garment"}>
+                <span role="listitem" aria-current="true" className="flex items-center gap-2 rounded-full border-2 border-ink bg-ink px-4 py-2 text-sm font-bold text-paper">
+                  {locale === "ar" ? product.product_type.name_ar : product.product_type.name_en} <span className="font-normal tabular-nums opacity-80">{formatIQD(price, locale)}</span>
+                </span>
+                {product.garment_options.map((g) => (
+                  <Link key={g.slug} role="listitem" href={`/${locale}/product/${g.slug}`} className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm font-semibold transition hover:border-ink">
+                    {locale === "ar" ? g.type.name_ar : g.type.name_en} <span className="font-normal tabular-nums text-mute">{formatIQD(g.price, locale)}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="mt-8" id="options">
             <p className="mb-3 text-sm font-semibold">
               {dict.common.color}: <span className="font-normal text-mute">{color ? (locale === "ar" ? color.name_ar : color.name_en) : ""}</span>

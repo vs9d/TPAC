@@ -123,6 +123,8 @@ export interface ProductDetail extends Product {
   /** printing template with its views and print areas, and the artwork placed on it (present once add-product-printing-1.sql + -2.sql ran) */
   product_type?: import("./print-config").ProductTypeRow | null;
   product_designs?: import("./print-config").ProductDesignRow[];
+  /** the same design on other garments (add-garment-links.sql) */
+  garment_options?: { slug: string; price: number; type: { name_ar: string; name_en: string } }[];
 }
 
 /** Shape returned by public.catalog_search() */

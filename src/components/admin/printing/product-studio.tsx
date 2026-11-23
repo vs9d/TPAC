@@ -1,6 +1,6 @@
 "use client";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { AlignCenterHorizontal, AlignCenterVertical, ArrowUpToLine, Expand, ImagePlus, Loader2, Move, Plus, RefreshCw, ScanLine, Trash2 } from "lucide-react";
+import { AlignCenterHorizontal, AlignCenterVertical, ArrowUpToLine, Eraser, Expand, ImagePlus, Loader2, Move, Paintbrush, Plus, RefreshCw, ScanLine, Trash2, Undo2 } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { adminT } from "@/lib/admin-i18n";
 import { toast } from "@/components/ui/toast";
@@ -11,6 +11,7 @@ import { discardPrintFile, ensureFreeArea } from "@/lib/actions/admin/printing";
 import { cn } from "@/lib/format";
 import type { Color } from "@/lib/types";
 import { DragRect, MockupStage, rectStyle } from "./stage";
+import { colorsOf, recolorAll, recolorPart, removeBackground } from "@/lib/artwork-tools";
 
 export interface DesignDraft {
   id?: string; area_id: string; artwork_url: string; artwork_path: string | null;
@@ -61,6 +62,13 @@ export const ProductStudio = forwardRef<StudioHandle, {
   const fileRef = useRef<HTMLInputElement>(null);
   const replaceKey = useRef<string | null>(null);
   const uploaded = useRef<string[]>([]);
+  // the artwork as uploaded, so edits (background / colours) can be undone
+  const originals = useRef<Record<string, Pick<Draft, "artwork_url" | "artwork_path" | "artwork_width" | "artwork_height">>>({});
+  const [tool, setTool] = useState<string>("");
+  const [swatches, setSwatches] = useState<string[]>([]);
+  const [fromHex, setFromHex] = useState("");
+  const [toHex, setToHex] = useState("#e3963c");
+  const [allHex, setAllHex] = useState("#ffffff");
 
   const palette = useMemo(() => {
     const ids = previewColorIds?.length ? previewColorIds : type.default_color_ids;
@@ -81,6 +89,9 @@ export const ProductStudio = forwardRef<StudioHandle, {
     setSelKey(designs.find((d) => free && d.area_id === free.id)?.key ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewId]);
+
+  // the colour picker belongs to the selected design
+  useEffect(() => { setSwatches([]); setFromHex(""); }, [selKey, areaId, mode]);
 
   /** every area (fixed + free) with its view, to find where a design lives */
   const allAreas = useMemo(() => views.flatMap((v) => [...(v.product_print_areas ?? []).filter((a) => a.is_active && a.code !== FREE), ...(freeAreas[v.id] ? [freeAreas[v.id]!] : [])].map((a) => ({ a, v }))), [views, freeAreas]);
@@ -180,6 +191,36 @@ export const ProductStudio = forwardRef<StudioHandle, {
       setBusy(false);
       replaceKey.current = null;
     }
+  };
+
+  /** runs an image tool on the selected artwork and swaps in the result (same place and size) */
+  const editArt = async (label: string, run: (url: string) => Promise<{ blob: Blob; width: number; height: number; changed: number }>) => {
+    if (!sel) return;
+    setTool(label);
+    try {
+      const r = await run(sel.artwork_url);
+      if (!r.changed) { toast.info(t("ما تغيّر شي — جرّب لون ثاني أو خلفية أوضح", "Nothing changed — try another colour or a plainer background")); return; }
+      const up = await uploadProductImage(r.blob, `products/${productId}/art/${crypto.randomUUID()}.png`, "image/png");
+      uploaded.current.push(up.path);
+      if (!originals.current[sel.key]) originals.current[sel.key] = { artwork_url: sel.artwork_url, artwork_path: sel.artwork_path, artwork_width: sel.artwork_width, artwork_height: sel.artwork_height };
+      else if (sel.artwork_path && sel.artwork_path !== originals.current[sel.key]!.artwork_path && uploaded.current.includes(sel.artwork_path)) void discardPrintFile(sel.artwork_path);
+      patch(sel.key, { artwork_url: up.url, artwork_path: up.path, artwork_width: r.width, artwork_height: r.height });
+      setSwatches(await colorsOf(up.url).catch(() => []));
+      toast.success(t("تم تعديل التصميم", "Artwork updated"));
+    } catch (e) {
+      console.error(e);
+      toast.error(t("تعذّر تعديل الصورة", "Couldn't edit the image"));
+    } finally {
+      setTool("");
+    }
+  };
+  const restoreArt = () => {
+    const o = sel && originals.current[sel.key];
+    if (!sel || !o) return;
+    if (sel.artwork_path && sel.artwork_path !== o.artwork_path && uploaded.current.includes(sel.artwork_path)) void discardPrintFile(sel.artwork_path);
+    patch(sel.key, o);
+    delete originals.current[sel.key];
+    void colorsOf(o.artwork_url).then(setSwatches, () => setSwatches([]));
   };
 
   const toggleArea = (id: string) => setDisabled((d) => (d.includes(id) ? d.filter((x) => x !== id) : [...d, id]));
@@ -322,6 +363,30 @@ export const ProductStudio = forwardRef<StudioHandle, {
                 <Btn label={t("توسيط عمودي", "Centre vertically")} onClick={() => patch(sel.key, { y: (1 - sel.height) / 2 })}><AlignCenterHorizontal className="size-4" /></Btn>
                 <Btn label={t("للأعلى", "To the top")} onClick={() => patch(sel.key, { y: 0 })}><ArrowUpToLine className="size-4" /></Btn>
                 <Btn label={t("أكبر حجم ممكن", "Largest size")} onClick={() => patch(sel.key, clampRect(fitArtwork(selArea, view, sel.artwork_width, sel.artwork_height, 1)))}><Expand className="size-4" /></Btn>
+              </div>
+              <div className="space-y-3 border-t border-line pt-3">
+                <p className="text-xs font-bold">{t("تعديل الصورة", "Edit the image")}</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={!!tool} onClick={() => editArt("bg", (u) => removeBackground(u))} className="btn btn-outline btn-sm">{tool === "bg" ? <Loader2 className="size-4 animate-spin" /> : <Eraser className="size-4" />} {t("إزالة الخلفية", "Remove background")}</button>
+                  {originals.current[sel.key] && <button type="button" disabled={!!tool} onClick={restoreArt} className="btn btn-outline btn-sm"><Undo2 className="size-4" /> {t("رجوع للأصل", "Restore original")}</button>}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-mute">{t("لون التصميم كله", "Whole design colour")}</span>
+                  <input type="color" aria-label={t("لون التصميم كله", "Whole design colour")} value={allHex} onChange={(e) => setAllHex(e.target.value)} className="size-9 cursor-pointer rounded-full border border-line bg-transparent p-0.5" />
+                  <button type="button" disabled={!!tool} onClick={() => editArt("all", (u) => recolorAll(u, allHex))} className="btn btn-outline btn-sm">{tool === "all" ? <Loader2 className="size-4 animate-spin" /> : <Paintbrush className="size-4" />} {t("تلوين الكل", "Colour all")}</button>
+                </div>
+                <div className="space-y-2">
+                  <span className="block text-xs text-mute">{t("تغيير لون جزء: اختار اللون الموجود ثم اللون الجديد", "Change one colour: pick the existing colour, then the new one")}</span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {swatches.length === 0 && <button type="button" onClick={() => void colorsOf(sel.artwork_url).then(setSwatches, () => setSwatches([]))} className="text-xs font-semibold text-pine underline">{t("اعرض ألوان التصميم", "Show the design's colours")}</button>}
+                    {swatches.map((c) => <button key={c} type="button" aria-label={c} aria-pressed={fromHex === c} onClick={() => setFromHex(c)} className={cn("size-7 rounded-full border border-ink/20", fromHex === c && "ring-2 ring-amber ring-offset-2")} style={{ background: c }} />)}
+                    {swatches.length > 0 && <>
+                      <span className="px-1 text-mute">←</span>
+                      <input type="color" aria-label={t("اللون الجديد", "New colour")} value={toHex} onChange={(e) => setToHex(e.target.value)} className="size-9 cursor-pointer rounded-full border border-line bg-transparent p-0.5" />
+                      <button type="button" disabled={!!tool || !fromHex} onClick={() => editArt("part", (u) => recolorPart(u, fromHex, toHex))} className="btn btn-outline btn-sm">{tool === "part" ? <Loader2 className="size-4 animate-spin" /> : <Paintbrush className="size-4" />} {t("تطبيق", "Apply")}</button>
+                    </>}
+                  </div>
+                </div>
               </div>
               <p className="text-[11px] text-mute">{selArea.code === FREE ? t("الحجم بالسنتيمتر تقريبي — محسوب من مقاس القطعة.", "The cm size is an estimate from the garment's size.") : t("التصميم لا يخرج عن منطقة الطباعة، والنسبة محفوظة أثناء تغيير الحجم.", "The artwork never leaves the print area, and its proportions are kept while resizing.")}</p>
             </div>

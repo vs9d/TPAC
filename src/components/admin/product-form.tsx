@@ -12,6 +12,7 @@ import { toast } from "@/components/ui/toast";
 import type { Category, Collection, Color, Product, Size } from "@/lib/types";
 import type { ProductTypeRow } from "@/lib/print-config";
 import { ProductStudio, type StudioHandle } from "./printing/product-studio";
+import { GarmentLinksDraft } from "./printing/garment-links";
 
 const setValue = (id: string, v: string) => {
   const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null;
@@ -23,7 +24,7 @@ const setValue = (id: string, v: string) => {
  * Everything else — English name, slug, descriptions, fabric & printing texts, flags, collections,
  * tags, SEO — lives in one collapsed "More options" block and has sensible automatic defaults.
  */
-export function ProductForm({ product, categories, collections, selectedCollections, sizes = [], colors = [], printType }: { product?: Product; categories: Category[]; collections: Collection[]; selectedCollections: string[]; sizes?: Size[]; colors?: Color[]; printType?: ProductTypeRow | null }) {
+export function ProductForm({ product, categories, collections, selectedCollections, sizes = [], colors = [], printType, otherTypes = [] }: { product?: Product; categories: Category[]; collections: Collection[]; selectedCollections: string[]; sizes?: Size[]; colors?: Color[]; printType?: ProductTypeRow | null; otherTypes?: ProductTypeRow[] }) {
   const { locale } = useI18n();
   const t = adminT(locale);
   const creating = !product;
@@ -175,6 +176,13 @@ export function ProductForm({ product, categories, collections, selectedCollecti
             </div>
             <ProductStudio key={newId} ref={studio} type={printType} colors={colors} productId={newId} previewColorIds={checkedColors} />
             {generating && <div className="absolute inset-0 z-20 grid place-items-center rounded-[inherit] bg-paper/80"><p className="flex items-center gap-2 text-sm font-semibold"><Loader2 className="size-4 animate-spin" /> {generating}</p></div>}
+          </div>
+        )}
+
+        {creating && printType && otherTypes.some((x) => x.id !== printType.id) && (
+          <div className={card}>
+            {title(L("نفس التصميم على قطعة ثانية", "Same design on another garment"))}
+            <GarmentLinksDraft productId={newId} types={otherTypes} currentTypeId={printType.id} />
           </div>
         )}
 

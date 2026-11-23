@@ -83,6 +83,14 @@ export const getProductBySlug = cache(async (slug: string): Promise<ProductDetai
   p.product_variants = p.product_variants.filter((v) => v.is_active);
   if (p.product_type) p.product_type = normType(p.product_type);
   p.product_designs = (p.product_designs ?? []).map(normDesign).sort((a, b) => a.sort_order - b.sort_order);
+  // the same design on other garments (hoodie ⇄ t-shirt …), each with the admin's price
+  const group = (p as ProductDetail & { design_group?: string | null }).design_group;
+  if (group) {
+    const { data: sib } = await supabase.from("products").select("id, slug, base_price, product_type:product_types(name_ar, name_en)").or(`design_group.eq.${group},id.eq.${group}`).eq("is_published", true).neq("id", p.id);
+    p.garment_options = ((sib ?? []) as unknown as { slug: string; base_price: number; product_type: { name_ar: string; name_en: string } | { name_ar: string; name_en: string }[] | null }[])
+      .map((x) => ({ slug: x.slug, price: x.base_price, type: Array.isArray(x.product_type) ? x.product_type[0] ?? null : x.product_type }))
+      .filter((x): x is { slug: string; price: number; type: { name_ar: string; name_en: string } } => !!x.type);
+  }
   return p;
 });
 

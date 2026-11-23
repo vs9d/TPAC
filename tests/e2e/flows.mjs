@@ -729,6 +729,9 @@ await flow("admin printing: type mockup & areas → product from template with a
   await page.waitForFunction(() => document.body.innerText.includes("Print size:"), null, { timeout: 20000 });
   // free placement: the back artwork goes to the very top of the garment, outside every print area
   await page.getByRole("button", { name: "To the top" }).click();
+  // while adding: the same design should also be sold as an oversized tee at 30,000
+  await page.getByLabel("Available as Oversized tee").check();
+  await page.getByLabel("Oversized tee price").fill("30000");
   await page.fill("#name_ar", "هودي الشعار");
   await openMore(page);
   await page.fill("#name_en", "E2E Logo Hoodie");
@@ -763,8 +766,17 @@ await flow("admin printing: type mockup & areas → product from template with a
   assert.ok(anonPut.status() >= 400, "anonymous writes are refused");
   await shop.close();
 
-  // 4) edit: enlarge the front artwork and save — same rows updated, photos replaced not duplicated
+  // the oversized tee chosen while adding is created right away, with the artwork carried over and its own photos
+  await page.getByText("Now also available as Oversized tee").waitFor({ timeout: 60000 });
+  const over = await one("select p.id, p.slug, p.base_price, p.is_published, p.design_group from products p join product_types t on t.id = p.product_type_id where t.code = 'oversized' and p.design_group = $1", [pid]);
+  assert.ok(over && over.is_published && over.base_price === 30000, "linked oversized tee at the admin's price");
+  assert.equal((await one("select count(*)::int n from product_designs d join product_print_areas a on a.id = d.area_id where d.product_id = $1 and a.code = 'free'", [over.id])).n, 2, "artwork carried to front and back");
+  assert.ok((await one("select count(*)::int n from product_images where product_id = $1 and is_generated", [over.id])).n >= 2, "photos generated for the tee");
+
+  // 4) edit: recolour the artwork, enlarge it and save — same rows updated, photos replaced not duplicated
   await page.getByRole("button", { name: "Largest size" }).first().click();
+  await page.getByRole("button", { name: "Colour all" }).click();
+  await page.getByText("Artwork updated").waitFor({ timeout: 20000 });
   await page.getByRole("button", { name: /Save printing & photos/ }).click();
   await page.getByText("Printing saved and product photos updated").waitFor({ timeout: 60000 });
   const after = (await db.query("select id, width from product_designs where product_id = $1", [pid])).rows;
@@ -772,6 +784,30 @@ await flow("admin printing: type mockup & areas → product from template with a
   const frontBefore = designs[0];
   assert.ok(Number(after.find((d) => d.id === frontBefore.id).width) > Number(frontBefore.width), "front artwork enlarged");
   assert.equal((await one("select count(*)::int n from product_images where product_id = $1 and is_generated", [pid])).n, 4, "no duplicate photos");
+  assert.equal((await db.query("select 1 from product_designs where product_id = $1 and artwork_path = $2", [pid, designs[0].artwork_path])).rows.length, 0, "recoloured artwork saved as a new file");
+
+  // 5) same design on a t-shirt with its own price, then the customer switches garments on the product page
+  await page.getByLabel("Available as T-shirt").check();
+  await page.getByLabel("T-shirt price").fill("25000");
+  await page.getByLabel("T-shirt price").locator("xpath=ancestor::div[1]").getByRole("button", { name: "Save" }).click();
+  await page.getByText("Now also available as T-shirt").waitFor({ timeout: 60000 });
+  const tee = await one("select p.slug, p.base_price from products p join product_types t on t.id = p.product_type_id where t.code = 'tshirt' and p.design_group = $1", [pid]);
+  assert.equal(tee.base_price, 25000);
+  const c2 = await page.context().browser().newContext({ viewport: { width: 1366, height: 900 } });
+  const s2 = await c2.newPage();
+  await s2.goto(`${BASE}/en/product/${prod.slug}`);
+  await s2.getByText("Same design on:").waitFor();
+  await s2.locator(`a[href$='/product/${tee.slug}']`).click();
+  await s2.waitForURL(new RegExp(`/product/${tee.slug}$`));
+  await s2.getByText("Print details").waitFor();
+  assert.ok(await s2.getByText("25,000").first().isVisible(), "the tee shows the admin's price");
+  await s2.screenshot({ path: `${SHOTS}/garment-switch.png` });
+  await c2.close();
+  // turning it off hides it from customers
+  await page.getByLabel("Available as T-shirt").uncheck();
+  await page.getByLabel("T-shirt price").locator("xpath=ancestor::div[1]").getByRole("button", { name: "Save" }).click();
+  await page.getByText("Hidden", { exact: true }).first().waitFor();
+  assert.equal((await one("select is_published from products where slug = $1", [tee.slug])).is_published, false);
 });
 
 await flow("print-on-demand images: admin uploads → preview → save → customers see it → delete falls back", async (page) => {
