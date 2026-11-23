@@ -723,10 +723,12 @@ await flow("admin printing: type mockup & areas → product from template with a
   assert.equal(await page.inputValue("#base_price"), "40000", "price comes from the type");
   const studioInput = page.locator("input[accept='image/png,image/jpeg,image/webp,image/avif']");
   await studioInput.setInputFiles(art);
-  await page.getByText(/Print size: \d/).waitFor({ timeout: 20000 });
+  await page.getByText(/Print size: (≈ )?\d/).waitFor({ timeout: 20000 });
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await studioInput.setInputFiles(art);
   await page.waitForFunction(() => document.body.innerText.includes("Print size:"), null, { timeout: 20000 });
+  // free placement: the back artwork goes to the very top of the garment, outside every print area
+  await page.getByRole("button", { name: "To the top" }).click();
   await page.fill("#name_ar", "هودي الشعار");
   await openMore(page);
   await page.fill("#name_en", "E2E Logo Hoodie");
@@ -739,6 +741,9 @@ await flow("admin printing: type mockup & areas → product from template with a
   assert.equal(designs.length, 2);
   assert.ok(designs.every((d) => Number(d.x) + Number(d.width) <= 1.0001 && Number(d.y) + Number(d.height) <= 1.0001), "artwork stays inside its area");
   assert.ok(designs.every((d) => d.artwork_path.startsWith(`products/${pid}/art/`)), "official artwork stored with the product");
+  const codes = (await db.query("select a.code, d.y from product_designs d join product_print_areas a on a.id = d.area_id where d.product_id = $1 order by d.sort_order", [pid])).rows;
+  assert.deepEqual(codes.map((c) => c.code), ["free", "free"], "admin artwork is placed freely on the garment");
+  assert.ok(codes.some((c) => Number(c.y) === 0), "free artwork can sit outside the print areas");
   const gen = (await db.query("select (select code from colors where id = color_id) color, (select code from product_type_views where id = view_id) view from product_images where product_id = $1 and is_generated order by sort_order", [pid])).rows;
   assert.deepEqual(gen.map((g) => `${g.color}/${g.view}`).sort(), ["black/back", "black/front", "white/back", "white/front"], "one photo per colour and angle");
   assert.equal((await one("select count(*)::int n from product_variants where product_id = $1", [pid])).n, 10);

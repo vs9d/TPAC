@@ -37,7 +37,7 @@ export default async function NewProduct({ params, searchParams }: { params: Pro
             const v = ty.product_type_views?.[0];
             const c = colorList.find((x) => x.id === ty.default_color_ids[0]);
             const src = v ? mockupFor(v, ty.garment_shape, c ? { id: c.id, hex: c.hex } : null) : null;
-            const areas = (ty.product_type_views ?? []).flatMap((x) => x.product_print_areas ?? []).filter((a) => a.is_active);
+            const areas = (ty.product_type_views ?? []).flatMap((x) => x.product_print_areas ?? []).filter((a) => a.is_active && a.code !== "free");
             const main = areas[0];
             return (
               <Link key={ty.id} href={`/${locale}/admin/products/new?type=${ty.id}`} className="card-admin group overflow-hidden transition hover:-translate-y-0.5 hover:border-pine hover:shadow-lg" data-ripple>

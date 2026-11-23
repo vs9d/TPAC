@@ -24,7 +24,7 @@ export function TypeEditor({ type, colors }: { type: ProductTypeRow; colors: Col
   const [viewId, setViewId] = useState(views[0]?.id ?? "");
   const view = views.find((v) => v.id === viewId) ?? views[0];
   const [previewColor, setPreviewColor] = useState<string>("");
-  const [areas, setAreas] = useState<DraftArea[]>(() => (view?.product_print_areas ?? []).map(toDraft));
+  const [areas, setAreas] = useState<DraftArea[]>(() => (view?.product_print_areas ?? []).filter((a) => a.code !== "free").map(toDraft));
   const [sel, setSel] = useState<string>(areas[0]?.key ?? "");
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState("");
@@ -32,7 +32,7 @@ export function TypeEditor({ type, colors }: { type: ProductTypeRow; colors: Col
 
   // switching view (or fresh server data) reloads its areas
   useEffect(() => {
-    const list = (view?.product_print_areas ?? []).map(toDraft);
+    const list = (view?.product_print_areas ?? []).filter((a) => a.code !== "free").map(toDraft);
     setAreas(list);
     setSel((s) => (list.some((a) => a.key === s) ? s : list[0]?.key ?? ""));
     setDirty(false);
@@ -160,7 +160,7 @@ export function TypeEditor({ type, colors }: { type: ProductTypeRow; colors: Col
       <div className="flex flex-wrap items-center gap-2">
         {views.map((v) => (
           <button key={v.id} onClick={() => { if (dirty && !confirm(t("لديك تغييرات غير محفوظة. المتابعة؟", "You have unsaved changes. Continue?"))) return; setViewId(v.id); }} aria-pressed={v.id === view.id} className={cn("chip h-10 px-4", !v.is_active && "opacity-50")}>
-            {locale === "ar" ? v.name_ar : v.name_en} <span className="text-xs opacity-60">· {(v.product_print_areas ?? []).length}</span>
+            {locale === "ar" ? v.name_ar : v.name_en} <span className="text-xs opacity-60">· {(v.product_print_areas ?? []).filter((a) => a.code !== "free").length}</span>
           </button>
         ))}
         <button onClick={addView} className="chip h-10 border-dashed px-4"><Plus className="size-4" /> {t("زاوية جديدة", "New view")}</button>

@@ -265,3 +265,35 @@ export async function discardPrintFile(path: string): Promise<void> {
   ]);
   if (!a?.length && !b?.length && !c?.length) await supabase.storage.from("product-images").remove([path]);
 }
+
+/**
+ * The "free placement" area of a view: the whole mockup, so the admin can put official artwork anywhere on the
+ * garment. Created on first use (no SQL needed); its cm size is estimated from the view's real print areas.
+ * Customers never see it in the print studio (only placements like front / back / sleeves are offered there).
+ */
+export async function ensureFreeArea(viewId: string): Promise<{ ok: true; area: Record<string, unknown> } | { ok: false; error: string }> {
+  await assertStaff();
+  if (!UUID.test(viewId)) return { ok: false, error: "validation" };
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from("product_print_areas").select("*").eq("view_id", viewId).eq("code", "free").maybeSingle();
+  if (existing) {
+    if (!existing.is_active) await supabase.from("product_print_areas").update({ is_active: true }).eq("id", existing.id);
+    return { ok: true, area: { ...existing, is_active: true } };
+  }
+  const { data: areas } = await supabase.from("product_print_areas").select("width, height, max_width_cm, max_height_cm").eq("view_id", viewId).neq("code", "free");
+  // cm per fraction of the photo, taken from the largest real print area of this view
+  const big = (areas ?? []).sort((a, b) => Number(b.width) * Number(b.height) - Number(a.width) * Number(a.height))[0];
+  const cmW = big ? Math.min(200, Math.round((Number(big.max_width_cm) / Number(big.width)) * 10) / 10) : 60;
+  const cmH = big ? Math.min(200, Math.round((Number(big.max_height_cm) / Number(big.height)) * 10) / 10) : 70;
+  const { data, error } = await supabase.from("product_print_areas").insert({
+    view_id: viewId, code: "free", name_ar: "حر — كل القطعة", name_en: "Free — whole garment",
+    x: 0, y: 0, width: 1, height: 1, max_width_cm: cmW, max_height_cm: cmH, sort_order: 99, is_active: true,
+  }).select("*").single();
+  if (error) {
+    // created at the same moment by another tab: read it back
+    const { data: again } = await supabase.from("product_print_areas").select("*").eq("view_id", viewId).eq("code", "free").maybeSingle();
+    if (again) return { ok: true, area: again };
+    return { ok: false, error: "generic" };
+  }
+  return { ok: true, area: data };
+}

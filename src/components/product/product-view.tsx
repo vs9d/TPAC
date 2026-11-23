@@ -125,9 +125,11 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
             <div key={view.id} className={cn("relative aspect-[4/5] w-full shrink-0 snap-center overflow-hidden md:rounded-[1.75rem]", (print.views.length + images.length) % 2 === 1 && view.id === print.views[0]!.view.id && "md:col-span-2")}>
               <MockupPreview view={view} shape={print.shape} color={color ? { id: color.id, hex: color.hex } : null} areas={areas} designs={designs} showAreas={showAreas} label={`${name} — ${locale === "ar" ? view.name_ar : view.name_en}`} />
               <span className="absolute start-3 top-3 rounded-full bg-paper/85 px-3 py-1 text-xs font-bold backdrop-blur">{locale === "ar" ? view.name_ar : view.name_en}</span>
-              <button type="button" onClick={() => setShowAreas((v) => !v)} aria-pressed={showAreas} className="absolute bottom-3 end-3 flex items-center gap-1.5 rounded-full bg-paper/85 px-3 py-1.5 text-xs font-semibold backdrop-blur">
-                <ScanLine className="size-4" /> {showAreas ? (locale === "ar" ? "إخفاء منطقة الطباعة" : "Hide print area") : (locale === "ar" ? "منطقة الطباعة" : "Print area")}
-              </button>
+              {areas.some((a) => a.code !== "free") && (
+                <button type="button" onClick={() => setShowAreas((v) => !v)} aria-pressed={showAreas} className="absolute bottom-3 end-3 flex items-center gap-1.5 rounded-full bg-paper/85 px-3 py-1.5 text-xs font-semibold backdrop-blur">
+                  <ScanLine className="size-4" /> {showAreas ? (locale === "ar" ? "إخفاء منطقة الطباعة" : "Hide print area") : (locale === "ar" ? "منطقة الطباعة" : "Print area")}
+                </button>
+              )}
             </div>
           ))}
           {images.map((img, i) => (
@@ -272,8 +274,8 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
               <ul className="mt-3 space-y-2 text-sm">
                 {print.details.map((d) => (
                   <li key={d.id} className="flex flex-wrap items-baseline justify-between gap-x-3">
-                    <span>{locale === "ar" ? d.area.name_ar : d.area.name_en} <span className="text-xs text-mute">· {locale === "ar" ? d.view.name_ar : d.view.name_en}</span></span>
-                    <span className="tabular-nums" dir="ltr"><b>{d.cm.w} × {d.cm.h} cm</b> <span className="text-xs text-mute">/ max {d.area.max_width_cm} × {d.area.max_height_cm}</span></span>
+                    <span>{d.area.code === "free" ? (locale === "ar" ? "تصميم" : "Design") : locale === "ar" ? d.area.name_ar : d.area.name_en} <span className="text-xs text-mute">· {locale === "ar" ? d.view.name_ar : d.view.name_en}</span></span>
+                    <span className="tabular-nums" dir="ltr"><b>{d.area.code === "free" ? "≈ " : ""}{d.cm.w} × {d.cm.h} cm</b>{d.area.code !== "free" && <span className="text-xs text-mute"> / max {d.area.max_width_cm} × {d.area.max_height_cm}</span>}</span>
                   </li>
                 ))}
               </ul>

@@ -35,7 +35,7 @@ export default async function ProductTypes({ params }: { params: Promise<{ local
             const front = ty.product_type_views?.[0];
             const c = colorById.get(ty.default_color_ids[0] ?? "");
             const src = front ? mockupFor(front, ty.garment_shape, c ? { id: c.id, hex: c.hex } : null) : null;
-            const areas = (ty.product_type_views ?? []).reduce((n, v) => n + (v.product_print_areas ?? []).length, 0);
+            const areas = (ty.product_type_views ?? []).reduce((n, v) => n + (v.product_print_areas ?? []).filter((a) => a.code !== "free").length, 0);
             return (
               <Link key={ty.id} href={`/${locale}/admin/product-types/${ty.id}`} className="card-admin group overflow-hidden transition hover:border-pine">
                 <div className="grid aspect-[4/3] place-items-center bg-bone">

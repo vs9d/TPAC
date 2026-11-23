@@ -22,7 +22,7 @@ export function MockupPreview({ view, shape, color, areas, designs, showAreas, l
           // eslint-disable-next-line @next/next/no-img-element
           return <img key={d.id} src={d.artwork_url} alt="" draggable={false} className="absolute object-contain" style={{ left: pct(r.x), top: pct(r.y), width: pct(r.width), height: pct(r.height) }} />;
         })}
-        {showAreas && areas.map((a) => (
+        {showAreas && areas.filter((a) => a.code !== "free").map((a) => (
           <span key={a.id} className="absolute rounded-sm border-2 border-dashed border-amber" style={{ left: pct(a.x), top: pct(a.y), width: pct(a.width), height: pct(a.height) }}>
             <span className="absolute -top-5 start-0 whitespace-nowrap rounded bg-amber px-1 text-[10px] font-bold text-white">{a.max_width_cm}×{a.max_height_cm} cm</span>
           </span>
