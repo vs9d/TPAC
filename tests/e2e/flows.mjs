@@ -1226,6 +1226,49 @@ await flow("coupons: usage statistics and who used each code", async (page) => {
   }
 });
 
+await flow("batch: several hoodies with their own artwork, names and collections → publish all", async (page) => {
+  await becomeAdmin(page, "batch");
+  const hoodie = (await one("select id from product_types where code = 'hoodie'")).id;
+  const cols = (await db.query("select id, name_ar from collections order by sort_order limit 2")).rows;
+  await page.goto(`${BASE}/ar/admin/products/new?type=${hoodie}`);
+  await page.getByRole("link", { name: "عدة منتجات مرة وحدة" }).click();
+  await page.waitForURL(/products\/batch\?type=/);
+  const art = (n) => `${SHOTS}/${n}.png`;
+  // product 1
+  const p1 = page.getByRole("region", { name: "المنتج 1" });
+  await p1.getByLabel("اسم المنتج 1").fill("هودي دفعة أولى");
+  await p1.getByRole("button", { name: cols[0].name_ar }).click();
+  await p1.locator("input[accept='image/png,image/jpeg,image/webp,image/avif']").setInputFiles(art("art"));
+  await p1.getByText(/حجم الطباعة/).first().waitFor({ timeout: 20000 });
+  // product 2 — and a 3rd one left without a name: nothing is published until it is fixed
+  await page.getByRole("button", { name: /إضافة هودي آخر/ }).click();
+  const p2 = page.getByRole("region", { name: "المنتج 2" });
+  await p2.getByLabel("اسم المنتج 2").fill("هودي دفعة ثانية");
+  await p2.getByRole("button", { name: cols[1].name_ar }).click();
+  await p2.getByLabel("سعر خاص 2").fill("45000");
+  await p2.locator("input[accept='image/png,image/jpeg,image/webp,image/avif']").setInputFiles(art("proj2"));
+  await p2.getByText(/حجم الطباعة/).first().waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: /إضافة هودي آخر/ }).click();
+  const before = (await one("select count(*)::int n from products")).n;
+  await page.getByRole("button", { name: /نشر الكل \(3\)/ }).click();
+  await page.getByText("الاسم ناقص").first().waitFor();
+  assert.equal((await one("select count(*)::int n from products")).n, before, "nothing half-published");
+  await page.getByRole("button", { name: "حذف المنتج 3" }).click();
+  await page.getByRole("button", { name: /نشر الكل \(2\)/ }).click();
+  await page.getByText("انضافت 2 منتجات ونُشرت ✅").waitFor({ timeout: 90000 });
+  const rows = (await db.query(`select p.id, p.name_ar, p.base_price, p.is_published, p.product_type_id = $1 typed,
+      (select array_agg(c.collection_id::text) from product_collections c where c.product_id = p.id) cols,
+      (select count(*)::int from product_designs d where d.product_id = p.id and d.artwork_path like 'products/' || p.id || '/art/%') designs,
+      (select count(*)::int from product_images i where i.product_id = p.id and i.is_generated) photos,
+      (select count(*)::int from product_variants v where v.product_id = p.id) variants
+    from products p where p.name_ar like 'هودي دفعة%' order by p.name_ar`, [hoodie])).rows;
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((r) => [r.name_ar, r.is_published, r.typed, r.cols, r.designs]), [["هودي دفعة أولى", true, true, [cols[0].id], 1], ["هودي دفعة ثانية", true, true, [cols[1].id], 1]]);
+  assert.equal(rows[1].base_price, 45000, "own price");
+  assert.ok(rows.every((r) => r.photos >= 1 && r.variants > 0), "each has its photos and variants");
+  await page.screenshot({ path: `${SHOTS}/batch.png`, fullPage: true });
+});
+
 await flow("collections: admin uploads a cover photo from the device → shown in the store", async (page) => {
   const email = `col${Date.now()}@thetpac.com`;
   await page.goto(`${BASE}/en/account/register`);

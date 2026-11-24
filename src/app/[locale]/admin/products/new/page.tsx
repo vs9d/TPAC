@@ -31,7 +31,7 @@ export default async function NewProduct({ params, searchParams }: { params: Pro
   if (!typeParam && types.length) {
     return (
       <div className="space-y-6">
-        <PageHeader title={t("منتج جديد", "New product")} subtitle={t("اختر نوع المنتج. نحمّل صورته ومناطق الطباعة وقيمه الافتراضية تلقائياً.", "Choose the kind of product. Its mockup, print areas and defaults load automatically.")} actions={<Link href={`/${locale}/admin/product-types`} className="btn btn-outline btn-sm"><Settings2 className="size-4" /> {t("إدارة الأنواع", "Manage types")}</Link>} />
+        <PageHeader title={t("منتج جديد", "New product")} subtitle={t("اختر نوع المنتج. نحمّل صورته ومناطق الطباعة وقيمه الافتراضية تلقائياً.", "Choose the kind of product. Its mockup, print areas and defaults load automatically.")} actions={<><Link href={`/${locale}/admin/products/batch`} className="btn btn-brand btn-sm">{t("عدة منتجات مرة وحدة", "Several at once")}</Link><Link href={`/${locale}/admin/product-types`} className="btn btn-outline btn-sm"><Settings2 className="size-4" /> {t("إدارة الأنواع", "Manage types")}</Link></>} />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
           {types.map((ty) => {
             const v = ty.product_type_views?.[0];
@@ -68,7 +68,7 @@ export default async function NewProduct({ params, searchParams }: { params: Pro
       <PageHeader
         title={chosen ? `${t("منتج جديد", "New product")} — ${locale === "ar" ? chosen.name_ar : chosen.name_en}` : t("منتج جديد", "New product")}
         subtitle={chosen ? t("ارفع التصميم وضعه على القطعة، ثم الاسم والسعر والمقاسات والألوان، واحفظ.", "Upload the artwork and place it, then name, price, sizes and colours — and save.") : t("كل شي بشاشة وحدة: المعلومات والصور والمقاسات والألوان والكمية.", "Everything on one screen: details, photos, sizes, colours and stock.")}
-        actions={types.length ? <Link href={`/${locale}/admin/products/new`} className="btn btn-outline btn-sm">{t("تغيير النوع", "Change type")}</Link> : undefined}
+        actions={types.length ? <>{chosen && <Link href={`/${locale}/admin/products/batch?type=${chosen.id}`} className="btn btn-brand btn-sm">{t("عدة منتجات مرة وحدة", "Several at once")}</Link>}<Link href={`/${locale}/admin/products/new`} className="btn btn-outline btn-sm">{t("تغيير النوع", "Change type")}</Link></> : undefined}
       />
       <ProductForm key={chosen?.id ?? "plain"} printType={chosen} otherTypes={types} categories={(categories as Category[]) ?? []} collections={(collections as Collection[]) ?? []} selectedCollections={[]} sizes={(sizes as Size[]) ?? []} colors={colorList} />
     </div>

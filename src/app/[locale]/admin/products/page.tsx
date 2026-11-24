@@ -50,6 +50,7 @@ export default async function AdminProducts({ params, searchParams }: { params: 
         actions={<>
           <a href="/api/admin/products" className="btn btn-outline btn-sm"><Download className="size-4" /> CSV</a>
           <Link href={`/${locale}/admin/products/import`} className="btn btn-outline btn-sm"><Upload className="size-4" /> {t("استيراد", "Import")}</Link>
+          <Link href={`/${locale}/admin/products/batch`} className="btn btn-outline btn-sm"><Plus className="size-4" /> {t("عدة منتجات", "Several at once")}</Link>
           <Link href={`/${locale}/admin/products/new`} className="btn btn-brand btn-sm"><Plus className="size-4" /> {t("منتج جديد", "New product")}</Link>
         </>}
       />
