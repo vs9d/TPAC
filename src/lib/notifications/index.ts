@@ -5,6 +5,8 @@ import { publicEnv } from "@/lib/env";
 import { sendEmail, emailConfigured } from "./email";
 import { sendWhatsAppTemplate, whatsappConfigured } from "./whatsapp";
 import { enqueueOrderWhatsApp, processWhatsAppQueue } from "./whatsapp-queue";
+import { adminNewOrderEmail, customerOrderEmail, type EmailItem } from "./email-templates";
+import { whatsappNumber } from "@/lib/whatsapp";
 import type { Order, SiteSettings } from "@/lib/types";
 
 type Channel = "email" | "whatsapp";
@@ -22,6 +24,8 @@ interface Message {
   userId?: string | null;
   /** template parameters for WhatsApp */
   params?: string[];
+  /** branded HTML version of an email */
+  html?: string;
 }
 
 const STATUS_TEXT: Record<string, { ar: string; en: string }> = {
@@ -65,7 +69,7 @@ async function dispatch(msg: Message): Promise<void> {
 
   try {
     if (msg.channel === "email") {
-      await sendEmail({ to: msg.recipient, subject: msg.title, text: `${msg.body}${msg.link ? `\n\n${msg.link}` : ""}` });
+      await sendEmail({ to: msg.recipient, subject: msg.title, text: `${msg.body}${msg.link && !msg.body.includes(msg.link) ? `\n\n${msg.link}` : ""}`, html: msg.html });
     } else {
       await sendWhatsAppTemplate({ to: msg.recipient, params: msg.params ?? [msg.title, msg.body] });
       // (admin alerts use the general template)
@@ -77,6 +81,18 @@ async function dispatch(msg: Message): Promise<void> {
       .update({ status: "failed", error: e instanceof Error ? e.message.slice(0, 500) : "unknown" })
       .eq("id", row.id);
   }
+}
+
+async function emailItems(orderId: string): Promise<EmailItem[]> {
+  const { data } = await createAdminClient().from("order_items").select("name_ar, name_en, size_code, color_name_ar, color_name_en, quantity, unit_price, line_total, image_url").eq("order_id", orderId);
+  return (data as EmailItem[] | null) ?? [];
+}
+
+/** Links and contact details shown in every email. */
+async function emailContext() {
+  const { data } = await createAdminClient().from("website_settings").select("key, value").in("key", ["contact", "social"]);
+  const get = (k: string) => (data ?? []).find((r) => r.key === k)?.value as Record<string, string> | undefined;
+  return { siteUrl: publicEnv.siteUrl, whatsapp: whatsappNumber(get("contact")?.whatsapp), instagram: get("social")?.instagram || null };
 }
 
 async function getNotificationSettings(): Promise<SiteSettings["notifications"]> {
@@ -123,7 +139,8 @@ export async function notifyOrder(orderId: string, event: "created" | "status_ch
     if (customerEvents.includes(order.status)) {
       const ev = event === "created" ? "order.created" : `order.${order.status}`;
       if (settings.customer_email && order.email) {
-        tasks.push(dispatch({ audience: "customer", channel: "email", event: ev, recipient: order.email, title, body, link: trackUrl, orderId, userId: order.user_id }));
+        const mail = customerOrderEmail(order, await emailItems(orderId), await emailContext());
+        tasks.push(dispatch({ audience: "customer", channel: "email", event: ev, recipient: order.email, title: mail.subject, body: mail.text, html: mail.html, link: trackUrl, orderId, userId: order.user_id }));
       }
     }
     // WhatsApp: own queue (opt-in, one message per status, retries, editable templates) — see whatsapp-queue.ts
@@ -134,7 +151,10 @@ export async function notifyOrder(orderId: string, event: "created" | "status_ch
       const adminTitle = `طلب جديد ${order.order_number}${order.has_custom_items ? " (تصميم خاص)" : ""}`;
       const adminBody = `${order.customer_name} — ${order.phone} — ${formatIQD(order.total, "ar")} — ${order.governorate}`;
       const link = `${publicEnv.siteUrl}/ar/admin/orders/${order.id}`;
-      if (admin.email) tasks.push(dispatch({ audience: "admin", channel: "email", event: "order.created", recipient: admin.email, title: adminTitle, body: adminBody, link, orderId }));
+      if (admin.email) {
+        const mail = adminNewOrderEmail(order, await emailItems(orderId), await emailContext());
+        tasks.push(dispatch({ audience: "admin", channel: "email", event: "order.created", recipient: admin.email, title: mail.subject, body: mail.text, html: mail.html, link, orderId }));
+      }
       if (admin.whatsapp) tasks.push(dispatch({ audience: "admin", channel: "whatsapp", event: "order.created", recipient: admin.whatsapp, title: adminTitle, body: adminBody, orderId, params: ["TPAC", order.order_number, adminBody] }));
     }
     await Promise.all(tasks);

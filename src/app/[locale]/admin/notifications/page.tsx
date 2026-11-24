@@ -31,6 +31,15 @@ export default async function AdminNotifications({ params }: { params: Promise<{
           </ul>
         )}
       </Card>
+      <Card title={t("شكل رسائل الإيميل", "How the emails look")}>
+        <p className="mb-3 text-sm text-mute">{t("معاينة بآخر طلب بالمتجر (أو مثال إذا ماكو طلبات).", "Preview filled with the latest order (or a sample).")}</p>
+        <div className="flex flex-wrap gap-2">
+          <a href="/api/admin/email-preview?kind=admin" target="_blank" className="btn btn-outline btn-sm">{t("تنبيه طلب جديد (للإدارة)", "New order (admin)")}</a>
+          {([["received", "تم استلام الطلب", "Received"], ["confirmed", "تم التأكيد", "Confirmed"], ["printing", "قيد الطباعة", "Printing"], ["shipped", "تم الشحن", "Shipped"], ["delivered", "تم التسليم", "Delivered"], ["cancelled", "ملغي", "Cancelled"]] as const).map(([s, ar, en]) => (
+            <a key={s} href={`/api/admin/email-preview?status=${s}&locale=${locale}`} target="_blank" className="btn btn-outline btn-sm">{t(`للزبون: ${ar}`, `Customer: ${en}`)}</a>
+          ))}
+        </div>
+      </Card>
       <Card title={t("سجل الإرسال (بريد / واتساب)", "Delivery log (email / WhatsApp)")}>
         {!delivery?.length ? <Empty>—</Empty> : (
           <table className="table-admin"><tbody>
