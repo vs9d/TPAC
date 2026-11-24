@@ -12,6 +12,7 @@ import { formatDate, formatIQD } from "@/lib/format";
 import { governorateName } from "@/lib/iraq";
 import { formatIraqiPhone } from "@/lib/phone";
 import type { Order, OrderItem, StatusHistory } from "@/lib/types";
+import { LineOptions } from "@/components/product/line-options";
 
 export const metadata = { robots: { index: false } };
 
@@ -40,7 +41,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ locale
         </div>
         <div className="flex items-center gap-3">
           <StatusBadge status={order.status} dict={dict} />
-          <ReorderButton items={(items ?? []).filter((i) => i.variant_id).map((i) => ({ variant_id: i.variant_id!, quantity: i.quantity, name_ar: i.name_ar, name_en: i.name_en, image: i.image_url, size: i.size_code ?? undefined, color_hex: i.color_hex ?? undefined }))} />
+          <ReorderButton items={(items ?? []).filter((i) => i.variant_id).map((i) => ({ variant_id: i.variant_id!, quantity: i.quantity, name_ar: i.name_ar, name_en: i.name_en, image: i.image_url, size: i.size_code ?? undefined, color_hex: i.color_hex ?? undefined, options: i.options ?? undefined }))} />
         </div>
       </div>
       <div className="grid gap-10 md:grid-cols-2">
@@ -55,6 +56,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ locale
                   <div className="flex-1 text-sm">
                     <p className="font-semibold">{locale === "ar" ? it.name_ar : it.name_en}</p>
                     <p className="text-xs text-mute">{[it.size_code, locale === "ar" ? it.color_name_ar : it.color_name_en].filter(Boolean).join(" · ")} × {it.quantity}</p>
+                    <LineOptions options={it.options} locale={locale} />
                   </div>
                   <p className="text-sm tabular-nums">{formatIQD(it.line_total, locale)}</p>
                 </li>

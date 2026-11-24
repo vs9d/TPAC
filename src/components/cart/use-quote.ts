@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { quoteCart } from "@/lib/actions/cart";
-import { useCart } from "./store";
+import { useCart, lineItem, lineKey } from "./store";
 import type { CartQuote } from "@/lib/types";
 
 /** Server-calculated quote for the current cart (prices are never trusted from the browser). */
@@ -14,7 +14,7 @@ export function useQuote(opts: { governorate?: string; delivery_method?: string;
   const [error, setError] = useState<string | null>(null);
   const seq = useRef(0);
   const enabled = opts.enabled ?? true;
-  const key = JSON.stringify([lines.map((l) => [l.variant_id, l.custom_design_id, l.quantity]), discountCode, opts.governorate, opts.delivery_method]);
+  const key = JSON.stringify([lines.map((l) => [lineKey(l), l.quantity]), discountCode, opts.governorate, opts.delivery_method]);
 
   useEffect(() => {
     if (!hydrated || !enabled) return;
@@ -26,7 +26,7 @@ export function useQuote(opts: { governorate?: string; delivery_method?: string;
     setLoading(true);
     const t = setTimeout(async () => {
       const res = await quoteCart({
-        items: lines.map((l) => (l.variant_id ? { variant_id: l.variant_id, quantity: l.quantity } : { custom_design_id: l.custom_design_id!, quantity: l.quantity })),
+        items: lines.map(lineItem),
         discount_code: discountCode || undefined,
         governorate: opts.governorate || undefined,
         delivery_method: (opts.delivery_method as "standard") || undefined,

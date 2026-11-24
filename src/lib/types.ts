@@ -107,6 +107,8 @@ export interface Product {
   disabled_print_area_ids?: string[];
   sales_count: number;
   tags: string[];
+  /** couple sets: second size + personalisation fields (add-couple-options.sql) */
+  couple_options?: import("./couple-options").CoupleOptions | null;
   seo_title_ar: string | null;
   seo_title_en: string | null;
   seo_description_ar: string | null;
@@ -177,7 +179,10 @@ export interface QuoteLine {
   quantity: number;
   available?: number;
   line_total: number;
-  error?: "unavailable" | "insufficient_stock" | "invalid_quantity";
+  /** couple sets: the customer's answers as sent, and the labelled options */
+  option_values?: Record<string, string>;
+  options?: import("./couple-options").ResolvedOption[] | null;
+  error?: "unavailable" | "insufficient_stock" | "invalid_quantity" | "options_required";
 }
 
 export interface CartQuote {
@@ -237,6 +242,8 @@ export interface OrderItem {
   unit_price: number;
   quantity: number;
   line_total: number;
+  /** couple sets: second size, names, letters, dates… */
+  options?: import("./couple-options").ResolvedOption[] | null;
 }
 
 export interface StatusHistory {

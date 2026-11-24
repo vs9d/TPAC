@@ -17,6 +17,7 @@ import { formatIQD, formatDate } from "@/lib/format";
 import { formatIraqiPhone } from "@/lib/phone";
 import { governorateName } from "@/lib/iraq";
 import type { Order, OrderItem, StatusHistory } from "@/lib/types";
+import { LineOptions } from "@/components/product/line-options";
 
 interface Design { id: string; batch_id: string | null; name: string | null; options: { method?: string; finish?: string; fabric?: string; package?: string; addons?: string[] } | null; garment_type: string; size_code: string; print_locations: string[]; preview_front_path: string | null; preview_back_path: string | null; notes: string | null; config: { objects?: { type: string; location: string; text?: string; fontFamily?: string; fill?: string; artwork_id?: string }[] } }
 interface Artwork { id: string; storage_path: string; mime_type: string; original_name: string | null; width: number | null; height: number | null; custom_design_id: string | null }
@@ -89,6 +90,7 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ l
                       <td>
                         <p className="font-semibold">{locale === "ar" ? it.name_ar : it.name_en}</p>
                         <p className="text-xs text-mute">{[it.sku, it.size_code, locale === "ar" ? it.color_name_ar : it.color_name_en].filter(Boolean).join(" · ")}</p>
+                        <LineOptions options={it.options} locale={locale} className="rounded-lg bg-amber/10 p-2 text-sm" />
                         {design && <Pill tone="warn">{t("تصميم خاص", "Custom design")}</Pill>}
                       </td>
                       <td className="tabular-nums">{formatIQD(it.unit_price, locale)} × {it.quantity}</td>

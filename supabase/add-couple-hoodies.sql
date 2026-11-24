@@ -28,115 +28,115 @@ from (values
   ('old-cinema-couple-hoodies', 'طقم زمن الطيبين', 'Golden Era Couple Set', 'على صدر كل هودي صورة صغيرة من زمن الطيبين مع قلوب حمراء — واحد إله وواحد إلها.
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'A small golden-era film still with red hearts on the chest of each hoodie — one for him, one for her.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'A small golden-era film still with red hearts on the chest of each hoodie — one for him, one for her.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
-  ('coordinates-couple-hoodies', 'طقم الإحداثيات', 'Coordinates Couple Set', 'على الصدر إحداثيات المكان اللي تعرّفتوا بيه، وعلى الكم أول حرف مع ∞ و♥. نكتب الإحداثيات والحروف مثل ما تريدون — اكتبوها بملاحظات الطلب.
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
+  ('coordinates-couple-hoodies', 'طقم الإحداثيات', 'Coordinates Couple Set', 'على الصدر إحداثيات المكان اللي تعرّفتوا بيه، وعلى الكم أول حرف مع ∞ و♥. نكتب الإحداثيات والحروف مثل ما تريدون — اكتبوها بالخانات بصفحة المنتج.
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'The coordinates of the place you met on the chest, and an initial with ∞ and ♥ on the sleeve. We print your own coordinates and initials — write them in the order notes.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'The coordinates of the place you met on the chest, and an initial with ∞ and ♥ on the sleeve. We print your own coordinates and initials — fill them in on the product page.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
-  ('anatomy-heart-names-couple-hoodies', 'طقم القلب بالاسم والتاريخ', 'Heart, Name & Date Couple Set', 'على الصدر قلب حقيقي مرسوم بالخط، تحته تاريخكم واسم كل واحد، وعلى الكم الحرفين وبينهم قلب. نكتب الأسماء والتاريخ والحروف مثل ما تريدون — اكتبوها بملاحظات الطلب.
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
+  ('anatomy-heart-names-couple-hoodies', 'طقم القلب بالاسم والتاريخ', 'Heart, Name & Date Couple Set', 'على الصدر قلب حقيقي مرسوم بالخط، تحته تاريخكم واسم كل واحد، وعلى الكم الحرفين وبينهم قلب. نكتب الأسماء والتاريخ والحروف مثل ما تريدون — اكتبوها بالخانات بصفحة المنتج.
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'A line-drawn anatomical heart on the chest with your date and each name beneath it, and both initials with a heart on the sleeve. We print your own names, date and initials — write them in the order notes.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'A line-drawn anatomical heart on the chest with your date and each name beneath it, and both initials with a heart on the sleeve. We print your own names, date and initials — fill them in on the product page.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
   ('bears-forever-couple-hoodies', 'طقم الدبدوبين', 'Forever Bears Couple Set', 'دبدوبين على الصدر: «الى متى يالوز ؟» — «الى الابد يا سكر ♡».
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'Two bears on the chest: “Until when, my almond?” — “Forever, sugar ♡”.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'Two bears on the chest: “Until when, my almond?” — “Forever, sugar ♡”.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
-  ('pinky-love-couple-hoodies', 'طقم وعد الخنصر', 'Pinky Love Couple Set', 'على الصدر إيدين ماسكين بعض بالخنصر وكلمة love، وعلى الكم أول حرف من اسم الشريك. نكتب الحروف مثل ما تريدون — اكتبوها بملاحظات الطلب.
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
+  ('pinky-love-couple-hoodies', 'طقم وعد الخنصر', 'Pinky Love Couple Set', 'على الصدر إيدين ماسكين بعض بالخنصر وكلمة love، وعلى الكم أول حرف من اسم الشريك. نكتب الحروف مثل ما تريدون — اكتبوها بالخانات بصفحة المنتج.
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'Two hands linked by the little finger and “love” on the chest, and your partner''s initial on the sleeve. We print your own initials — write them in the order notes.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'Two hands linked by the little finger and “love” on the chest, and your partner''s initial on the sleeve. We print your own initials — fill them in on the product page.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
   ('puzzle-heart-couple-hoodies', 'طقم تكمّلني', 'You Complete Me Couple Set', 'على هودي قلب ناقصه قطعة، وعلى الثاني القطعة اللي تكمّله — وعلى الكم «u complete me ♥».
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'One hoodie has a heart missing a piece, the other has the piece that completes it — “u complete me ♥” on the sleeve.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'One hoodie has a heart missing a piece, the other has the piece that completes it — “u complete me ♥” on the sleeve.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
   ('full-of-you-couple-hoodies', 'طقم مليان بيك', 'Full of You Couple Set', 'قلب حقيقي على الصدر: «I''m Full of you» و«You are always in my heart».
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'An anatomical heart on the chest: “I''m Full of you” and “You are always in my heart”.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'An anatomical heart on the chest: “I''m Full of you” and “You are always in my heart”.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
   ('fik-minni-couple-hoodies', 'طقم فيك مني .. فيني منك', 'Part of Me Couple Set', 'على هودي «فيك مني ..» وعلى الثاني «فيني منك ..» — عبارتين تكمّلن بعض.
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'One reads “فيك مني ..” (there''s some of me in you), the other “فيني منك ..” (there''s some of you in me).
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'One reads “فيك مني ..” (there''s some of me in you), the other “فيني منك ..” (there''s some of you in me).
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
   ('bunnies-couple-hoodies', 'طقم الأرانب', 'Bunnies Couple Set', 'على هودي الأرنب وعلى الثاني الأرنبة.
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'The bunny on one hoodie and his bunny girl on the other.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'The bunny on one hoodie and his bunny girl on the other.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
   ('always-with-you-couple-hoodies', 'طقم دائماً وياك', 'Always With You Couple Set', 'قلب حقيقي مرسوم بالخط على الصدر، وعلى الكم «I AM ALWAYS WITH YOU».
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'A line-drawn anatomical heart on the chest and “I AM ALWAYS WITH YOU” on the sleeve.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'A line-drawn anatomical heart on the chest and “I AM ALWAYS WITH YOU” on the sleeve.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
   ('little-chicks-couple-hoodies', 'طقم الصوص', 'Little Chicks Couple Set', 'على هودي صوص صغير وعلى الثاني صوص طالع من البيضة.
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'A little chick on one hoodie and a chick hatching from its egg on the other.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'A little chick on one hoodie and a chick hatching from its egg on the other.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
   ('ocean-heart-couple-hoodies', 'طقم قلب البحر', 'Ocean Heart Couple Set', 'قلب نصّه بحر على الصدر، وتحته «You are my soul and my all my life».
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'A heart half-filled with the sea on the chest and “You are my soul and my all my life”.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'A heart half-filled with the sea on the chest and “You are my soul and my all my life”.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
-  ('initial-heart-couple-hoodies', 'طقم القلب بالحرف', 'Initial Heart Couple Set', 'على صدر كل هودي قلب حقيقي بداخله أول حرف من اسم الشريك. نكتب الحروف مثل ما تريدون — اكتبوها بملاحظات الطلب.
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
+  ('initial-heart-couple-hoodies', 'طقم القلب بالحرف', 'Initial Heart Couple Set', 'على صدر كل هودي قلب حقيقي بداخله أول حرف من اسم الشريك. نكتب الحروف مثل ما تريدون — اكتبوها بالخانات بصفحة المنتج.
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'An anatomical heart holding your partner''s initial on the chest of each hoodie. We print your own initials — write them in the order notes.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'An anatomical heart holding your partner''s initial on the chest of each hoodie. We print your own initials — fill them in on the product page.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
-  ('stitch-hug-couple-hoodies', 'طقم الحضن', 'The Hug Couple Set', 'حضن الكائنين الأزرق والوردي على الصدر، وتحته «I''m with you even if this whole world abandons you, I promise to love you forever»، وعلى الكم تاريخكم. نكتب التاريخ مثل ما تريدون — اكتبوها بملاحظات الطلب.
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
+  ('stitch-hug-couple-hoodies', 'طقم الحضن', 'The Hug Couple Set', 'حضن الكائنين الأزرق والوردي على الصدر، وتحته «I''m with you even if this whole world abandons you, I promise to love you forever»، وعلى الكم تاريخكم. نكتب التاريخ مثل ما تريدون — اكتبوها بالخانات بصفحة المنتج.
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'The blue and pink hug on the chest, “I''m with you even if this whole world abandons you, I promise to love you forever”, and your date on the sleeve. We print your own date — write them in the order notes.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'The blue and pink hug on the chest, “I''m with you even if this whole world abandons you, I promise to love you forever”, and your date on the sleeve. We print your own date — fill them in on the product page.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
-  ('pinky-promise-date-couple-hoodies', 'طقم الوعد بالتاريخ', 'Pinky Promise Date Couple Set', 'على الصدر إيدين بوعد الخنصر وفوقهم تاريخكم وقلب. نكتب التاريخ مثل ما تريدون — اكتبوها بملاحظات الطلب.
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
+  ('pinky-promise-date-couple-hoodies', 'طقم الوعد بالتاريخ', 'Pinky Promise Date Couple Set', 'على الصدر إيدين بوعد الخنصر وفوقهم تاريخكم وقلب. نكتب التاريخ مثل ما تريدون — اكتبوها بالخانات بصفحة المنتج.
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'A pinky promise with your date and a heart on the chest. We print your own date — write them in the order notes.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'A pinky promise with your date and a heart on the chest. We print your own date — fill them in on the product page.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.'),
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.'),
   ('stitch-angel-couple-hoodies', 'طقم الأزرق والوردي', 'Blue & Pink Couple Set', 'على هودي الكائن الوردي وعلى الثاني الكائن الأزرق — يباوعون على بعض.
 
 الألوان: أسود + أبيض، الاثنين أسود، أو الاثنين أبيض.
-السعر للطقم كامل (هوديين). المقاس اللي تختارونه للهودي الأول — اكتبوا مقاس الهودي الثاني بملاحظات الطلب.', 'The pink one on one hoodie and the blue one on the other — looking at each other.
+السعر للطقم كامل (هوديين). تختارون قياس كل هودي بصفحة المنتج.', 'The pink one on one hoodie and the blue one on the other — looking at each other.
 
 Colours: black + white, both black, or both white.
-The price is for the full set (two hoodies). The size you pick is for the first hoodie — write the second hoodie''s size in the order notes.')
+The price is for the full set (two hoodies). Pick each hoodie''s size on the product page.')
 ) as v(slug, name_ar, name_en, description_ar, description_en)
 -- only on a shop that already has its catalogue (on a brand-new database the seed comes later)
 where exists (select 1 from public.categories where slug = 'hoodies')

@@ -13,6 +13,8 @@ import type { Category, Collection, Color, Product, Size } from "@/lib/types";
 import type { ProductTypeRow } from "@/lib/print-config";
 import { ProductStudio, type StudioHandle } from "./printing/product-studio";
 import { GarmentLinksDraft } from "./printing/garment-links";
+import { CoupleOptionsEditor } from "./couple-options-editor";
+import { parseCoupleOptions } from "@/lib/couple-options";
 
 const setValue = (id: string, v: string) => {
   const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null;
@@ -218,6 +220,8 @@ export function ProductForm({ product, categories, collections, selectedCollecti
             <Input name="compare_at_price" type="number" min={0} step={250} inputMode="numeric" label={L("السعر قبل الخصم", "Compare-at price")} defaultValue={product?.compare_at_price ?? ""} hint={L("يظهر مشطوباً لإظهار التخفيض", "Shown struck-through as a sale")} />
           </div>
         </div>
+
+        <CoupleOptionsEditor initial={parseCoupleOptions(product?.couple_options)} locale={locale} />
 
         {creating && (
           <div className={card}>

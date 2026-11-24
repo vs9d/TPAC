@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { optionValuesSchema } from "./couple-options";
 import { SHAPE_IDS } from "./design-assets";
 import { normalizeIraqiPhone } from "./phone";
 import { GOVERNORATES } from "./iraq";
@@ -38,7 +39,7 @@ export const governorateSchema = z.enum(governorateCodes, { message: "required" 
 export const uuid = z.uuid();
 
 export const cartLineSchema = z.union([
-  z.object({ variant_id: uuid, quantity: z.number().int().min(1).max(99) }),
+  z.object({ variant_id: uuid, quantity: z.number().int().min(1).max(99), options: optionValuesSchema.optional() }),
   z.object({ custom_design_id: uuid, quantity: z.number().int().min(1).max(99) }),
 ]);
 export const cartLinesSchema = z.array(cartLineSchema).max(50);
