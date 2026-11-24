@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Check, ChevronDown, Copy, Eye, EyeOff, Image as ImageIcon, Layers, Lightbulb, Loader2, Lock, LockOpen, Minus, Plus, Ruler, Shapes, Sparkles, Trash2, Type as TypeIcon, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Copy, Eye, EyeOff, HeartHandshake, Image as ImageIcon, Layers, Lightbulb, Loader2, Lock, LockOpen, Minus, Plus, Ruler, Shapes, Sparkles, Trash2, Type as TypeIcon, Upload } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { adminT } from "@/lib/admin-i18n";
 import { GARMENTS, type GarmentType, type PrintLocation } from "@/lib/garments";
@@ -13,7 +13,7 @@ import type { Choice, DesignerApi, LayerInfo, TabId } from "./types";
 
 /* ============================================================================ creative space */
 
-const shapeGroups = { basic: ["أساسية", "Basic"], stars: ["نجوم", "Stars"], symbols: ["رموز", "Symbols"], lines: ["خطوط وإطارات", "Lines & frames"] } as const;
+const shapeGroups = { love: ["حب ومرتبطين", "Love"], cute: ["لطيفة", "Cute"], codes: ["باركود و QR", "Barcode & QR"], basic: ["أساسية", "Basic"], stars: ["نجوم", "Stars"], symbols: ["رموز", "Symbols"], lines: ["خطوط وإطارات", "Lines & frames"] } as const;
 
 export function CreativeSpace({ tab, setTab, api, ready, uploading, openUpload, fonts, location, locationLabel, layers, selectedId, garmentLocations, textRef, onClear }: {
   tab: TabId; setTab: (t: TabId) => void; api: DesignerApi; ready: boolean; uploading: boolean; openUpload: () => void;
@@ -23,7 +23,13 @@ export function CreativeSpace({ tab, setTab, api, ready, uploading, openUpload, 
   const { locale } = useI18n();
   const t = adminT(locale);
   const [word, setWord] = useState("");
-  const [group, setGroup] = useState<keyof typeof shapeGroups>("basic");
+  const [group, setGroup] = useState<keyof typeof shapeGroups>("love");
+  const [code, setCode] = useState("");
+  const [making, setMaking] = useState(false);
+  const makeCode = async (kind: "barcode" | "qr") => {
+    setMaking(true);
+    try { await api.addCode(kind, code); } finally { setMaking(false); }
+  };
   const [layersOpen, setLayersOpen] = useState(false);
   const here = layers.filter((l) => l.location === location);
   const tabs: [TabId, string, React.ReactNode][] = [
@@ -113,6 +119,17 @@ export function CreativeSpace({ tab, setTab, api, ready, uploading, openUpload, 
                 <button key={g} aria-pressed={group === g} onClick={() => setGroup(g)} className="chip h-9 shrink-0 px-4 text-xs">{shapeGroups[g][locale === "ar" ? 0 : 1]}</button>
               ))}
             </div>
+            {group === "codes" ? (
+              <div className="space-y-3 rounded-2xl border border-line p-4">
+                <p className="text-sm text-mute">{t("اكتب تاريخ، اسم، رقم، أو رابط (مثلاً حساب إنستغرام أو أغنيتكم) ونحوّله لباركود أو QR ينطبع.", "Type a date, a name, a number or a link (an Instagram account, your song…) and we turn it into a printable barcode or QR code.")}</p>
+                <input value={code} onChange={(e) => setCode(e.target.value)} maxLength={300} dir="auto" placeholder={t("مثلاً: 20.09.2020 أو instagram.com/…", "e.g. 20.09.2020 or instagram.com/…")} aria-label={t("نص الباركود", "Barcode text")} className="field h-12" />
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" disabled={!ready || !code.trim() || making || uploading} onClick={() => makeCode("barcode")} className="btn btn-outline h-12">{making ? <Loader2 className="size-4 animate-spin" /> : <span className="font-mono text-base leading-none tracking-[-.18em]" aria-hidden>║▌║█║</span>} {t("باركود", "Barcode")}</button>
+                  <button type="button" disabled={!ready || !code.trim() || making || uploading} onClick={() => makeCode("qr")} className="btn btn-outline h-12">{making ? <Loader2 className="size-4 animate-spin" /> : <span className="font-mono text-base leading-none" aria-hidden>▣</span>} {t("رمز QR", "QR code")}</button>
+                </div>
+                <p className="text-[11px] text-mute">{t("الباركود يقبل الأحرف الإنجليزية والأرقام. الـ QR يقبل أي نص أو رابط، والكاميرا تقراه.", "Barcodes take English letters and digits. QR codes take any text or link and phones can scan them.")}</p>
+              </div>
+            ) : (
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
               {SHAPES.filter((s) => s.group === group).map((s) => (
                 <button key={s.id} disabled={!ready} onClick={() => api.addShape(s.id)} title={locale === "ar" ? s.ar : s.en} aria-label={locale === "ar" ? s.ar : s.en} className="grid aspect-square place-items-center rounded-2xl border border-line bg-paper p-3.5 transition hover:border-pine hover:bg-pine-soft">
@@ -120,6 +137,7 @@ export function CreativeSpace({ tab, setTab, api, ready, uploading, openUpload, 
                 </button>
               ))}
             </div>
+            )}
           </div>
         )}
 
@@ -129,14 +147,27 @@ export function CreativeSpace({ tab, setTab, api, ready, uploading, openUpload, 
               <h3 className="text-lg font-bold">{t("أفكار جاهزة", "Ready ideas")}</h3>
               <p className="mt-1 text-sm text-mute">{t("اختر فكرة وبعدها عدّل الكلام مثل ما تحب.", "Pick an idea, then change the words to your own.")}</p>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {TEMPLATES.filter((tp) => tp.items.some((i) => garmentLocations.includes(i.location))).map((tp) => (
-                <button key={tp.id} disabled={!ready} onClick={() => api.applyTemplate(tp.id)} className="flex items-center gap-3 rounded-2xl border border-line bg-paper p-4 text-start transition hover:border-pine hover:bg-pine-soft">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-pine-soft text-pine"><Sparkles className="size-5" /></span>
-                  <span><span className="block text-sm font-bold">{locale === "ar" ? tp.ar : tp.en}</span><span className="block text-xs text-mute">{locale === "ar" ? tp.hint_ar : tp.hint_en}</span></span>
-                </button>
-              ))}
-            </div>
+            {([
+              ["couple", t("للمرتبطين 💞 — قطعتين سوة", "For couples 💞 — two pieces at once")],
+              ["gift", t("هدايا وكلمات وتواريخ", "Gifts, words & dates")],
+              ["", t("أفكار عامة", "General ideas")],
+            ] as const).map(([g, title]) => {
+              const list = TEMPLATES.filter((tp) => (tp.group ?? "") === g && [...tp.items, ...(tp.pair ?? [])].some((i) => garmentLocations.includes(i.location)));
+              if (!list.length) return null;
+              return (
+                <div key={g || "general"} className="space-y-2">
+                  <p className="text-sm font-bold">{title}</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {list.map((tp) => (
+                      <button key={tp.id} disabled={!ready} onClick={() => api.applyTemplate(tp.id)} className="flex items-center gap-3 rounded-2xl border border-line bg-paper p-4 text-start transition hover:border-pine hover:bg-pine-soft">
+                        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-pine-soft text-pine">{tp.pair ? <HeartHandshake className="size-5" /> : <Sparkles className="size-5" />}</span>
+                        <span><span className="block text-sm font-bold">{locale === "ar" ? tp.ar : tp.en}</span><span className="block text-xs text-mute" dir="auto">{locale === "ar" ? tp.hint_ar : tp.hint_en}</span></span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

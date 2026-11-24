@@ -154,7 +154,7 @@ export const bulkRequestSchema = z
 
 const designObject = z.object({
   type: z.enum(["image", "text", "shape"]),
-  location: z.enum(["front", "back", "left_chest", "sleeve", "sleeve_left"]),
+  location: z.enum(["front", "back", "left_chest", "sleeve", "sleeve_left", "hood"]),
   left: z.number().finite(),
   top: z.number().finite(),
   // tiny artwork may be scaled up a lot; what matters is the rendered size (checked below)
@@ -211,6 +211,7 @@ export const designSchema = z.object({
   preview_sides: z.object({
     right: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000).optional(),
     left: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000).optional(),
+    hood: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000).optional(),
   }).optional(),
 });
 export type DesignInput = z.infer<typeof designSchema>;

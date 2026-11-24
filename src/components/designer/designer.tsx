@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Canvas as FabricCanvas, FabricObject, IText as FabricIText } from "fabric";
-import { Download, Eye, EyeOff, Loader2, Move, Redo2, ShoppingBag, Type as TypeIcon, Undo2, Upload } from "lucide-react";
+import { Copy, Download, Eye, EyeOff, HeartHandshake, Loader2, Move, Redo2, ShoppingBag, Type as TypeIcon, Undo2, Upload, X } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { useCart } from "@/components/cart/store";
 import { toast } from "@/components/ui/toast";
@@ -14,7 +14,7 @@ import { TEMPLATES, TEXT_PRESETS_UI, shapeById, type DesignerFont } from "@/lib/
 import { discountedUnit, resolveOptions, tierPercent, type OptionLite } from "@/lib/design-pricing";
 import { cn, formatIQD } from "@/lib/format";
 import type { Color, DesignerOptionRow, DesignerSettings, DesignerTierRow, GarmentTypeRow, PrintLocationRow } from "@/lib/types";
-import { PROPS, type Choice, type DesignerApi, type LayerInfo, type TabId, type Tagged } from "./types";
+import { PROPS, type Choice, type DesignerApi, type LayerInfo, type ReviewPiece, type TabId, type Tagged } from "./types";
 import { Inspector } from "./inspector";
 import { CreativeSpace, PieceCard } from "./studio";
 import { ReviewDialog } from "./review";
@@ -77,7 +77,11 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const [dragging, setDragging] = useState(false);
   const [ready, setReady] = useState(false);
   const [hist, setHist] = useState({ undo: false, redo: false });
-  const [review, setReview] = useState<{ front: string; back: string; right?: string; left?: string } | null>(null);
+  const [review, setReview] = useState<{ pieces: ReviewPiece[] } | null>(null);
+  // couples: two pieces designed together — the one on the canvas lives in the editor, the other is kept here
+  const [couple, setCouple] = useState(false);
+  const [piece, setPiece] = useState<0 | 1>(0);
+  const piecesRef = useRef<({ objects: string; colorId: string; sizes: Record<string, number> } | null)[]>([null, null]);
   const [preparing, setPreparing] = useState(false);
   const [saving, startSaving] = useTransition();
 
@@ -90,6 +94,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const historyRef = useRef<{ stack: string[]; index: number; busy: boolean; timer: ReturnType<typeof setTimeout> | null }>({ stack: [], index: -1, busy: false, timer: null });
   const stateRef = useRef({ garmentCode, location, view, colorHex: color?.hex ?? "#FFFFFF", colorId: color?.id ?? "", guides });
   stateRef.current = { garmentCode, location, view, colorHex: color?.hex ?? "#FFFFFF", colorId: color?.id ?? "", guides };
+  const liveRef = useRef({ piece: 0 as 0 | 1, sizes, colorId });
+  liveRef.current = { piece, sizes, colorId };
   const tplRef = useRef(templates);
   tplRef.current = templates;
   const tpl = (g: string) => tplRef.current[g] ?? null;
@@ -256,7 +262,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const focusOf = (loc: PrintLocation) => {
     // whole view for front / back, and for a sleeve that has its own close-up photo
     const own = viewOf(tplRef.current[stateRef.current.garmentCode] ?? null, loc);
-    if (loc === "front" || loc === "back" || own === "right" || own === "left") return { x: 0, y: 0, w: ARTBOARD.width };
+    if (loc === "front" || loc === "back" || own === "right" || own === "left" || own === "hood") return { x: 0, y: 0, w: ARTBOARD.width };
     const a = area(loc);
     const w = Math.min(ARTBOARD.width, Math.max(a.width, a.height) * 6);
     const h = (w * ARTBOARD.height) / ARTBOARD.width;
@@ -408,14 +414,84 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location, garmentCode]);
 
+  // ------------------------------------------------------------------ couples
+  const serialize = () => JSON.stringify(design().map((o) => o.toObject(PROPS)));
+  /** Puts a stored design on the canvas (its own undo history starts fresh). */
+  const loadObjects = async (json: string) => {
+    const c = canvasRef.current;
+    const F = fabricRef.current;
+    if (!c || !F) return;
+    const h = historyRef.current;
+    h.busy = true;
+    try {
+      c.discardActiveObject();
+      for (const o of design()) c.remove(o);
+      const objs = (await F.util.enlivenObjects(JSON.parse(json))) as Tagged[];
+      for (const o of objs) {
+        if (o.tpacLocation && !garment.print_locations.includes(o.tpacLocation)) continue;
+        o.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false });
+        c.add(o);
+      }
+      await renderScene();
+      syncLayers();
+      setSelected(null);
+    } finally {
+      h.busy = false;
+    }
+    historyRef.current = { stack: [], index: -1, busy: false, timer: null };
+    snapshot();
+  };
+  /** Shows the other piece: the current one is stored, the other one loaded with its colour and sizes. */
+  const switchPiece = async (to: 0 | 1) => {
+    const cur = liveRef.current;
+    if (to === cur.piece) return;
+    piecesRef.current[cur.piece] = { objects: serialize(), colorId: cur.colorId, sizes: cur.sizes };
+    const stored = piecesRef.current[to] ?? { objects: "[]", colorId: cur.colorId, sizes: { ...cur.sizes } };
+    // the garment may have changed since this piece was stored: keep its colour and sizes valid
+    const okSizes = Object.fromEntries(Object.entries(stored.sizes).filter(([k]) => garment.sizes.includes(k)));
+    const next = {
+      ...stored,
+      colorId: garmentColors.some((c) => c.id === stored.colorId) ? stored.colorId : garmentColors[0]?.id ?? cur.colorId,
+      sizes: Object.keys(okSizes).length ? okSizes : { [garment.sizes.includes("L") ? "L" : garment.sizes[0]!]: 1 },
+    };
+    const col = colors.find((c) => c.id === next.colorId);
+    // the canvas reads the colour from stateRef: update it now, before React re-renders
+    stateRef.current = { ...stateRef.current, colorId: next.colorId, colorHex: col?.hex ?? stateRef.current.colorHex };
+    liveRef.current = { piece: to, sizes: next.sizes, colorId: next.colorId };
+    setColorId(next.colorId);
+    setSizes(next.sizes);
+    setPiece(to);
+    await loadObjects(next.objects);
+  };
+  const startCouple = () => {
+    if (couple) return;
+    const cur = liveRef.current;
+    const other = garmentColors.find((c) => c.id !== cur.colorId)?.id ?? cur.colorId;
+    piecesRef.current = [null, { objects: "[]", colorId: other, sizes: { ...cur.sizes } }];
+    setCouple(true);
+  };
+  const stopCouple = async () => {
+    if (liveRef.current.piece === 1) await switchPiece(0);
+    piecesRef.current = [null, null];
+    setCouple(false);
+  };
+  const copyToOther = () => {
+    const cur = liveRef.current;
+    const otherIdx = cur.piece === 0 ? 1 : 0;
+    const o = piecesRef.current[otherIdx];
+    piecesRef.current[otherIdx] = { objects: serialize(), colorId: o?.colorId ?? cur.colorId, sizes: o?.sizes ?? { ...cur.sizes } };
+    setTick((n) => n + 1);
+    toast.success(t(`انسخ التصميم للقطعة ${otherIdx + 1} — عدّل عليها براحتك`, `Copied to piece ${otherIdx + 1} — edit it freely`));
+  };
+
   // ------------------------------------------------------------------ adding things
-  const placeNew = useCallback((o: Tagged, kind: "image" | "text" | "shape", loc: PrintLocation = stateRef.current.location, dy = 0) => {
+  const placeNew = useCallback((o: Tagged, kind: "image" | "text" | "shape", loc: PrintLocation = stateRef.current.location, dy = 0, dx = 0) => {
     const c = canvasRef.current!;
     const a = area(loc);
     o.tpacId = crypto.randomUUID();
     o.tpacLocation = loc;
     o.tpacKind = kind;
-    o.set({ left: a.x + a.width / 2, top: a.y + a.height / 2 + dy * a.height, cornerColor: "#E3963C", cornerStyle: "circle", transparentCorners: false, borderColor: "#E3963C", cornerSize: 12, padding: 2 });
+    o.set({ left: a.x + a.width / 2 + dx * a.width, top: a.y + a.height / 2 + dy * a.height, cornerColor: "#E3963C", cornerStyle: "circle", transparentCorners: false, borderColor: "#E3963C", cornerSize: 12, padding: 2 });
     o.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false });
     c.add(o);
     constrain(o);
@@ -442,7 +518,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     const weight = font.weights === 2 ? preset.weight : 400;
     await document.fonts.load(`${weight} 40px ${font.family}`).catch(() => undefined);
     const loc = over?.loc ?? stateRef.current.location;
-    const small = loc === "left_chest" || loc === "sleeve" || loc === "sleeve_left";
+    const small = loc === "left_chest" || loc === "sleeve" || loc === "sleeve_left" || loc === "hood";
     const fill = over?.fill ?? (preset.fill === "auto" ? autoFill() : preset.fill);
     const base = over?.text ?? dict.designer.textPlaceholder;
     const txt = new F.IText(preset.upper && !/[؀-ۿ]/.test(base) ? base.toUpperCase() : base, {
@@ -485,30 +561,66 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       const tpl = TEMPLATES.find((x) => x.id === id);
       const F = fabricRef.current;
       if (!tpl || !F) return;
-      let lastObj: Tagged | null = null;
-      for (const item of tpl.items) {
-        if (!garment.print_locations.includes(item.location)) continue;
-        if (item.kind === "text") {
-          const txt = await makeText(item.preset, { text: locale === "ar" ? item.ar : item.en, size: item.size, fill: item.fill, loc: item.location });
-          placeNew(txt, "text", item.location, item.dy);
-          lastObj = txt;
-        } else {
-          const def = shapeById(item.shape);
-          if (!def) continue;
-          const a = area(item.location);
-          const p = new F.Path(def.path, { fill: item.fill ?? autoFill(), fillRule: def.evenodd ? "evenodd" : "nonzero" }) as unknown as Tagged;
-          const k = Math.min(item.size, a.width, a.height) / Math.max(p.width || 100, p.height || 100);
-          p.set({ scaleX: k, scaleY: k, originX: "center", originY: "center" });
-          p.tpacShape = item.shape;
-          placeNew(p, "shape", item.location, item.dy);
-          lastObj = p;
+      const applyItems = async (items: typeof tpl.items) => {
+        let lastObj: Tagged | null = null;
+        for (const item of items) {
+          if (!garment.print_locations.includes(item.location)) continue;
+          if (item.kind === "text") {
+            const txt = await makeText(item.preset, { text: locale === "ar" ? item.ar : item.en, size: item.size, fill: item.fill, loc: item.location });
+            placeNew(txt, "text", item.location, item.dy, item.dx ?? 0);
+            lastObj = txt;
+          } else {
+            const def = shapeById(item.shape);
+            if (!def) continue;
+            const a = area(item.location);
+            const p = new F.Path(def.path, { fill: item.fill ?? autoFill(), fillRule: def.evenodd ? "evenodd" : "nonzero" }) as unknown as Tagged;
+            const k = Math.min(item.size, a.width, a.height) / Math.max(p.width || 100, p.height || 100);
+            p.set({ scaleX: k, scaleY: k, originX: "center", originY: "center" });
+            p.tpacShape = item.shape;
+            placeNew(p, "shape", item.location, item.dy, item.dx ?? 0);
+            lastObj = p;
+          }
         }
+        if (lastObj) await finishAdd(lastObj);
+        return lastObj;
+      };
+      if (tpl.pair) {
+        // a design for two: piece 1 gets `items`, piece 2 gets `pair`
+        startCouple();
+        await switchPiece(0);
+        await applyItems(tpl.items);
+        await switchPiece(1);
+        await applyItems(tpl.pair);
+        await switchPiece(0);
+        toast.success(t("انضاف التصميم على القطعتين — بدّل بينهن من فوق وعدّل الكلام", "Added to both pieces — switch between them above and edit the words"));
+        setTab("ideas");
+        return;
       }
-      if (lastObj) {
-        await finishAdd(lastObj);
+      if (await applyItems(tpl.items)) {
         toast.success(t("تمت إضافة القالب — عدّل النصوص كما تريد", "Template added — edit the text as you like"));
         setTab("ideas");
       }
+    },
+    addCode: async (kind, text) => {
+      const value = text.trim().slice(0, kind === "qr" ? 300 : 60);
+      if (!value) return;
+      const ink = autoFill();
+      let svg: string;
+      try {
+        if (kind === "qr") {
+          const QR = await import("qrcode");
+          svg = await QR.toString(value, { type: "svg", margin: 0, errorCorrectionLevel: "M", color: { dark: ink, light: "#ffffff00" } });
+        } else {
+          const JsBarcode = (await import("jsbarcode")).default;
+          const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          JsBarcode(el, value, { format: "CODE128", lineColor: ink, background: "transparent", displayValue: true, font: "monospace", fontSize: 16, margin: 0, height: 70, width: 2 });
+          svg = new XMLSerializer().serializeToString(el);
+        }
+      } catch {
+        toast.error(t("هذا النص ما ينفع كباركود — جرّب أحرف إنجليزية وأرقام", "This text can't be a barcode — try English letters and digits"));
+        return;
+      }
+      await onUpload(new File([svg], `${kind}.svg`, { type: "image/svg+xml" }), kind === "qr" ? t("رمز QR", "QR code") : t("باركود", "Barcode"));
     },
     upload: (file) => void onUpload(file),
     selectLayer: (id) => {
@@ -571,7 +683,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     redo: () => void restore(historyRef.current.index + 1),
   };
 
-  const onUpload = async (file: File) => {
+  const onUpload = async (file: File, label?: string) => {
     const F = fabricRef.current;
     if (!F) return;
     setUploading(true);
@@ -586,10 +698,10 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       img.tpacPx = width ?? img.width ?? 0;
       img.tpacVector = file.type === "image/svg+xml";
       const base = file.name.replace(/\.[a-z0-9]+$/i, "");
-      img.tpacLabel = /^[0-9a-f-]{16,}$/i.test(base) || /^(image|img_\d+)$/i.test(base) ? t("صورتك", "Your image") : base.slice(0, 28);
+      img.tpacLabel = label ?? (/^[0-9a-f-]{16,}$/i.test(base) || /^(image|img_\d+)$/i.test(base) ? t("صورتك", "Your image") : base.slice(0, 28));
       placeNew(img, "image");
       await finishAdd(img);
-      setTab("image");
+      if (!label) setTab("image");
     } catch (e) {
       const key = e instanceof Error ? e.message : "";
       toast.error(key === "fileType" ? dict.validation.fileType : key === "fileSize" ? dict.validation.fileSize : key === "rate_limited" ? dict.checkout.errors.rate_limited! : dict.common.somethingWrong);
@@ -694,8 +806,15 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const usedLocations = useMemo(() => [...new Set(layers.filter((l) => !l.hidden).map((l) => l.location))], [layers]);
   const locPrice = usedLocations.reduce((n, l) => n + (locations.find((x) => x.code === l)?.price ?? 0), 0);
   const unit = garment.base_price + locPrice + resolved.price;
-  const pct = tierPercent(tiers.filter((x) => x.is_active), totalQty);
+  // the other piece of a couple design: its own placements and sizes, priced the same way
+  const other = couple ? piecesRef.current[piece === 0 ? 1 : 0] : null;
+  const otherUsed = other ? [...new Set((JSON.parse(other.objects) as { tpacLocation?: string; tpacHidden?: boolean }[]).filter((o) => !o.tpacHidden && o.tpacLocation).map((o) => o.tpacLocation!))] : [];
+  const otherQty = other ? Object.values(other.sizes).reduce((n, q) => n + q, 0) : 0;
+  const otherUnit = garment.base_price + otherUsed.reduce((n, l) => n + (locations.find((x) => x.code === l)?.price ?? 0), 0) + resolved.price;
+  const pct = tierPercent(tiers.filter((x) => x.is_active), totalQty + otherQty);
   const unitAfter = discountedUnit(unit, pct);
+  const grandTotal = unitAfter * totalQty + discountedUnit(otherUnit, pct) * otherQty;
+  void tick;
 
   // ------------------------------------------------------------------ preview / save
   /**
@@ -707,7 +826,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     exportingRef.current = true;
     const prev = { w: c.getWidth(), h: c.getHeight(), vpt: [...c.viewportTransform] as [number, number, number, number, number, number] };
     try {
-      await renderScene({ view: v, location: v === "front" ? "front" : v === "back" ? "back" : v === "right" ? "sleeve" : "sleeve_left" });
+      await renderScene({ view: v, location: v === "front" ? "front" : v === "back" ? "back" : v === "right" ? "sleeve" : v === "hood" ? "hood" : "sleeve_left" });
       for (const o of c.getObjects() as Tagged[]) if (o.tpacKind === "guide") o.visible = false;
       c.discardActiveObject();
       c.setDimensions({ width: 900, height: 1050 });
@@ -726,64 +845,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
 
   const hasContent = () => design().some((o) => !o.tpacHidden);
 
-  const openReview = async () => {
-    if (!hasContent()) {
-      toast.error(dict.designer.emptyDesign);
-      return;
-    }
-    if (totalQty < 1) {
-      toast.error(t("اختر مقاساً واحداً على الأقل", "Pick at least one size"));
-      pieceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    setPreparing(true);
-    try {
-      const sides: { right?: string; left?: string } = {};
-      for (const side of ["right", "left"] as const) {
-        const loc = side === "right" ? "sleeve" : "sleeve_left";
-        if (viewOf(tpl(garmentCode), loc) === side && design().some((o) => !o.tpacHidden && o.tpacLocation === loc)) sides[side] = await compact(await exportView(side));
-      }
-      setReview({ front: await compact(await exportView("front")), back: await compact(await exportView("back")), ...sides });
-    } finally {
-      setPreparing(false);
-    }
-  };
-
-  const download = async () => {
-    setPreparing(true);
-    try {
-      for (const v of (["front", "back", "right", "left"] as StudioView[]).filter((x) => x === "front" || x === "back" || tpl(garmentCode)?.views[x])) {
-        const a = document.createElement("a");
-        a.href = await exportView(v, "png");
-        a.download = `tpac-${garmentCode}-${v}.png`;
-        a.click();
-      }
-    } finally {
-      setPreparing(false);
-    }
-  };
-
-  const pickedRows = resolved.picked.map((o) => options.find((x) => x.id === o.id)).filter((x): x is DesignerOptionRow => !!x);
-  const optionName = (o: DesignerOptionRow) => (locale === "ar" ? o.name_ar : o.name_en);
-
-  const confirmSave = () => {
-    if (!review) return;
-    const objs = design().filter((o) => !o.tpacHidden);
-    startSaving(async () => {
-      const thumb = await downscale(review.front, 360);
-      let res: Awaited<ReturnType<typeof saveDesign>>;
-      try {
-      res = await saveDesign({
-        garment_type: garmentCode,
-        color_id: colorId,
-        sizes,
-        name: designName || undefined,
-        options: resolved.choice,
-        notes: notes || undefined,
-        preview_front: review.front,
-        preview_back: review.back,
-        preview_sides: review.right || review.left ? { right: review.right, left: review.left } : undefined,
-        objects: objs.map((o) => {
+  /** Canvas objects → the payload saved with the design. */
+  const toPayload = (objs: Tagged[]) => objs.map((o) => {
           const base = {
             type: o.tpacKind as "image" | "text" | "shape",
             location: o.tpacLocation!,
@@ -818,52 +881,153 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             charSpacing: tx.charSpacing ?? 0,
             lineHeight: tx.lineHeight ?? 1.16,
           };
-        }),
-      });
-      } catch (e) {
-        console.error("saveDesign failed", e);
-        toast.error(t("تعذّر رفع التصميم — تأكد من الإنترنت وحاول مرة ثانية. إذا الصورة كبيرة جداً جرّب صورة أصغر.", "Couldn't upload the design — check your connection and try again. If the image is very large, try a smaller one."));
-        return;
-      }
-      if (!res.ok) {
-        const map: Record<string, string> = {
-          rate_limited: dict.checkout.errors.rate_limited!,
-          option_unavailable: t("أحد الخيارات لم يعد متاحاً — حدّث الصفحة", "One of the options is no longer available — refresh the page"),
-          size_unavailable: t("أحد المقاسات غير متاح", "One of the sizes is unavailable"),
-          location_unavailable: t("أحد أماكن الطباعة غير متاح لهذه القطعة", "A print placement is unavailable for this garment"),
-          garment_unavailable: t("هذه القطعة غير متاحة حالياً", "This garment is not available right now"),
-          color_unavailable: t("هذا اللون غير متاح لهذه القطعة", "This colour is not available for this garment"),
-          artwork_missing: t("لم تكتمل رفع إحدى الصور — احذفها وارفعها مرة ثانية", "One image didn't finish uploading — remove it and upload it again"),
-          invalid_preview: t("تعذّر تجهيز المعاينة — حاول مرة ثانية", "Couldn't prepare the preview — try again"),
-          validation: t("في عنصر بالتصميم غير صالح — جرّب حذف آخر عنصر أضفته", "Something in the design isn't valid — try removing the last element you added"),
-          storage_failed: t("تعذّر حفظ صور المعاينة — حاول بعد قليل", "Couldn't store the preview images — try again shortly"),
-          uploads_disabled: t("رفع التصاميم الخاصة متوقف حالياً", "Uploading your own designs is paused right now"),
-          save_failed: t("تعذّر حفظ التصميم — حاول بعد قليل", "Couldn't save the design — try again shortly"),
-        };
-        toast.error(map[res.error] ?? dict.common.somethingWrong);
-        return;
-      }
-      const extras = pickedRows.filter((o) => o.group_code !== "package" || !o.is_default).map(optionName).join(" · ");
-      for (const l of res.lines) {
-        addToCart({
-          custom_design_id: l.design_id,
-          quantity: l.quantity,
-          snapshot: {
-            name_ar: `${garment.name_ar} — ${designName || "تصميم خاص"}`,
-            name_en: `Custom ${garment.name_en}${designName ? ` — ${designName}` : ""}`,
-            image: thumb,
-            size: l.size,
-            color_hex: color?.hex,
-            color_name_ar: color?.name_ar,
-            color_name_en: color?.name_en,
-            unit_price: discountedUnit(res.unit_price, pct),
-            print_locations: res.print_locations,
-            extras,
-          },
         });
+
+  /** Previews + everything needed to save the piece that is on the canvas right now. */
+  const capture = async (): Promise<ReviewPiece> => {
+    const sides: ReviewPiece["sides"] = [];
+    const sideLabel = { right: t("الكم الأيمن", "Right sleeve"), left: t("الكم الأيسر", "Left sleeve"), hood: t("داخل القبعة", "Inside the hood") };
+    const raw: Partial<Record<"right" | "left" | "hood", string>> = {};
+    for (const side of ["right", "left", "hood"] as const) {
+      const loc = side === "right" ? "sleeve" : side === "hood" ? "hood" : "sleeve_left";
+      if (viewOf(tpl(garmentCode), loc) === side && design().some((o) => !o.tpacHidden && o.tpacLocation === loc)) {
+        raw[side] = await compact(await exportView(side));
+        sides.push({ src: raw[side]!, label: sideLabel[side] });
+      }
+    }
+    const objs = design().filter((o) => !o.tpacHidden);
+    const live = liveRef.current;
+    const col = colors.find((c) => c.id === live.colorId);
+    const used = [...new Set(objs.map((o) => o.tpacLocation!).filter(Boolean))];
+    return {
+      front: await compact(await exportView("front")), back: await compact(await exportView("back")), sides, raw,
+      colorId: live.colorId, colorName: col ? (locale === "ar" ? col.name_ar : col.name_en) : "", colorHex: col?.hex, sizes: { ...live.sizes },
+      used, objects: toPayload(objs),
+    };
+  };
+  const qtyOf = (z: Record<string, number>) => Object.values(z).reduce((n, q) => n + q, 0);
+
+  const openReview = async () => {
+    if (!hasContent()) {
+      toast.error(dict.designer.emptyDesign);
+      return;
+    }
+    if (totalQty < 1) {
+      toast.error(t("اختر مقاساً واحداً على الأقل", "Pick at least one size"));
+      pieceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (couple) {
+      const otherIdx = piece === 0 ? 1 : 0;
+      const o = piecesRef.current[otherIdx];
+      const otherEmpty = !o || !(JSON.parse(o.objects) as { tpacHidden?: boolean }[]).some((x) => !x.tpacHidden);
+      if (otherEmpty || qtyOf(o!.sizes) < 1) {
+        toast.error(otherEmpty ? t(`صمّم القطعة ${otherIdx + 1} كمان`, `Design piece ${otherIdx + 1} too`) : t(`اختار مقاس القطعة ${otherIdx + 1}`, `Pick a size for piece ${otherIdx + 1}`));
+        await switchPiece(otherIdx as 0 | 1);
+        return;
+      }
+    }
+    setPreparing(true);
+    try {
+      if (!couple) {
+        setReview({ pieces: [await capture()] });
+        return;
+      }
+      const start = liveRef.current.piece;
+      const first = await capture();
+      await switchPiece(start === 0 ? 1 : 0);
+      const second = await capture();
+      await switchPiece(start);
+      setReview({ pieces: start === 0 ? [first, second] : [second, first] });
+    } finally {
+      setPreparing(false);
+    }
+  };
+
+  const download = async () => {
+    setPreparing(true);
+    try {
+      for (const v of (["front", "back", "right", "left", "hood"] as StudioView[]).filter((x) => x === "front" || x === "back" || tpl(garmentCode)?.views[x])) {
+        const a = document.createElement("a");
+        a.href = await exportView(v, "png");
+        a.download = `tpac-${garmentCode}-${couple ? `piece${piece + 1}-` : ""}${v}.png`;
+        a.click();
+      }
+    } finally {
+      setPreparing(false);
+    }
+  };
+
+  const pickedRows = resolved.picked.map((o) => options.find((x) => x.id === o.id)).filter((x): x is DesignerOptionRow => !!x);
+  const optionName = (o: DesignerOptionRow) => (locale === "ar" ? o.name_ar : o.name_en);
+
+  const confirmSave = () => {
+    if (!review) return;
+    const errorText: Record<string, string> = {
+      rate_limited: dict.checkout.errors.rate_limited!,
+      option_unavailable: t("أحد الخيارات لم يعد متاحاً — حدّث الصفحة", "One of the options is no longer available — refresh the page"),
+      size_unavailable: t("أحد المقاسات غير متاح", "One of the sizes is unavailable"),
+      location_unavailable: t("أحد أماكن الطباعة غير متاح لهذه القطعة", "A print placement is unavailable for this garment"),
+      garment_unavailable: t("هذه القطعة غير متاحة حالياً", "This garment is not available right now"),
+      color_unavailable: t("هذا اللون غير متاح لهذه القطعة", "This colour is not available for this garment"),
+      artwork_missing: t("لم تكتمل رفع إحدى الصور — احذفها وارفعها مرة ثانية", "One image didn't finish uploading — remove it and upload it again"),
+      invalid_preview: t("تعذّر تجهيز المعاينة — حاول مرة ثانية", "Couldn't prepare the preview — try again"),
+      validation: t("في عنصر بالتصميم غير صالح — جرّب حذف آخر عنصر أضفته", "Something in the design isn't valid — try removing the last element you added"),
+      storage_failed: t("تعذّر حفظ صور المعاينة — حاول بعد قليل", "Couldn't store the preview images — try again shortly"),
+      uploads_disabled: t("رفع التصاميم الخاصة متوقف حالياً", "Uploading your own designs is paused right now"),
+      save_failed: t("تعذّر حفظ التصميم — حاول بعد قليل", "Couldn't save the design — try again shortly"),
+    };
+    const extras = pickedRows.filter((o) => o.group_code !== "package" || !o.is_default).map(optionName).join(" · ");
+    const pieces = review.pieces;
+    startSaving(async () => {
+      for (const [i, p] of pieces.entries()) {
+        const label = pieces.length > 1 ? ` (${t(`للمرتبطين ${i + 1}/2`, `couple ${i + 1}/2`)})` : "";
+        const thumb = await downscale(p.front, 360);
+        let res: Awaited<ReturnType<typeof saveDesign>>;
+        try {
+          res = await saveDesign({
+            garment_type: garmentCode,
+            color_id: p.colorId,
+            sizes: p.sizes,
+            name: (designName || (pieces.length > 1 ? t("تصميم للمرتبطين", "Couple design") : "")) ? `${designName || t("تصميم للمرتبطين", "Couple design")}${label}`.slice(0, 80) : undefined,
+            options: resolved.choice,
+            notes: notes || undefined,
+            preview_front: p.front,
+            preview_back: p.back,
+            preview_sides: p.raw.right || p.raw.left || p.raw.hood ? { right: p.raw.right, left: p.raw.left, hood: p.raw.hood } : undefined,
+            objects: p.objects,
+          });
+        } catch (e) {
+          console.error("saveDesign failed", e);
+          toast.error(t("تعذّر رفع التصميم — تأكد من الإنترنت وحاول مرة ثانية. إذا الصورة كبيرة جداً جرّب صورة أصغر.", "Couldn't upload the design — check your connection and try again. If the image is very large, try a smaller one."));
+          return;
+        }
+        if (!res.ok) {
+          toast.error((pieces.length > 1 ? t(`القطعة ${i + 1}: `, `Piece ${i + 1}: `) : "") + (errorText[res.error] ?? dict.common.somethingWrong));
+          return;
+        }
+        const col = colors.find((c) => c.id === p.colorId);
+        for (const l of res.lines) {
+          addToCart({
+            custom_design_id: l.design_id,
+            quantity: l.quantity,
+            snapshot: {
+              name_ar: `${garment.name_ar} — ${designName || (pieces.length > 1 ? "للمرتبطين" : "تصميم خاص")}${pieces.length > 1 ? ` (${i + 1}/2)` : ""}`,
+              name_en: `Custom ${garment.name_en}${designName ? ` — ${designName}` : pieces.length > 1 ? " — couple" : ""}${pieces.length > 1 ? ` (${i + 1}/2)` : ""}`,
+              image: thumb,
+              size: l.size,
+              color_hex: col?.hex,
+              color_name_ar: col?.name_ar,
+              color_name_en: col?.name_en,
+              unit_price: discountedUnit(res.unit_price, pct),
+              print_locations: res.print_locations,
+              extras,
+            },
+          });
+        }
       }
       setReview(null);
-      toast.success(dict.designer.added);
+      toast.success(pieces.length > 1 ? t("انضافت القطعتين للسلة 💞", "Both pieces are in your bag 💞") : dict.designer.added);
       openDrawer(true);
     });
   };
@@ -921,6 +1085,31 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             </div>
           </div>
 
+          {/* one piece, or two for a couple */}
+          <div className="px-5 pt-3 sm:px-7">
+            {couple ? (
+              <div className="flex items-center gap-1.5">
+                <div className="flex flex-1 gap-1 rounded-2xl bg-bone p-1" role="tablist" aria-label={t("القطع", "Pieces")}>
+                  {([0, 1] as const).map((i) => {
+                    const cid = i === piece ? colorId : piecesRef.current[i]?.colorId;
+                    const col = colors.find((c) => c.id === cid);
+                    return (
+                      <button key={i} type="button" role="tab" aria-selected={piece === i} disabled={preparing || saving} onClick={() => void switchPiece(i)} className={cn("flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-2 py-2.5 text-sm font-bold transition", piece === i ? "bg-paper shadow-sm" : "text-mute")}>
+                        <span className="size-4 rounded-full border border-ink/20" style={{ background: col?.hex }} aria-hidden /> {t(`القطعة ${i + 1}`, `Piece ${i + 1}`)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <IconBtn label={t("انسخ التصميم للقطعة الثانية", "Copy this design to the other piece")} onClick={copyToOther}><Copy className="size-5" /></IconBtn>
+                <IconBtn label={t("رجوع لقطعة وحدة", "Back to one piece")} onClick={() => { if (confirm(t("تحذف تصميم القطعة الثانية وترجع لقطعة وحدة؟", "Remove the second piece and go back to one?"))) void stopCouple(); }}><X className="size-5" /></IconBtn>
+              </div>
+            ) : (
+              <button type="button" onClick={startCouple} disabled={!ready} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-pine/50 px-4 py-2.5 text-sm font-bold text-pine transition hover:bg-pine-soft">
+                <HeartHandshake className="size-5" /> {t("صمّم قطعتين للمرتبطين 💞", "Design two pieces for a couple 💞")}
+              </button>
+            )}
+          </div>
+
           <div className="px-3 pb-2 pt-3 sm:px-6">
             <div
               ref={wrapRef}
@@ -932,16 +1121,6 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             >
               <canvas ref={elRef} aria-label={dict.designer.title} />
               {!ready && <div className="absolute inset-0 grid place-items-center"><Loader2 className="size-7 animate-spin text-mute" /></div>}
-              {ready && hereCount === 0 && !selected && !dragging && (
-                <div className={cn("pointer-events-none absolute inset-x-0 flex flex-col items-center gap-3 px-6", closeUp ? "bottom-[5%]" : "bottom-[17%]")}>
-                  <button type="button" onClick={openUpload} disabled={uploading} className="pointer-events-auto flex w-full max-w-sm items-center justify-center gap-3 rounded-2xl bg-pine px-5 py-4 text-[15px] font-bold leading-tight text-white shadow-[0_14px_30px_-12px_rgba(0,0,0,.5)] transition active:scale-[.98] dark:text-night">
-                    {uploading ? <Loader2 className="size-5 animate-spin" /> : <Upload className="size-5" />} {t(`ارفع تصميمك على ${locLabel}`, `Upload your design for the ${locLabel.toLowerCase()}`)}
-                  </button>
-                  <button type="button" onClick={writeWord} className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-ink/10 bg-paper/95 px-6 py-2.5 text-sm font-semibold text-ink shadow-md backdrop-blur transition active:scale-[.98]">
-                    <TypeIcon className="size-5" /> {t("أو اكتب كلمة", "or write a word")}
-                  </button>
-                </div>
-              )}
               {dragging && <div className="absolute inset-0 grid place-items-center bg-pine/15 text-base font-bold text-pine">{t("أفلت الصورة هنا", "Drop the image here")}</div>}
               {(saving || preparing) && (
                 <div className="absolute inset-0 grid place-items-center bg-paper/70">
@@ -950,6 +1129,18 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
               )}
             </div>
           </div>
+
+          {/* first step, under the garment so the whole piece stays visible */}
+          {ready && hereCount === 0 && !selected && (
+            <div className="flex flex-wrap items-center justify-center gap-2 px-4 pt-3">
+              <button type="button" onClick={openUpload} disabled={uploading} className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-pine px-5 py-3 text-[15px] font-bold leading-tight text-white shadow-[0_10px_24px_-14px_rgba(0,0,0,.55)] transition active:scale-[.98] sm:max-w-xs dark:text-night">
+                {uploading ? <Loader2 className="size-5 animate-spin" /> : <Upload className="size-5" />} {t(`ارفع تصميمك على ${locLabel}`, `Upload your design for the ${locLabel.toLowerCase()}`)}
+              </button>
+              <button type="button" onClick={writeWord} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-line bg-paper px-5 py-3 text-sm font-semibold text-ink transition active:scale-[.98]">
+                <TypeIcon className="size-5" /> {t("أو اكتب كلمة", "or write a word")}
+              </button>
+            </div>
+          )}
 
           {/* placements */}
           <div className="flex justify-center gap-1 overflow-x-auto px-4 pb-1 pt-2" role="tablist" aria-label={dict.designer.location}>
@@ -1024,8 +1215,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/92 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
         <div className="container-x flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs text-mute">{t("السعر مع الطباعة", "Price with printing")}{totalQty > 1 && ` · ${totalQty} ${t("قطع", "pcs")}`}{pct > 0 && <span className="ms-1.5 rounded-full bg-pine-soft px-1.5 py-0.5 font-bold text-pine">-{pct}%</span>}</p>
-            <p className="display text-2xl tabular-nums">{formatIQD(unitAfter * totalQty, locale)}</p>
+            <p className="text-xs text-mute">{couple ? t("القطعتين مع الطباعة", "Both pieces with printing") : t("السعر مع الطباعة", "Price with printing")}{totalQty + otherQty > 1 && ` · ${totalQty + otherQty} ${t("قطع", "pcs")}`}{pct > 0 && <span className="ms-1.5 rounded-full bg-pine-soft px-1.5 py-0.5 font-bold text-pine">-{pct}%</span>}</p>
+            <p className="display text-2xl tabular-nums">{formatIQD(grandTotal, locale)}</p>
           </div>
           {anyContent ? (
             <button onClick={openReview} disabled={saving || uploading || preparing || !ready} className="btn btn-brand h-14 min-w-[44%] rounded-2xl px-6 text-base sm:min-w-64">
@@ -1041,10 +1232,12 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
 
       {review && (
         <ReviewDialog
-          front={review.front} back={review.back} sides={[review.right, review.left].filter((x): x is string => !!x)} warnings={warnings} saving={saving}
-          garmentName={locale === "ar" ? garment.name_ar : garment.name_en} colorName={color ? (locale === "ar" ? color.name_ar : color.name_en) : ""} colorHex={color?.hex}
-          sizes={sizes} placements={usedLocations.map((l) => dict.designer.locations[l]!)} extras={pickedRows.map(optionName)}
-          unit={unitAfter} listUnit={unit} pct={pct} totalQty={totalQty} notice={locale === "ar" ? settings.notice_ar : settings.notice_en}
+          pieces={review.pieces.map((p) => {
+            const list = garment.base_price + p.used.reduce((n, l) => n + (locations.find((x) => x.code === l)?.price ?? 0), 0) + resolved.price;
+            return { front: p.front, back: p.back, sides: p.sides, colorName: p.colorName, colorHex: p.colorHex, sizes: p.sizes, placements: p.used.map((l) => dict.designer.locations[l] ?? l), unit: discountedUnit(list, pct), listUnit: list };
+          })}
+          warnings={warnings} saving={saving} garmentName={locale === "ar" ? garment.name_ar : garment.name_en} extras={pickedRows.map(optionName)} pct={pct}
+          notice={locale === "ar" ? settings.notice_ar : settings.notice_en}
           onClose={() => setReview(null)} onConfirm={confirmSave}
           onFix={() => { setReview(null); wrapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }}
         />

@@ -462,7 +462,8 @@ describe("product printing configuration", () => {
     const rows = await q<{ code: string; views: number; areas: number }>(
       "select t.code, count(distinct v.id)::int views, count(a.id)::int areas from product_types t join product_type_views v on v.product_type_id = t.id join product_print_areas a on a.view_id = v.id group by t.code order by t.code");
     expect(rows.map((r) => r.code)).toEqual(["hoodie", "longsleeve", "oversized", "sweatshirt", "tshirt"]);
-    expect(rows.every((r) => r.views === 2 && r.areas === 5)).toBe(true);
+    // the hoodie also has its "inside the hood" view and area
+    expect(rows.every((r) => (r.code === "hoodie" ? r.views === 3 && r.areas === 6 : r.views === 2 && r.areas === 5))).toBe(true);
   });
 
   it("rejects areas outside the mockup and artwork outside its area", async () => {

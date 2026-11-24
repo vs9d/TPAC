@@ -16,7 +16,7 @@ export interface DesignObjectCfg {
 export interface DesignRow {
   id: string; batch_id: string | null; name: string | null; user_id: string | null;
   garment_type: string; color_id: string; size_code: string; print_locations: string[];
-  config: { version?: number; objects?: DesignObjectCfg[]; sizes?: Record<string, number>; options?: Record<string, unknown>; areas?: Record<string, { x: number; y: number; width: number; height: number; cm: { width: number; height: number } }>; previews?: { right?: string; left?: string } };
+  config: { version?: number; objects?: DesignObjectCfg[]; sizes?: Record<string, number>; options?: Record<string, unknown>; areas?: Record<string, { x: number; y: number; width: number; height: number; cm: { width: number; height: number } }>; previews?: { right?: string; left?: string; hood?: string } };
   options: { method?: string; finish?: string; fabric?: string; package?: string; addons?: string[] } | null;
   options_price: number; preview_front_path: string | null; preview_back_path: string | null;
   unit_price: number; notes: string | null; created_at: string;
@@ -80,15 +80,16 @@ export function describeObject(o: DesignObjectCfg, locale: "ar" | "en", art: Map
 }
 
 /** Every preview image of a design: front, back, and the sleeve close-ups when it has them. */
-export function previewPaths(d: Pick<DesignRow, "preview_front_path" | "preview_back_path" | "config">): { key: "front" | "back" | "right" | "left"; path: string }[] {
-  const list: { key: "front" | "back" | "right" | "left"; path: string | null | undefined }[] = [
+export function previewPaths(d: Pick<DesignRow, "preview_front_path" | "preview_back_path" | "config">): { key: "front" | "back" | "right" | "left" | "hood"; path: string }[] {
+  const list: { key: "front" | "back" | "right" | "left" | "hood"; path: string | null | undefined }[] = [
     { key: "front", path: d.preview_front_path },
     { key: "back", path: d.preview_back_path },
     { key: "right", path: d.config?.previews?.right },
     { key: "left", path: d.config?.previews?.left },
+    { key: "hood", path: d.config?.previews?.hood },
   ];
   return list.filter((x): x is { key: "front" | "back" | "right" | "left"; path: string } => !!x.path);
 }
 
 export const previewLabel = (key: string, locale: "ar" | "en") =>
-  ({ front: ["الأمام", "FRONT"], back: ["الخلف", "BACK"], right: ["الكم الأيمن", "RIGHT SLEEVE"], left: ["الكم الأيسر", "LEFT SLEEVE"] } as Record<string, [string, string]>)[key]?.[locale === "ar" ? 0 : 1] ?? key;
+  ({ front: ["الأمام", "FRONT"], back: ["الخلف", "BACK"], right: ["الكم الأيمن", "RIGHT SLEEVE"], left: ["الكم الأيسر", "LEFT SLEEVE"], hood: ["داخل القبعة", "INSIDE HOOD"] } as Record<string, [string, string]>)[key]?.[locale === "ar" ? 0 : 1] ?? key;

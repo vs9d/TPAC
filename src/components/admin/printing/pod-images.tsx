@@ -51,9 +51,9 @@ export function PodImages({ garments, types, colors }: { garments: GarmentTypeRo
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex rounded-full border border-line p-1">
-              {(["front", "back", "right", "left"] as const).filter((v) => v === "front" || v === "back" || type.product_type_views?.some((x) => x.code === v)).map((v) => (
+              {(["front", "back", "right", "left", "hood"] as const).filter((v) => v === "front" || v === "back" || type.product_type_views?.some((x) => x.code === v)).map((v) => (
                 <button key={v} onClick={() => setViewCode(v)} aria-pressed={viewCode === v} className={cn("rounded-full px-4 py-2 text-sm font-bold transition", viewCode === v ? "bg-pine text-white dark:text-night" : "hover:bg-bone")}>
-                  {{ front: t("الأمام", "Front"), back: t("الخلف", "Back"), right: t("الكم الأيمن", "Right sleeve"), left: t("الكم الأيسر", "Left sleeve") }[v]}
+                  {{ front: t("الأمام", "Front"), back: t("الخلف", "Back"), right: t("الكم الأيمن", "Right sleeve"), left: t("الكم الأيسر", "Left sleeve"), hood: t("داخل القبعة", "Inside the hood") }[v]}
                 </button>
               ))}
             </div>

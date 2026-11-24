@@ -379,7 +379,7 @@ const en: Dict = {
     color: "Garment colour",
     size: "Size",
     location: "Print placement",
-    locations: { front: "Front", back: "Back", left_chest: "Left chest", sleeve: "Right sleeve", sleeve_left: "Left sleeve" },
+    locations: { front: "Front", back: "Back", left_chest: "Left chest", sleeve: "Right sleeve", sleeve_left: "Left sleeve", hood: "Inside the hood" },
     view: "View",
     front: "Front",
     back: "Back",

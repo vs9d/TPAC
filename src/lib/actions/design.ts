@@ -91,7 +91,7 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
   }
   // sleeve close-ups (only when the garment has its own sleeve photos and the sleeve carries a design)
   const sidePaths: Record<string, string> = {};
-  for (const side of ["right", "left"] as const) {
+  for (const side of ["right", "left", "hood"] as const) {
     const raw = d.preview_sides?.[side];
     if (!raw) continue;
     const img = decodeImage(raw);

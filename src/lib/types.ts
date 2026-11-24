@@ -310,7 +310,7 @@ export interface GarmentTypeRow {
 }
 
 export interface PrintLocationRow {
-  code: "front" | "back" | "left_chest" | "sleeve" | "sleeve_left";
+  code: "front" | "back" | "left_chest" | "sleeve" | "sleeve_left" | "hood";
   name_ar: string;
   name_en: string;
   price: number;

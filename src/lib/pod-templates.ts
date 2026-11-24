@@ -11,19 +11,19 @@ import { ARTBOARD, GARMENTS, LOCATION_VIEW, type GarmentType, type GarmentView, 
 import type { ProductTypeRow } from "./print-config";
 
 /** Views the studio can show: front / back, plus a dedicated photo of each sleeve when the admin provides one. */
-export type StudioView = GarmentView | "right" | "left";
-export const STUDIO_VIEWS: StudioView[] = ["front", "back", "right", "left"];
+export type StudioView = GarmentView | "right" | "left" | "hood";
+export const STUDIO_VIEWS: StudioView[] = ["front", "back", "right", "left", "hood"];
 export interface PodView { mockup_url: string | null; color_mockups: Record<string, { url: string }>; width: number; height: number }
 export interface PodArea { view: StudioView; x: number; y: number; width: number; height: number; cmW: number; cmH: number }
 export interface PodTemplate { views: Partial<Record<StudioView, PodView>>; areas: Partial<Record<PrintLocation, PodArea>> }
 
 /** Which views may hold a placement: sleeves sit on the front, or on their own sleeve photo. */
-const ALLOWED: Record<PrintLocation, StudioView[]> = { front: ["front"], left_chest: ["front"], back: ["back"], sleeve: ["front", "right"], sleeve_left: ["front", "left"] };
+const ALLOWED: Record<PrintLocation, StudioView[]> = { front: ["front"], left_chest: ["front"], back: ["back"], sleeve: ["front", "right"], sleeve_left: ["front", "left"], hood: ["hood", "front"] };
 
 /** The view a placement is shown on (its own sleeve photo when configured, else the built-in mapping). */
 export const viewOf = (t: PodTemplate | null, loc: PrintLocation): StudioView => t?.areas[loc]?.view ?? LOCATION_VIEW[loc];
 
-const LOCATIONS: PrintLocation[] = ["front", "back", "left_chest", "sleeve", "sleeve_left"];
+const LOCATIONS: PrintLocation[] = ["front", "back", "left_chest", "sleeve", "sleeve_left", "hood"];
 
 /** Builds the studio template from a product type (front / back views; areas matched by their code). */
 export function podTemplate(type: ProductTypeRow | null | undefined): PodTemplate | null {

@@ -377,7 +377,7 @@ const ar = {
     color: "لون القطعة",
     size: "المقاس",
     location: "مكان الطباعة",
-    locations: { front: "الأمام", back: "الخلف", left_chest: "الصدر الأيسر", sleeve: "الكم الأيمن", sleeve_left: "الكم الأيسر" } as Record<string, string>,
+    locations: { front: "الأمام", back: "الخلف", left_chest: "الصدر الأيسر", sleeve: "الكم الأيمن", sleeve_left: "الكم الأيسر", hood: "داخل القبعة" } as Record<string, string>,
     view: "العرض",
     front: "أمامي",
     back: "خلفي",

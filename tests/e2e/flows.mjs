@@ -897,7 +897,7 @@ await flow("hoodie photos: 5 colours × front / back / both sleeves, sleeve desi
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("button", { name: "Review & add to bag" }).click();
   const dlg = page.getByRole("dialog", { name: "Review your design" });
-  await dlg.getByText("Sleeve", { exact: true }).waitFor();
+  await dlg.getByRole("figure", { name: "Right sleeve" }).waitFor();
   await dlg.getByRole("button", { name: "Confirm & add to bag" }).click();
   await page.getByRole("dialog", { name: "Your bag" }).waitFor({ timeout: 20000 });
   const d = await one("select print_locations, config from custom_designs order by created_at desc limit 1");
@@ -1267,6 +1267,62 @@ await flow("batch: several hoodies with their own artwork, names and collections
   assert.equal(rows[1].base_price, 45000, "own price");
   assert.ok(rows.every((r) => r.photos >= 1 && r.variants > 0), "each has its photos and variants");
   await page.screenshot({ path: `${SHOTS}/batch.png`, fullPage: true });
+});
+
+await flow("studio: love shapes, barcode + QR, inside the hood, couple design → both pieces in the bag", async (page) => {
+  await db.query(readFileSync(new URL("../../supabase/add-hood-print.sql", import.meta.url), "utf8"));
+  await page.goto(`${BASE}/en/design?garment=hoodie`);
+  await page.locator("canvas").first().waitFor();
+  // the first-step buttons sit under the garment, not on it
+  const up = await page.getByRole("button", { name: /Upload your design for the/ }).first().boundingBox();
+  const canvasBox = await page.locator("canvas").first().boundingBox();
+  assert.ok(up.y >= canvasBox.y + canvasBox.height - 2, "upload button is below the preview");
+
+  // love shapes
+  await page.getByRole("tab", { name: "Shapes" }).click();
+  await page.getByRole("button", { name: "Love", exact: true }).click();
+  await page.getByRole("button", { name: "Heart outline" }).click();
+  // barcode + QR from the customer's text (vector artwork)
+  await page.getByRole("button", { name: "Barcode & QR" }).click();
+  await page.getByLabel("Barcode text").fill("20.09.2020");
+  await page.getByRole("button", { name: /QR code/ }).last().click();
+  await page.getByRole("button", { name: /Elements on/ }).click();
+  await page.getByText("QR code", { exact: true }).waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: /Barcode$/ }).last().click();
+  await page.getByText("Barcode", { exact: true }).last().waitFor({ timeout: 20000 });
+
+  // inside the hood: its own close-up photo
+  const hoodPhoto = page.waitForResponse((r) => /\/mockups\/hoodie-[a-z]+-hood\.webp/.test(r.url()) && r.status() === 200, { timeout: 20000 });
+  await page.getByRole("tab", { name: "Inside the hood" }).click();
+  await hoodPhoto;
+
+  // couple: one idea fills both pieces, each with its own colour
+  await page.getByRole("tab", { name: "Front", exact: true }).click();
+  await page.getByRole("tab", { name: "Ideas" }).click();
+  await page.getByRole("button", { name: /Part of me · part of you/ }).click();
+  await page.getByRole("tab", { name: "Piece 2" }).waitFor();
+  await page.getByRole("tab", { name: "Piece 2" }).click();
+  await page.getByText("part of you ..", { exact: false }).first().waitFor();
+  await page.getByRole("tab", { name: "Piece 1" }).click();
+  await page.getByRole("button", { name: "Review & add to bag" }).click();
+  const dlg = page.getByRole("dialog", { name: "Review your design" });
+  await dlg.getByRole("region", { name: "Piece 1" }).waitFor({ timeout: 30000 });
+  await dlg.getByRole("region", { name: "Piece 2" }).waitFor();
+  await dlg.getByText("Inside the hood").count();
+  await page.screenshot({ path: `${SHOTS}/couple-review.png` });
+  const before = (await one("select count(distinct (config->>'objects'))::int n from custom_designs")).n;
+  await dlg.getByRole("button", { name: "Confirm & add both" }).click();
+  await page.getByRole("dialog", { name: "Your bag" }).waitFor({ timeout: 40000 });
+  const rows = (await db.query("select color_id, name, print_locations, config from custom_designs order by created_at desc limit 2")).rows;
+  assert.equal((await one("select count(distinct (config->>'objects'))::int n from custom_designs")).n, before + 2, "two designs saved");
+  assert.notEqual(rows[0].color_id, rows[1].color_id, "each piece keeps its own colour");
+  assert.ok(rows.every((r) => /couple|للمرتبطين/i.test(r.name ?? "")), "named as a couple design");
+  const texts = rows.flatMap((r) => r.config.objects.filter((o) => o.type === "text").map((o) => o.text));
+  assert.ok(texts.includes("part of me ..") && texts.includes("part of you .."), "each piece has its own words");
+  const p1 = rows.find((r) => r.config.objects.some((o) => o.text === "part of me .."));
+  assert.ok(p1.print_locations.includes("hood") === false || p1.config.previews?.hood, "hood design carries its preview");
+  const lines = await page.evaluate(() => JSON.parse(localStorage.getItem("tpac-cart")).state.lines);
+  assert.equal(lines.filter((l) => / — couple \([12]\/2\)$/.test(l.snapshot?.name_en ?? "")).length, 2, "both pieces are in the bag");
 });
 
 await flow("collections: admin uploads a cover photo from the device → shown in the store", async (page) => {

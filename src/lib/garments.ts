@@ -6,7 +6,7 @@
 export type GarmentType = "tshirt" | "oversized" | "hoodie" | "sweatshirt" | "longsleeve";
 export type GarmentView = "front" | "back";
 /** "sleeve" = wearer's right sleeve (viewer's left on the front view); "sleeve_left" = wearer's left sleeve. */
-export type PrintLocation = "front" | "back" | "left_chest" | "sleeve" | "sleeve_left";
+export type PrintLocation = "front" | "back" | "left_chest" | "sleeve" | "sleeve_left" | "hood";
 
 export const ARTBOARD = { width: 600, height: 700 } as const;
 
@@ -53,6 +53,8 @@ const standardAreas: Omit<Record<PrintLocation, PrintArea>, "sleeve_left"> = {
   back: { x: 192, y: 130, width: 216, height: 320, cm: { width: 32, height: 45 } },
   left_chest: { x: 352, y: 140, width: 70, height: 70, cm: { width: 10, height: 10 } },
   sleeve: { x: 62, y: 150, width: 52, height: 52, cm: { width: 8, height: 8 } },
+  // inside of the hood (only offered for hoodies; shown on its own photo when the admin adds one)
+  hood: { x: 252, y: 52, width: 96, height: 48, cm: { width: 20, height: 9 } },
 };
 
 export const GARMENTS: Record<GarmentType, GarmentShape> = {
@@ -138,6 +140,7 @@ export const LOCATION_VIEW: Record<PrintLocation, GarmentView> = {
   left_chest: "front",
   sleeve: "front",
   sleeve_left: "front",
+  hood: "front",
   back: "back",
 };
 
