@@ -28,6 +28,11 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
+  async redirects() {
+    // designs.thetpac.com (any path) → the print studio on the main domain.
+    // Temporary (307) on purpose, so the target can change later without browsers remembering the old one.
+    return [{ source: "/:path*", has: [{ type: "host", value: "designs.thetpac.com" }], destination: "https://thetpac.com/ar/design", permanent: false }];
+  },
 };
 
 export default nextConfig;
