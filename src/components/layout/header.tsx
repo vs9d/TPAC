@@ -51,13 +51,14 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
   }, [menu]);
 
   const primary = [
-    { href: L("/shop?new=1"), label: dict.nav.newArrivals, match: "new=1" },
+    { href: L("/shop?new=1"), label: dict.nav.newArrivals, match: "new=1", wide: true },
     { href: L("/shop"), label: dict.nav.shop, match: "/shop" },
     { href: L("/collections"), label: dict.nav.collections, match: "/collections" },
+    { href: L("/couples"), label: locale === "ar" ? "للمرتبطين 💞" : "Couples 💞", match: "/couples" },
     { href: L("/design"), label: dict.nav.customDesign, match: "/design", brand: true },
     { href: L("/bulk"), label: dict.nav.bulk, match: "/bulk" },
-    { href: L("/reviews"), label: dict.reviews.navLabel, match: "/reviews" },
-    { href: L("/size-finder"), label: locale === "ar" ? "اعرف قياسك" : "Find your size", match: "/size-finder", wide: true },
+    { href: L("/reviews"), label: dict.reviews.navLabel, match: "/reviews", wide: true },
+    { href: L("/size-finder"), label: locale === "ar" ? "اعرف قياسك" : "Find your size", match: "/size-finder", widest: true },
   ];
   const active = (m: string) => (m === "new=1" ? false : pathname.includes(m));
 
@@ -72,15 +73,16 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
           </button>
           <Logo href={L("")} priority className="h-8 w-auto md:h-9" />
 
-          <nav className="ms-6 hidden items-center gap-1 lg:flex" aria-label="primary">
+          <nav className="ms-4 hidden items-center gap-0.5 lg:flex xl:ms-6 xl:gap-1" aria-label="primary">
             {primary.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 aria-current={active(item.match) ? "page" : undefined}
                 className={cn(
-                  "rounded-full px-3.5 py-2 text-[0.85rem] font-semibold transition-colors",
+                  "whitespace-nowrap rounded-full px-3 py-2 text-[0.85rem] font-semibold transition-colors xl:px-3.5",
                   "wide" in item && item.wide && "hidden xl:inline-flex",
+                  "widest" in item && item.widest && "hidden 2xl:inline-flex",
                   item.brand ? "bg-pine-soft text-pine hover:bg-pine hover:text-white dark:hover:text-night" : "hover:bg-bone",
                   active(item.match) && !item.brand && "bg-bone",
                 )}
@@ -143,6 +145,7 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
                   {[
                     { href: L("/shop"), label: dict.nav.shop, icon: ShoppingBag },
                     { href: L("/design"), label: dict.nav.customDesign, icon: Paintbrush, brand: true },
+                    { href: L("/couples"), label: locale === "ar" ? "للمرتبطين 💞" : "For couples 💞", icon: Heart },
                     { href: L("/bulk"), label: dict.nav.bulk, icon: Building2 },
                     { href: L("/portfolio"), label: locale === "ar" ? "أعمالنا" : "Our work", icon: Images },
                     { href: L("/reviews"), label: dict.reviews.navLabel, icon: Star },

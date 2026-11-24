@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Download, Plus, Upload } from "lucide-react";
+import { Download, Heart, Plus, Upload } from "lucide-react";
 import { isLocale } from "@/lib/i18n/config";
 import { adminT } from "@/lib/admin-i18n";
 import { createClient } from "@/lib/supabase/server";
@@ -9,7 +9,7 @@ import { ProductsTable, type ProductRow } from "@/components/admin/products-tabl
 
 const PAGE_SIZE = 40;
 
-export default async function AdminProducts({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ q?: string; category?: string; status?: string; stock?: string; page?: string }> }) {
+export default async function AdminProducts({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ q?: string; category?: string; status?: string; stock?: string; page?: string; collection?: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const t = adminT(locale);
@@ -26,6 +26,11 @@ export default async function AdminProducts({ params, searchParams }: { params: 
   if (sp.category) q = q.eq("category_id", sp.category);
   if (sp.status === "published") q = q.eq("is_published", true);
   if (sp.status === "hidden") q = q.eq("is_published", false);
+  // products of one collection (e.g. ?collection=couples for the couples page)
+  if (sp.collection && /^[a-z0-9-]{1,80}$/.test(sp.collection)) {
+    const { data: inCol } = await supabase.from("product_collections").select("product_id, collection:collections!inner(slug)").eq("collection.slug", sp.collection);
+    q = q.in("id", (inCol ?? []).map((r) => r.product_id as string).concat("00000000-0000-0000-0000-000000000000"));
+  }
   const [{ data, count }, { data: categories }, { data: collections }] = await Promise.all([
     q,
     supabase.from("categories").select("id, name_ar, name_en").order("sort_order"),
@@ -50,6 +55,7 @@ export default async function AdminProducts({ params, searchParams }: { params: 
         actions={<>
           <a href="/api/admin/products" className="btn btn-outline btn-sm"><Download className="size-4" /> CSV</a>
           <Link href={`/${locale}/admin/products/import`} className="btn btn-outline btn-sm"><Upload className="size-4" /> {t("استيراد", "Import")}</Link>
+          <Link href={sp.collection === "couples" ? `/${locale}/admin/products` : `/${locale}/admin/products?collection=couples`} className={sp.collection === "couples" ? "btn btn-primary btn-sm" : "btn btn-outline btn-sm"}><Heart className="size-4" /> {t("للمرتبطين", "Couples")}</Link>
           <Link href={`/${locale}/admin/products/batch`} className="btn btn-outline btn-sm"><Plus className="size-4" /> {t("عدة منتجات", "Several at once")}</Link>
           <Link href={`/${locale}/admin/products/new`} className="btn btn-brand btn-sm"><Plus className="size-4" /> {t("منتج جديد", "New product")}</Link>
         </>}

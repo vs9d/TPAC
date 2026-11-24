@@ -81,12 +81,12 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return { title: t.designer.title, description: t.designer.subtitle, alternates: { canonical: `/${locale}/design`, languages: { ar: "/ar/design", en: "/en/design" } } };
 }
 
-export default async function DesignPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ garment?: string; color?: string }> }) {
+export default async function DesignPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ garment?: string; color?: string; couple?: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const dict = getDictionary(locale);
   const t = adminT(locale);
-  const { garment, color } = await searchParams;
+  const { garment, color, couple } = await searchParams;
   let garments: GarmentTypeRow[] = [];
   let locations: PrintLocationRow[] = [];
   let options: DesignerOptionRow[] = [];
@@ -150,7 +150,7 @@ export default async function DesignPage({ params, searchParams }: { params: Pro
       ) : garments.length === 0 ? (
         <p className="py-20 text-center text-mute">{dict.common.serviceUnavailable}</p>
       ) : (
-        <Designer garments={garments} locations={locations} colors={colors} fonts={FONTS} options={options} tiers={tiers} settings={settings} initialGarment={garment} initialColor={color} templates={templates} />
+        <Designer garments={garments} locations={locations} colors={colors} fonts={FONTS} options={options} tiers={tiers} settings={settings} initialGarment={garment} initialColor={color} initialCouple={couple === "1"} templates={templates} />
       )}
       <DesignFaq items={faq} locale={locale} />
     </div>

@@ -22,7 +22,7 @@ import { ReviewDialog } from "./review";
 const MAX_HISTORY = 60;
 const NUDGE = 1;
 
-export function Designer({ garments, locations, colors, fonts, options, tiers, settings, initialGarment, initialColor, templates = {} }: {
+export function Designer({ garments, locations, colors, fonts, options, tiers, settings, initialGarment, initialColor, initialCouple = false, templates = {} }: {
   garments: GarmentTypeRow[];
   locations: PrintLocationRow[];
   colors: Color[];
@@ -32,6 +32,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   settings: DesignerSettings;
   initialGarment?: string;
   initialColor?: string;
+  /** open straight in couples mode (two pieces) — from the couples page */
+  initialCouple?: boolean;
   /** admin-managed photos + print areas per garment code (Dashboard → Print designer → Printing images) */
   templates?: Record<string, PodTemplate | null>;
 }) {
@@ -483,6 +485,12 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     setTick((n) => n + 1);
     toast.success(t(`انسخ التصميم للقطعة ${otherIdx + 1} — عدّل عليها براحتك`, `Copied to piece ${otherIdx + 1} — edit it freely`));
   };
+
+  // links from the couples page open with two pieces ready
+  useEffect(() => {
+    if (ready && initialCouple) startCouple();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
 
   // ------------------------------------------------------------------ adding things
   const placeNew = useCallback((o: Tagged, kind: "image" | "text" | "shape", loc: PrintLocation = stateRef.current.location, dy = 0, dx = 0) => {

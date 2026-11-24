@@ -1325,6 +1325,26 @@ await flow("studio: love shapes, barcode + QR, inside the hood, couple design �
   assert.equal(lines.filter((l) => / — couple \([12]\/2\)$/.test(l.snapshot?.name_en ?? "")).length, 2, "both pieces are in the bag");
 });
 
+await flow("couples page: admin adds a hoodie to «للمرتبطين» → listed on /couples, studio opens with two pieces", async (page) => {
+  const hoodie = await one("select p.id, p.slug, p.name_en from products p join categories c on c.id = p.category_id where c.slug = 'hoodies' and p.is_published order by p.created_at limit 1");
+  await becomeAdmin(page, "couples");
+  await page.goto(`${BASE}/en/admin/products/${hoodie.id}`);
+  await page.getByLabel("For couples", { exact: true }).check();
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await waitFor("select count(*)::int n from product_collections pc join collections c on c.id = pc.collection_id where c.slug = 'couples' and pc.product_id = $1", [hoodie.id], (r) => r.n === 1);
+  await page.goto(`${BASE}/en/admin/products?collection=couples`);
+  await page.getByText(hoodie.name_en).first().waitFor();
+  // the public page
+  await page.goto(`${BASE}/ar/couples`);
+  await page.getByRole("heading", { level: 1, name: /للمرتبطين/ }).waitFor();
+  await page.locator(`a[href$="/product/${hoodie.slug}"]`).first().waitFor();
+  await page.getByRole("link", { name: "للمرتبطين 💞" }).first().waitFor();
+  await page.screenshot({ path: `${SHOTS}/couples-page.png`, fullPage: true });
+  await page.getByRole("link", { name: /صمّموا طقمكم بنفسكم/ }).click();
+  await page.waitForURL(/design\?garment=hoodie&couple=1/);
+  await page.getByRole("tab", { name: "القطعة 2" }).waitFor({ timeout: 20000 });
+});
+
 await flow("collections: admin uploads a cover photo from the device → shown in the store", async (page) => {
   const email = `col${Date.now()}@thetpac.com`;
   await page.goto(`${BASE}/en/account/register`);
