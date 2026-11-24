@@ -571,3 +571,67 @@ describe("customer reviews page", () => {
     await expect(q("insert into reviews (rating, photos) values (5, '{1,2,3,4,5,6,7}')")).rejects.toThrow(/reviews_photos_max/);
   });
 });
+
+describe("couple sets: personalised lines (couple_options)", () => {
+  const cfg = { second_size: true, fields: [
+    { key: "letter", label_ar: "الحرف", label_en: "Letter", type: "letter", per_piece: true, required: true },
+    { key: "date", label_ar: "التاريخ", label_en: "Date", type: "date", per_piece: false, required: false },
+  ] };
+
+  it("quotes the same product twice with different answers, labels them, and checks stock on the total", async () => {
+    const v = await variantWithStock(4);
+    await q("update products set couple_options = $1::jsonb where id = $2", [JSON.stringify(cfg), v.product_id]);
+    const qt = await as(svc, (c) => rpc(c, "quote_cart", { items: [
+      { variant_id: v.id, quantity: 1, options: { size_2: "m", letter_1: "M", letter_2: "R", date: " 8/5/2022 " } },
+      { variant_id: v.id, quantity: 2, options: { size_2: "L", letter_1: "A", letter_2: "D" } },
+    ] }));
+    expect(qt.errors).toEqual([]);
+    expect(qt.lines).toHaveLength(2);
+    expect(qt.subtotal).toBe(v.price * 3);
+    expect(qt.lines[1].line_total).toBe(v.price * 2);
+    expect(qt.lines[0].options.map((o: { key: string; value: string }) => [o.key, o.value])).toEqual([
+      ["size_1", (await q("select size_code from product_variants where id = $1", [v.id]))[0]!.size_code],
+      ["size_2", "M"], ["letter_1", "M"], ["letter_2", "R"], ["date", "8/5/2022"],
+    ]);
+    expect(qt.lines[0].options[2].label_ar).toBe("الحرف — الهودي الأول");
+    const tooMany = await as(svc, (c) => rpc(c, "quote_cart", { items: [
+      { variant_id: v.id, quantity: v.quantity, options: { size_2: "M", letter_1: "M", letter_2: "R" } },
+      { variant_id: v.id, quantity: 1, options: { size_2: "M", letter_1: "A", letter_2: "D" } },
+    ] }));
+    expect(tooMany.errors.map((e: { code: string }) => e.code)).toContain("insufficient_stock");
+  });
+
+  it("blocks a line with a missing required answer or second size, and rejects identical duplicate lines", async () => {
+    const v = await variantWithStock(2);
+    await q("update products set couple_options = $1::jsonb where id = $2", [JSON.stringify(cfg), v.product_id]);
+    const qt = await as(svc, (c) => rpc(c, "quote_cart", { items: [{ variant_id: v.id, quantity: 1, options: { letter_1: "M" } }] }));
+    expect(qt.lines[0].error).toBe("options_required");
+    expect(qt.errors.map((e: { code: string }) => e.code)).toEqual(["options_required"]);
+    const line = { variant_id: v.id, quantity: 1, options: { size_2: "M", letter_1: "M", letter_2: "R" } };
+    await expect(as(svc, (c) => rpc(c, "quote_cart", { items: [line, { ...line, options: { ...line.options, letter_1: " M " } }] }))).rejects.toThrow(/duplicate_cart_line/);
+    await expect(as(svc, (c) => rpc(c, "place_order", orderPayload([{ variant_id: v.id, quantity: 1 }])), true)).rejects.toThrow(/cart_invalid/);
+  });
+
+  it("stores each line's options on the order and deducts stock once per line", async () => {
+    const v = await variantWithStock(3);
+    await q("update products set couple_options = $1::jsonb where id = $2", [JSON.stringify(cfg), v.product_id]);
+    const before = await stockOf(v.id);
+    const res = await as(svc, (c) => rpc(c, "place_order", orderPayload([
+      { variant_id: v.id, quantity: 1, options: { size_2: "XL", letter_1: "M", letter_2: "R" } },
+      { variant_id: v.id, quantity: 1, options: { size_2: "S", letter_1: "A", letter_2: "D" } },
+    ])), true);
+    expect(await stockOf(v.id)).toBe(before - 2);
+    const items = await q<{ options: { key: string; value: string }[] }>("select options from order_items where order_id = $1 order by id", [res.order_id]);
+    expect(items).toHaveLength(2);
+    expect(items.map((i) => i.options.find((o) => o.key === "letter_1")!.value).sort()).toEqual(["A", "M"]);
+  });
+
+  it("leaves ordinary products and lines without options unchanged", async () => {
+    const v = await variantWithStock(1);
+    await q("update products set couple_options = null where id = $1", [v.product_id]);
+    const qt = await as(svc, (c) => rpc(c, "quote_cart", { items: [{ variant_id: v.id, quantity: 1 }] }));
+    expect(qt.errors).toEqual([]);
+    expect(qt.lines[0].options).toBeNull();
+    expect(qt.lines[0].line_total).toBe(v.price);
+  });
+});

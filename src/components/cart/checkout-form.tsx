@@ -5,7 +5,8 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Lock } from "lucide-react";
 import { useI18n, fmt } from "@/components/i18n-provider";
-import { useCart, lineKey } from "./store";
+import { useCart, lineKey, lineItem } from "./store";
+import { LineOptions } from "@/components/product/line-options";
 import { useQuote } from "./use-quote";
 import { OrderSummary } from "./order-summary";
 import { DiscountInput } from "./discount-input";
@@ -78,7 +79,7 @@ export function CheckoutForm({ zones, addresses, prefill, signedIn, onlinePaymen
     setFormError(null);
     start(async () => {
       const res = await placeOrder({
-        items: lines.map((l) => (l.variant_id ? { variant_id: l.variant_id, quantity: l.quantity } : { custom_design_id: l.custom_design_id!, quantity: l.quantity })),
+        items: lines.map(lineItem),
         customer_name: f.customer_name,
         phone: f.phone,
         email: f.email || undefined,
@@ -118,7 +119,7 @@ export function CheckoutForm({ zones, addresses, prefill, signedIn, onlinePaymen
     { id: "express", label: dict.checkout.express, fee: zone?.express_fee ?? null, note: dict.checkout.sameDay, available: !!zone && zone.express_fee !== null },
     { id: "pickup", label: dict.checkout.pickup, fee: 0, note: locale === "ar" ? "بغداد" : "Baghdad", available: !!zone?.pickup_available },
   ];
-  const qmap = new Map((quote?.lines ?? []).map((l) => [l.variant_id ?? `d:${l.custom_design_id}`, l]));
+  const qmap = new Map((quote?.lines ?? []).map((l) => [lineKey(l), l]));
   const blocking = quote?.lines.some((l) => l.error) || quote?.errors.some((e) => e.code === "min_order_total");
 
   return (
@@ -251,8 +252,9 @@ export function CheckoutForm({ zones, addresses, prefill, signedIn, onlinePaymen
                   </div>
                   <div className="min-w-0 flex-1 text-sm">
                     <p className="line-clamp-1 font-semibold">{q ? (locale === "ar" ? q.name_ar : q.name_en) : locale === "ar" ? l.snapshot?.name_ar : l.snapshot?.name_en}</p>
-                    <p className="text-xs text-mute">{[q?.size_code ?? l.snapshot?.size, locale === "ar" ? q?.color_name_ar : q?.color_name_en].filter(Boolean).join(" · ")}</p>
-                    {q?.error && <p className="text-xs font-semibold text-danger">{q.error === "insufficient_stock" ? fmt(dict.cart.insufficientStock, { n: q.available ?? 0 }) : dict.cart.unavailable}</p>}
+                    <p className="text-xs text-mute">{[(q?.options ?? l.snapshot?.options)?.some((o) => o.key === "size_1") ? null : q?.size_code ?? l.snapshot?.size, locale === "ar" ? q?.color_name_ar : q?.color_name_en].filter(Boolean).join(" · ")}</p>
+                    <LineOptions options={q?.options ?? l.snapshot?.options} locale={locale} />
+                    {q?.error && <p className="text-xs font-semibold text-danger">{q.error === "insufficient_stock" ? fmt(dict.cart.insufficientStock, { n: q.available ?? 0 }) : q.error === "options_required" ? (locale === "ar" ? "ناقص قياس أو اسم/حرف/تاريخ" : "A size or name / letter / date is missing") : dict.cart.unavailable}</p>}
                   </div>
                   <p className="text-sm tabular-nums">{q ? formatIQD(q.line_total, locale) : ""}</p>
                 </li>

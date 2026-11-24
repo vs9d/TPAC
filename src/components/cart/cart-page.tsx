@@ -11,7 +11,7 @@ import { DiscountInput } from "./discount-input";
 export function CartPageClient() {
   const { locale, dict } = useI18n();
   const { quote, loading, lines, hydrated } = useQuote();
-  const qmap = new Map((quote?.lines ?? []).map((l) => [l.variant_id ?? `d:${l.custom_design_id}`, l]));
+  const qmap = new Map((quote?.lines ?? []).map((l) => [lineKey(l), l]));
   const blocking = quote?.lines.some((l) => l.error);
 
   if (!hydrated) return <div className="container-x py-24"><div className="skeleton mx-auto h-8 w-48" /></div>;

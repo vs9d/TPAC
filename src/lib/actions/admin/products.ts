@@ -8,6 +8,7 @@ import { bool, str, dbError, logActivity, type ActionState } from "./common";
 import { copySlug, parseCsv, skuPrefix, slugify, uniqueSlug } from "@/lib/product-tools";
 import { z } from "zod";
 import { designItem, generatedImage, writeProductPrinting } from "@/lib/printing-write";
+import { coupleOptionsSchema, type CoupleOptions } from "@/lib/couple-options";
 
 type SB = Awaited<ReturnType<typeof createClient>>;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -79,10 +80,25 @@ async function makeVariants(supabase: SB, productId: string, slug: string, sizes
   return { count: rows.length };
 }
 
+/** «خيارات الطقم» from the form: undefined = not in this form, null = off. */
+function coupleOptionsInput(form: FormData): { ok: true; value: CoupleOptions | null | undefined } | { ok: false } {
+  if (!form.get("couple_options_present")) return { ok: true, value: undefined };
+  const raw = str(form.get("couple_options_json")).trim();
+  if (!raw) return { ok: true, value: null };
+  try {
+    const r = coupleOptionsSchema.safeParse(JSON.parse(raw));
+    return r.success ? { ok: true, value: r.data } : { ok: false };
+  } catch {
+    return { ok: false };
+  }
+}
+
 export async function saveProduct(_prev: ActionState, form: FormData): Promise<ActionState> {
   await assertStaff();
   const parsed = productSchema.safeParse(productInput(form));
   if (!parsed.success) return { ok: false, error: "validation", fields: fieldErrors(parsed.error) };
+  const couple = coupleOptionsInput(form);
+  if (!couple.ok) return { ok: false, error: "validation", fields: { couple_options: "invalid" } };
   const { collection_ids, ...row } = parsed.data;
   const supabase = await createClient();
   const id = str(form.get("id"));
@@ -155,9 +171,15 @@ export async function saveProduct(_prev: ActionState, form: FormData): Promise<A
     if (made.error) return made.error;
     variantCount = made.count;
   }
+  let message: string | undefined;
+  if (couple.value !== undefined) {
+    const { error } = await supabase.from("products").update({ couple_options: couple.value }).eq("id", productId);
+    // the column comes with add-couple-options.sql: the product itself is saved either way
+    if (error) message = error.message?.includes("couple_options") ? "تم الحفظ بدون خيارات الطقم — شغّل supabase/add-couple-options.sql أولاً" : "تم الحفظ، لكن خيارات الطقم ما انحفظت";
+  }
   await logActivity(id ? "product.updated" : "product.created", "product", productId, { slug: row.slug, published: row.is_published, variants: variantCount });
   revalidateCatalog(row.slug);
-  return { ok: true, id: productId, extra: str(form.get("after")) || undefined };
+  return { ok: true, id: productId, extra: str(form.get("after")) || undefined, ...(message ? { message } : {}) };
 }
 
 async function deleteProductCore(supabase: SB, id: string) {

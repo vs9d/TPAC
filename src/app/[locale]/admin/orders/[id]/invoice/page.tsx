@@ -10,6 +10,7 @@ import { formatIraqiPhone } from "@/lib/phone";
 import { governorateName } from "@/lib/iraq";
 import { PrintButton } from "@/components/admin/print-button";
 import type { Order, OrderItem } from "@/lib/types";
+import { optionsText } from "@/components/product/line-options";
 
 export default async function Invoice({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
@@ -56,7 +57,7 @@ export default async function Invoice({ params }: { params: Promise<{ locale: st
           {(items ?? []).map((it) => (
             <tr key={it.id} className="border-b border-line">
               <td className="py-2">{locale === "ar" ? it.name_ar : it.name_en}{it.sku && <span className="block text-xs text-mute" dir="ltr">{it.sku}</span>}</td>
-              <td>{[it.size_code, locale === "ar" ? it.color_name_ar : it.color_name_en].filter(Boolean).join(" / ")}</td>
+              <td>{[it.size_code, locale === "ar" ? it.color_name_ar : it.color_name_en].filter(Boolean).join(" / ")}{it.options?.length ? <span className="block text-xs">{optionsText(it.options, locale)}</span> : null}</td>
               <td className="text-center tabular-nums">{it.quantity}</td>
               <td className="text-end tabular-nums">{formatIQD(it.unit_price, locale)}</td>
               <td className="text-end tabular-nums">{formatIQD(it.line_total, locale)}</td>

@@ -14,6 +14,8 @@ import type { ProductDetail, Color } from "@/lib/types";
 import { SizeGuideTable } from "./size-guide";
 import { MockupPreview } from "./mockup-preview";
 import { designCm } from "@/lib/print-config";
+import { CoupleFields } from "./couple-fields";
+import { cleanValues, missingInputs, parseCoupleOptions, resolveLocally, type OptionValues } from "@/lib/couple-options";
 
 export function ProductView({ product, sizeOrder, garment, initialFavorite, signedIn, customStudio = true }: { product: ProductDetail; sizeOrder: string[]; garment: string; initialFavorite: boolean; signedIn: boolean; customStudio?: boolean }) {
   const { locale, dict } = useI18n();
@@ -39,6 +41,10 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
   const [fav, setFav] = useState(initialFavorite);
   const [favPending, startFav] = useTransition();
   const [active, setActive] = useState(0);
+  // couple sets: second size + names / letters / dates set by the admin
+  const couple = useMemo(() => parseCoupleOptions(product.couple_options), [product.couple_options]);
+  const [answers, setAnswers] = useState<OptionValues>({});
+  const [showErrors, setShowErrors] = useState(false);
 
   const variantsForColor = product.product_variants.filter((v) => v.color_id === colorId);
   const sizes = sizeOrder.filter((s) => product.product_variants.some((v) => v.size_code === s));
@@ -81,9 +87,16 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
       toast.error(dict.product.chooseOptions);
       return;
     }
+    const options = couple ? cleanValues(answers) : undefined;
+    if (couple && missingInputs(couple, answers).length) {
+      setShowErrors(true);
+      toast.error(locale === "ar" ? "كمّل قياس الهودي الثاني والخانات المطلوبة" : "Fill in the second size and the required boxes");
+      return;
+    }
     add({
       variant_id: variant.id,
       quantity: qty,
+      ...(options && Object.keys(options).length ? { options } : {}),
       snapshot: {
         name_ar: product.name_ar,
         name_en: product.name_en,
@@ -94,6 +107,7 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
         color_name_en: color?.name_en,
         unit_price: price,
         slug: product.slug,
+        ...(couple ? { options: resolveLocally(couple, variant.size_code, answers) } : {}),
       },
     });
     if (buyNow) router.push(`/${locale}/checkout`);
@@ -223,7 +237,7 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
             <>
           <div className="mt-8">
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-semibold">{dict.product.selectSize}</p>
+              <p className="text-sm font-semibold">{couple?.second_size ? (locale === "ar" ? "قياس الهودي الأول" : "First hoodie size") : dict.product.selectSize}</p>
               <button onClick={() => setGuide(true)} className="inline-flex items-center gap-1.5 text-sm underline">
                 <Ruler className="size-4" /> {dict.product.sizeGuide}
               </button>
@@ -264,6 +278,8 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
                 ))}
             </p>
           </div>
+
+          {couple && <CoupleFields cfg={couple} sizes={sizes} values={answers} onChange={setAnswers} locale={locale} showErrors={showErrors} />}
 
           <div className="mt-4 flex gap-3">
             <div className="flex items-center border border-line" role="group" aria-label={dict.common.quantity}>

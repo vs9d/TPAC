@@ -7,6 +7,7 @@ import { formatIQD } from "@/lib/format";
 import { toast } from "@/components/ui/toast";
 import { useCart, lineKey, type CartLine as Line } from "./store";
 import type { QuoteLine } from "@/lib/types";
+import { LineOptions } from "@/components/product/line-options";
 
 export function CartLineRow({ line, quoted, compact = false }: { line: Line; quoted?: QuoteLine; compact?: boolean }) {
   const { locale, dict } = useI18n();
@@ -17,7 +18,9 @@ export function CartLineRow({ line, quoted, compact = false }: { line: Line; quo
   const name = quoted ? (locale === "ar" ? quoted.name_ar : quoted.name_en) : snap ? (locale === "ar" ? snap.name_ar : snap.name_en) : "…";
   const image = quoted?.image_url ?? snap?.image ?? null;
   const colorName = quoted ? (locale === "ar" ? quoted.color_name_ar : quoted.color_name_en) : locale === "ar" ? snap?.color_name_ar : snap?.color_name_en;
-  const size = quoted?.size_code ?? snap?.size;
+  const lineOptions = quoted?.options ?? snap?.options;
+  // a couple set lists "first hoodie size" with its options — no second size label
+  const size = lineOptions?.some((o) => o.key === "size_1") ? undefined : quoted?.size_code ?? snap?.size;
   const unit = quoted?.unit_price ?? snap?.unit_price ?? 0;
   const href = quoted?.slug ?? snap?.slug ? `/${locale}/product/${quoted?.slug ?? snap?.slug}` : `/${locale}/design`;
   const errorText =
@@ -27,6 +30,8 @@ export function CartLineRow({ line, quoted, compact = false }: { line: Line; quo
       ? fmt(dict.cart.insufficientStock, { n: quoted.available ?? 0 })
       : quoted?.error === "invalid_quantity"
       ? dict.cart.invalidQuantity
+      : quoted?.error === "options_required"
+      ? (locale === "ar" ? "ناقص قياس الهودي الثاني أو اسم/حرف/تاريخ — احذفه وأضفه من صفحة المنتج من جديد." : "The second size or a name / letter / date is missing — remove it and add it again from the product page.")
       : null;
   const locations = quoted?.print_locations ?? snap?.print_locations;
 
@@ -53,6 +58,7 @@ export function CartLineRow({ line, quoted, compact = false }: { line: Line; quo
               <p className="mt-1 text-xs text-mute">{dict.cart.printLocations}: {locations.map((l) => dict.designer.locations[l] ?? l).join("، ")}</p>
             )}
             {snap?.extras && <p className="mt-0.5 text-xs text-mute">{snap.extras}</p>}
+            <LineOptions options={lineOptions} locale={locale} />
           </div>
           <button data-ripple onClick={() => { remove(key); toast.info(dict.common.itemRemoved); }} className="grid size-9 place-items-center rounded-full text-mute hover:bg-bone hover:text-ink" aria-label={dict.cart.remove}>
             <X className="size-4" />

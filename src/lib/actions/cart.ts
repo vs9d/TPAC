@@ -7,6 +7,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { isSupabaseConfigured } from "@/lib/env";
 import { signedUrls } from "@/lib/storage";
 import type { CartQuote } from "@/lib/types";
+import { cleanValues } from "@/lib/couple-options";
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -34,7 +35,19 @@ export async function quoteCart(input: unknown): Promise<Result<CartQuote>> {
   return { ok: true, data: quote };
 }
 
-type Line = { variant_id?: string; custom_design_id?: string; quantity: number };
+type Line = { variant_id?: string; custom_design_id?: string; quantity: number; options?: Record<string, string> };
+const hasOptions = (o?: Record<string, string> | null) => !!o && Object.keys(o).length > 0;
+const keyOf = (l: Line) => (l.variant_id ? `${l.variant_id}|${hasOptions(l.options) ? JSON.stringify(cleanValues(l.options)) : ""}` : `d:${l.custom_design_id}`);
+
+/** Writes the account cart; without the options column (add-couple-options.sql not run yet) lines are saved without them. */
+async function writeItems(supabase: Awaited<ReturnType<typeof createClient>>, cartId: string, lines: Line[]) {
+  await supabase.from("cart_items").delete().eq("cart_id", cartId);
+  if (!lines.length) return null;
+  const rows = lines.map((l) => ({ cart_id: cartId, variant_id: l.variant_id ?? null, custom_design_id: l.custom_design_id ?? null, quantity: l.quantity, options: cleanValues(l.options) }));
+  let { error } = await supabase.from("cart_items").insert(rows);
+  if (error?.message?.includes("options")) ({ error } = await supabase.from("cart_items").insert(rows.map(({ options: _o, ...r }) => r).filter((r, i, a) => !r.variant_id || a.findIndex((x) => x.variant_id === r.variant_id) === i)));
+  return error;
+}
 
 async function loadServerCart(userId: string) {
   const supabase = await createClient();
@@ -44,7 +57,9 @@ async function loadServerCart(userId: string) {
     cart = res.data;
   }
   if (!cart) throw new Error("cart_unavailable");
-  const { data: items } = await supabase.from("cart_items").select("variant_id, custom_design_id, quantity").eq("cart_id", cart.id);
+  const withOptions = await supabase.from("cart_items").select("variant_id, custom_design_id, quantity, options").eq("cart_id", cart.id);
+  // without the options column (add-couple-options.sql not run yet) read the lines without it
+  const items = withOptions.error ? (await supabase.from("cart_items").select("variant_id, custom_design_id, quantity").eq("cart_id", cart.id)).data : withOptions.data;
   return { supabase, cartId: cart.id as string, items: (items ?? []) as Line[] };
 }
 
@@ -55,20 +70,17 @@ export async function syncCart(localLines: unknown): Promise<Result<Line[]>> {
   const parsed = cartLinesSchema.safeParse(localLines);
   if (!parsed.success) return { ok: false, error: "invalid_input" };
   const { supabase, cartId, items } = await loadServerCart(session.userId);
-  const key = (l: Line) => l.variant_id ?? `d:${l.custom_design_id}`;
   const merged = new Map<string, Line>();
-  for (const l of items) merged.set(key(l), { variant_id: l.variant_id ?? undefined, custom_design_id: l.custom_design_id ?? undefined, quantity: l.quantity });
+  for (const l of items) {
+    const line: Line = { variant_id: l.variant_id ?? undefined, custom_design_id: l.custom_design_id ?? undefined, quantity: l.quantity, ...(hasOptions(l.options) ? { options: l.options } : {}) };
+    merged.set(keyOf(line), line);
+  }
   for (const l of parsed.data as Line[]) {
-    const cur = merged.get(key(l));
-    merged.set(key(l), { ...l, quantity: Math.min(99, Math.max(cur?.quantity ?? 0, l.quantity)) });
+    const cur = merged.get(keyOf(l));
+    merged.set(keyOf(l), { ...l, quantity: Math.min(99, Math.max(cur?.quantity ?? 0, l.quantity)) });
   }
   const lines = [...merged.values()].slice(0, 50);
-  await supabase.from("cart_items").delete().eq("cart_id", cartId);
-  if (lines.length) {
-    await supabase.from("cart_items").insert(
-      lines.map((l) => ({ cart_id: cartId, variant_id: l.variant_id ?? null, custom_design_id: l.custom_design_id ?? null, quantity: l.quantity })),
-    );
-  }
+  await writeItems(supabase, cartId, lines);
   return { ok: true, data: lines };
 }
 
@@ -79,11 +91,7 @@ export async function saveCart(lines: unknown): Promise<Result<null>> {
   const parsed = cartLinesSchema.safeParse(lines);
   if (!parsed.success) return { ok: false, error: "invalid_input" };
   const { supabase, cartId } = await loadServerCart(session.userId);
-  await supabase.from("cart_items").delete().eq("cart_id", cartId);
-  if (parsed.data.length) {
-    const rows = (parsed.data as Line[]).map((l) => ({ cart_id: cartId, variant_id: l.variant_id ?? null, custom_design_id: l.custom_design_id ?? null, quantity: l.quantity }));
-    const { error } = await supabase.from("cart_items").insert(rows);
-    if (error) return { ok: false, error: "save_failed" };
-  }
+  const error = await writeItems(supabase, cartId, parsed.data as Line[]);
+  if (error) return { ok: false, error: "save_failed" };
   return { ok: true, data: null };
 }

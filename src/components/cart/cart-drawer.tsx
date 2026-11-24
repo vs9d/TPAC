@@ -25,7 +25,7 @@ export function CartDrawer() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, setOpen]);
 
-  const qmap = new Map((quote?.lines ?? []).map((l) => [l.variant_id ?? `d:${l.custom_design_id}`, l]));
+  const qmap = new Map((quote?.lines ?? []).map((l) => [lineKey(l), l]));
 
   return (
     <AnimatePresence>

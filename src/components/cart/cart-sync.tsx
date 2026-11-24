@@ -1,10 +1,9 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { syncCart, saveCart } from "@/lib/actions/cart";
-import { useCart } from "./store";
+import { useCart, lineItem, lineKey } from "./store";
 
-const toServer = (lines: ReturnType<typeof useCart.getState>["lines"]) =>
-  lines.map((l) => (l.variant_id ? { variant_id: l.variant_id, quantity: l.quantity } : { custom_design_id: l.custom_design_id!, quantity: l.quantity }));
+const toServer = (lines: ReturnType<typeof useCart.getState>["lines"]) => lines.map(lineItem);
 
 /** Keeps a signed-in customer's cart saved to their account (cross-device persistence). */
 export function CartSync({ userId }: { userId: string | null }) {
@@ -18,10 +17,8 @@ export function CartSync({ userId }: { userId: string | null }) {
     const local = useCart.getState().lines;
     syncCart(toServer(local)).then((res) => {
       if (!res.ok) return;
-      const bySnapshot = new Map(local.map((l) => [l.variant_id ?? `d:${l.custom_design_id}`, l.snapshot]));
-      useCart.getState().replace(
-        res.data.map((l) => ({ ...l, snapshot: bySnapshot.get(l.variant_id ?? `d:${l.custom_design_id}`) })),
-      );
+      const bySnapshot = new Map(local.map((l) => [lineKey(l), l.snapshot]));
+      useCart.getState().replace(res.data.map((l) => ({ ...l, snapshot: bySnapshot.get(lineKey(l)) })));
     });
   }, [hydrated, userId]);
 
