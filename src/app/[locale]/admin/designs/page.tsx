@@ -7,6 +7,7 @@ import { adminT } from "@/lib/admin-i18n";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader, Card, Pill, Empty, Pagination } from "@/components/admin/ui";
 import { groupDesigns, loadArtwork, optionList, optionNames, type DesignRow } from "@/lib/design-admin";
+import { DesignReferenceBlock } from "@/components/admin/design-reference";
 import { formatDate, cn } from "@/lib/format";
 
 const PAGE = 24;
@@ -42,7 +43,7 @@ export default async function AdminDesigns({ params, searchParams }: { params: P
   const uids = [...new Set(pageItems.map((g) => g.primary.user_id).filter(Boolean) as string[])];
   const { data: profiles } = uids.length ? await supabase.from("customer_profiles").select("id, full_name, phone").in("id", uids) : { data: [] };
   const who = new Map((profiles ?? []).map((p) => [p.id as string, p]));
-  void art;
+  const artPaths = new Map([...art.values()].map((a) => [a.id, a.storage_path]));
   const base = `/${locale}/admin/designs`;
 
   return (
@@ -78,6 +79,7 @@ export default async function AdminDesigns({ params, searchParams }: { params: P
                   <p><span className="font-semibold">{t("الأماكن", "Placements")}:</span> {d.print_locations.map((l) => dict.designer.locations[l] ?? l).join("، ")} · {objs.length} {t("عنصر", "elements")}</p>
                   {optionList(d, names, locale).length > 0 && <p className="text-xs text-mute">{optionList(d, names, locale).join(" · ")}</p>}
                   {d.notes && <p className="rounded-xl bg-bone p-2 text-xs">{d.notes}</p>}
+                  <DesignReferenceBlock compact reference={d.config.reference} paths={artPaths} urls={urls} locationName={(l) => dict.designer.locations[l] ?? l} locale={locale} />
                   <p className="text-xs text-mute">{owner ? `${owner.full_name ?? ""} ${owner.phone ?? ""}` : t("زائر", "Guest")} · {formatDate(d.created_at, locale, true)}</p>
                   {g.order && <Link href={`/${locale}/admin/orders/${g.order.id}/production`} target="_blank" className="btn btn-outline btn-sm w-full">{t("ورقة التصنيع", "Production sheet")}</Link>}
                 </div>

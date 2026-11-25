@@ -54,7 +54,8 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
   const sizeEntries = Object.entries(d.sizes);
   if (sizeEntries.some(([s]) => !(garment.sizes as string[]).includes(s))) return { ok: false, error: "size_unavailable" };
 
-  const used = [...new Set(d.objects.map((o) => o.location))];
+  // placements come from the customer's own elements plus, for a "make it like this photo" request, the places they picked
+  const used = [...new Set([...d.objects.map((o) => o.location), ...(d.reference?.locations ?? [])])];
   const priceByLoc = new Map((locations ?? []).map((l) => [l.code as string, l.price as number]));
   if (used.some((l) => !priceByLoc.has(l) || !(garment.print_locations as string[]).includes(l))) return { ok: false, error: "location_unavailable" };
 
@@ -66,7 +67,7 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
   const optionsPrice = chosen.price;
   const unitPrice = (garment.base_price as number) + used.reduce((n, l) => n + (priceByLoc.get(l) ?? 0), 0) + optionsPrice;
 
-  const artworkIds = [...new Set(d.objects.map((o) => o.artwork_id).filter(Boolean) as string[])];
+  const artworkIds = [...new Set([...(d.objects.map((o) => o.artwork_id).filter(Boolean) as string[]), ...(d.reference?.artwork_ids ?? [])])];
   if (artworkIds.length) {
     const { data: art } = await db.from("uploaded_artwork").select("id, custom_design_id").in("id", artworkIds);
     if ((art ?? []).length !== artworkIds.length) return { ok: false, error: "artwork_missing" };
@@ -112,6 +113,7 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
     previews: sidePaths,
     artboard: { width: 600, height: 700 },
     objects: d.objects,
+    ...(d.reference ? { reference: { artwork_ids: d.reference.artwork_ids, note: d.reference.note ?? null, locations: d.reference.locations } } : {}),
     options: chosen.choice,
     sizes: d.sizes,
   };

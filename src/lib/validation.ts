@@ -153,9 +153,22 @@ export const bulkRequestSchema = z
 
 /* -------------------------- designer --------------------------- */
 
+const printLocation = z.enum(["front", "back", "left_chest", "sleeve", "sleeve_left", "hood"]);
+
+/**
+ * "I don't have the design": the customer uploads photos of a piece they saw somewhere
+ * and describes what they want — the team recreates it on the chosen placements.
+ */
+export const designReference = z.object({
+  artwork_ids: z.array(uuid).min(1).max(4),
+  note: trimmed(1000).optional(),
+  locations: z.array(printLocation).min(1).max(6),
+});
+export type DesignReference = z.infer<typeof designReference>;
+
 const designObject = z.object({
   type: z.enum(["image", "text", "shape"]),
-  location: z.enum(["front", "back", "left_chest", "sleeve", "sleeve_left", "hood"]),
+  location: printLocation,
   left: z.number().finite(),
   top: z.number().finite(),
   // tiny artwork may be scaled up a lot; what matters is the rendered size (checked below)
@@ -204,7 +217,9 @@ export const designSchema = z.object({
     package: z.string().regex(/^[a-z0-9_]{2,32}$/).optional(),
     addons: z.array(z.string().regex(/^[a-z0-9_]{2,32}$/)).max(12).optional(),
   }).default({}),
-  objects: z.array(designObject).min(1, "required").max(40),
+  objects: z.array(designObject).max(40),
+  /** photos of a design the customer wants copied (instead of, or next to, their own design) */
+  reference: designReference.optional(),
   notes: trimmed(1000).optional(),
   preview_front: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000),
   preview_back: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000),
@@ -214,7 +229,7 @@ export const designSchema = z.object({
     left: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000).optional(),
     hood: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000).optional(),
   }).optional(),
-});
+}).refine((d) => d.objects.length > 0 || !!d.reference, { message: "required", path: ["objects"] });
 export type DesignInput = z.infer<typeof designSchema>;
 
 /* ---------------------------- admin ---------------------------- */

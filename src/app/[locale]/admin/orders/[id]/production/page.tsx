@@ -5,6 +5,7 @@ import { getDictionary } from "@/lib/i18n";
 import { adminT } from "@/lib/admin-i18n";
 import { createClient } from "@/lib/supabase/server";
 import { PrintButton } from "@/components/admin/print-button";
+import { DesignReferenceBlock } from "@/components/admin/design-reference";
 import { describeObject, groupDesigns, loadArtwork, objectCm, optionList, optionNames, previewLabel, previewPaths, type DesignRow } from "@/lib/design-admin";
 import { GARMENTS, type GarmentType } from "@/lib/garments";
 import { formatDate } from "@/lib/format";
@@ -104,6 +105,7 @@ export default async function ProductionSheet({ params }: { params: Promise<{ lo
                 })}
               </tbody>
             </table>
+            <DesignReferenceBlock compact reference={d.config.reference} paths={new Map([...art.values()].map((a) => [a.id, a.storage_path]))} urls={urls} locationName={(l) => dict.designer.locations[l] ?? l} locale={locale} />
             {fileIds.length > 0 && (
               <p className="mt-3 text-xs"><b>{t("الملفات الأصلية", "Original files")}:</b> {fileIds.map((fid) => art.get(fid)?.original_name ?? art.get(fid)?.storage_path.split("/").pop()).filter(Boolean).join(" ، ")} <span className="no-print text-mute">— {t("تنزيل من صفحة الطلب", "download from the order page")}</span></p>
             )}

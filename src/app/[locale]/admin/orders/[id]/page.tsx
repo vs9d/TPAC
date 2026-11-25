@@ -12,14 +12,15 @@ import { AdminForm, Select, Textarea, Input, Submit } from "@/components/admin/f
 import { updateOrderStatus, addOrderNote, updateOrderDetails } from "@/lib/actions/admin/orders";
 import { setOrderWhatsAppOptIn, sendOrderWhatsApp } from "@/lib/actions/admin/whatsapp";
 import { nextStatuses } from "@/lib/order-status";
-import { groupDesigns, optionNames, optionList, previewPaths, type DesignRow } from "@/lib/design-admin";
+import { groupDesigns, optionNames, optionList, previewPaths, type DesignRow, type DesignReferenceCfg } from "@/lib/design-admin";
+import { DesignReferenceBlock } from "@/components/admin/design-reference";
 import { formatIQD, formatDate } from "@/lib/format";
 import { formatIraqiPhone } from "@/lib/phone";
 import { governorateName } from "@/lib/iraq";
 import type { Order, OrderItem, StatusHistory } from "@/lib/types";
 import { LineOptions } from "@/components/product/line-options";
 
-interface Design { id: string; batch_id: string | null; name: string | null; options: { method?: string; finish?: string; fabric?: string; package?: string; addons?: string[] } | null; garment_type: string; size_code: string; print_locations: string[]; preview_front_path: string | null; preview_back_path: string | null; notes: string | null; config: { objects?: { type: string; location: string; text?: string; fontFamily?: string; fill?: string; artwork_id?: string }[] } }
+interface Design { id: string; batch_id: string | null; name: string | null; options: { method?: string; finish?: string; fabric?: string; package?: string; addons?: string[] } | null; garment_type: string; size_code: string; print_locations: string[]; preview_front_path: string | null; preview_back_path: string | null; notes: string | null; config: { objects?: { type: string; location: string; text?: string; fontFamily?: string; fill?: string; artwork_id?: string }[]; reference?: DesignReferenceCfg } }
 interface Artwork { id: string; storage_path: string; mime_type: string; original_name: string | null; width: number | null; height: number | null; custom_design_id: string | null }
 
 export default async function AdminOrderDetail({ params }: { params: Promise<{ locale: string; id: string }> }) {
@@ -51,7 +52,7 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ l
     void a;
     designs = (d.data as Design[]) ?? [];
     // original files are referenced from the saved layout (one batch = one set of files for every size)
-    const artIds = [...new Set(designs.flatMap((x) => (x.config.objects ?? []).map((o) => o.artwork_id).filter(Boolean) as string[]))];
+    const artIds = [...new Set(designs.flatMap((x) => [...((x.config.objects ?? []).map((o) => o.artwork_id).filter(Boolean) as string[]), ...(x.config.reference?.artwork_ids ?? [])]))];
     if (artIds.length) artwork = ((await supabase.from("uploaded_artwork").select("*").in("id", artIds)).data as Artwork[]) ?? [];
   }
   const optNames = await optionNames(supabase);
@@ -120,6 +121,7 @@ export default async function AdminOrderDetail({ params }: { params: Promise<{ l
               <p className="mt-4 text-sm"><span className="font-semibold">{t("أماكن الطباعة", "Placements")}:</span> {d.print_locations.map((l) => dict.designer.locations[l] ?? l).join("، ")}</p>
               {optionList(d, optNames, locale).length > 0 && <p className="mt-1 text-sm"><span className="font-semibold">{t("خيارات الطباعة", "Print options")}:</span> {optionList(d, optNames, locale).join(" · ")}</p>}
               {d.notes && <p className="mt-1 text-sm"><span className="font-semibold">{t("ملاحظات العميل", "Customer notes")}:</span> {d.notes}</p>}
+              <DesignReferenceBlock reference={d.config.reference} paths={new Map(artwork.map((a) => [a.id, a.storage_path]))} urls={urls} locationName={(l) => dict.designer.locations[l] ?? l} locale={locale} />
               <ul className="mt-3 space-y-1 text-sm">
                 {(d.config.objects ?? []).filter((o) => o.type === "text").map((o, i) => (
                   <li key={i} className="flex items-center gap-2"><span className="size-3 rounded-full border" style={{ background: o.fill }} /> «{o.text}» — {o.fontFamily} — {dict.designer.locations[o.location]}</li>

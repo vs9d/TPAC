@@ -1,6 +1,6 @@
 "use client";
 import Image from "next/image";
-import { AlertTriangle, Check, Loader2, X } from "lucide-react";
+import { AlertTriangle, Check, ImagePlus, Loader2, X } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { adminT } from "@/lib/admin-i18n";
 import { formatIQD } from "@/lib/format";
@@ -12,8 +12,8 @@ export interface ReviewPieceView {
 }
 
 /** Last look before the design (or both pieces of a couple design) is saved and added to the bag. */
-export function ReviewDialog({ pieces, warnings, saving, garmentName, extras, pct, notice, onClose, onConfirm, onFix }: {
-  pieces: ReviewPieceView[]; warnings: string[]; saving: boolean; garmentName: string; extras: string[]; pct: number; notice: string;
+export function ReviewDialog({ pieces, reference, warnings, saving, garmentName, extras, pct, notice, onClose, onConfirm, onFix }: {
+  pieces: ReviewPieceView[]; reference?: { urls: string[]; note: string }; warnings: string[]; saving: boolean; garmentName: string; extras: string[]; pct: number; notice: string;
   onClose: () => void; onConfirm: () => void; onFix: () => void;
 }) {
   const { locale } = useI18n();
@@ -54,6 +54,16 @@ export function ReviewDialog({ pieces, warnings, saving, garmentName, extras, pc
               </section>
             );
           })}
+          {reference && (
+            <section className="space-y-2 rounded-2xl border-2 border-amber/60 bg-amber/5 p-3" aria-label={t("طلبك حسب الصورة", "Your photo request")}>
+              <p className="flex items-center gap-2 text-sm font-bold"><ImagePlus className="size-4 text-amber-deep" aria-hidden="true" /> {t("نصمّمها لك مثل هذه الصور", "We'll design it like these photos")}</p>
+              <div className="flex flex-wrap gap-2">
+                {reference.urls.map((u) => <div key={u} className="relative size-20 overflow-hidden rounded-xl bg-bone"><Image src={u} alt={t("صورتك المرجعية", "Your reference photo")} fill sizes="80px" className="object-cover" unoptimized /></div>)}
+              </div>
+              {reference.note && <p className="whitespace-pre-line text-sm">{reference.note}</p>}
+              <p className="text-xs text-mute">{t("نتواصل وياك قبل الطباعة.", "We'll get in touch before printing.")}</p>
+            </section>
+          )}
           {couple && <dl className="text-sm"><Item l={t("الخيارات (للقطعتين)", "Options (both pieces)")} v={extras.join(" · ") || "—"} /></dl>}
           {warnings.length > 0 && (
             <div className="space-y-1.5 rounded-2xl border border-amber/60 bg-amber/10 p-4">

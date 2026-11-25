@@ -16,11 +16,13 @@ export interface DesignObjectCfg {
 export interface DesignRow {
   id: string; batch_id: string | null; name: string | null; user_id: string | null;
   garment_type: string; color_id: string; size_code: string; print_locations: string[];
-  config: { version?: number; objects?: DesignObjectCfg[]; sizes?: Record<string, number>; options?: Record<string, unknown>; areas?: Record<string, { x: number; y: number; width: number; height: number; cm: { width: number; height: number } }>; previews?: { right?: string; left?: string; hood?: string } };
+  config: { version?: number; objects?: DesignObjectCfg[]; sizes?: Record<string, number>; options?: Record<string, unknown>; areas?: Record<string, { x: number; y: number; width: number; height: number; cm: { width: number; height: number } }>; previews?: { right?: string; left?: string; hood?: string }; reference?: DesignReferenceCfg };
   options: { method?: string; finish?: string; fabric?: string; package?: string; addons?: string[] } | null;
   options_price: number; preview_front_path: string | null; preview_back_path: string | null;
   unit_price: number; notes: string | null; created_at: string;
 }
+/** "Make it like this photo": the customer's photos, what they wrote, and where it should be printed. */
+export interface DesignReferenceCfg { artwork_ids: string[]; note: string | null; locations: string[] }
 export interface ArtworkRow { id: string; storage_path: string; mime_type: string; original_name: string | null; width: number | null; height: number | null }
 export interface DesignGroup { key: string; rows: DesignRow[]; primary: DesignRow }
 
@@ -50,7 +52,7 @@ export function optionList(d: Pick<DesignRow, "options">, names: Map<string, { a
 }
 
 export async function loadArtwork(supabase: SB, rows: DesignRow[]): Promise<{ art: Map<string, ArtworkRow>; urls: Record<string, string> }> {
-  const ids = [...new Set(rows.flatMap((r) => (r.config.objects ?? []).map((o) => o.artwork_id).filter(Boolean) as string[]))];
+  const ids = [...new Set(rows.flatMap((r) => [...((r.config.objects ?? []).map((o) => o.artwork_id).filter(Boolean) as string[]), ...(r.config.reference?.artwork_ids ?? [])]))];
   const { data } = ids.length ? await supabase.from("uploaded_artwork").select("id, storage_path, mime_type, original_name, width, height").in("id", ids) : { data: [] };
   const art = new Map(((data as ArtworkRow[]) ?? []).map((a) => [a.id, a]));
   const urls = await signedUrls([...rows.flatMap((r) => previewPaths(r).map((p) => p.path)), ...[...art.values()].map((a) => a.storage_path)]);

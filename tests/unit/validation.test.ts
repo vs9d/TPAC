@@ -92,6 +92,16 @@ describe("designer payload validation", () => {
     expect(designSchema.safeParse({ ...ok, options: { method: "DROP TABLE" } }).success).toBe(false);
     expect(designSchema.safeParse({ ...ok, garment_type: "longsleeve" }).success).toBe(true);
   });
+  it("accepts a photo request instead of a drawn design (\"I want one like this\")", () => {
+    const reference = { artwork_ids: [V], note: "أريد مثله بالضبط", locations: ["back"] };
+    expect(designSchema.safeParse({ ...ok, objects: [], reference }).success).toBe(true);
+    expect(designSchema.safeParse({ ...ok, reference }).success).toBe(true);
+    expect(designSchema.safeParse({ ...ok, objects: [], reference: { ...reference, artwork_ids: [] } }).success).toBe(false);
+    expect(designSchema.safeParse({ ...ok, objects: [], reference: { ...reference, locations: [] } }).success).toBe(false);
+    expect(designSchema.safeParse({ ...ok, objects: [], reference: { ...reference, locations: ["hat"] } }).success).toBe(false);
+    expect(designSchema.safeParse({ ...ok, objects: [], reference: { ...reference, artwork_ids: [V, V, V, V, V] } }).success).toBe(false);
+    expect(designSchema.safeParse({ ...ok, objects: [], reference: { ...reference, note: "x".repeat(1001) } }).success).toBe(false);
+  });
   it("rejects empty designs, unknown placements, script-y previews", () => {
     expect(designSchema.safeParse({ ...ok, objects: [] }).success).toBe(false);
     expect(designSchema.safeParse({ ...ok, objects: [{ ...obj, location: "hat" }] }).success).toBe(false);

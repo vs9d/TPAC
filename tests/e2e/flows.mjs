@@ -17,6 +17,8 @@ const one = async (sql, p = []) => (await db.query(sql, p)).rows[0];
 const browser = await chromium.launch();
 const results = [];
 async function flow(name, fn, ctxOpts = { viewport: { width: 1366, height: 900 } }) {
+  // E2E_ONLY=<text> runs just the flows whose name contains it
+  if (process.env.E2E_ONLY && !name.includes(process.env.E2E_ONLY)) return;
   const ctx = await browser.newContext(ctxOpts);
   const page = await ctx.newPage();
   const errors = [];
@@ -1389,6 +1391,46 @@ await flow("collections: admin uploads a cover photo from the device → shown i
   const imported = await one("select count(*)::int n, count(*) filter (where author_name like '1%')::int numbered from reviews where label = 'اختبار'");
   assert.deepEqual([imported.n, imported.numbered], [100, 0], "line numbers dropped from the names");
   await page.screenshot({ path: `${SHOTS}/collections-cover.png` });
+});
+
+await flow("studio: no design? upload a photo of a hoodie you liked + «I want one like this» → bag → staff see it", async (page) => {
+  const sharp = require("sharp");
+  const photo = `${SHOTS}/liked-hoodie.png`;
+  writeFileSync(photo, await sharp({ create: { width: 600, height: 700, channels: 3, background: "#6E1F2B" } }).png().toBuffer());
+  await page.goto(`${BASE}/en/design?garment=hoodie`);
+  await page.locator("canvas").first().waitFor();
+  await page.getByRole("button", { name: /Don't have a design\?/ }).click();
+  const panel = page.getByRole("region", { name: "Design from a photo" });
+  await panel.locator("input[type=file]").setInputFiles(photo);
+  await panel.getByRole("img", { name: "Your reference photo" }).waitFor({ timeout: 20000 });
+  await panel.getByLabel("What exactly do you want?").fill("Same artwork as the photo, on the back, with my name");
+  await panel.getByRole("button", { name: "Back", exact: true }).click();
+  assert.equal(await panel.getByRole("button", { name: "Back", exact: true }).getAttribute("aria-pressed"), "true");
+  // nothing drawn on the canvas, yet the order can go ahead
+  await page.getByRole("button", { name: "Review & add to bag" }).click();
+  const dlg = page.getByRole("dialog", { name: "Review your design" });
+  await dlg.getByText("We'll design it like these photos").waitFor({ timeout: 30000 });
+  await dlg.getByText("Same artwork as the photo, on the back, with my name").waitFor();
+  await page.screenshot({ path: `${SHOTS}/reference-review.png` });
+  await dlg.getByRole("button", { name: "Confirm & add to bag" }).click();
+  await page.getByRole("dialog", { name: "Your bag" }).waitFor({ timeout: 40000 });
+  const row = await one("select id, print_locations, unit_price, config from custom_designs order by created_at desc limit 1");
+  assert.deepEqual([...row.print_locations].sort(), ["back", "front"], "priced on the picked placements");
+  assert.equal(row.config.objects.length, 0);
+  assert.equal(row.config.reference.note, "Same artwork as the photo, on the back, with my name");
+  assert.equal(row.config.reference.artwork_ids.length, 1);
+  const art = await one("select custom_design_id, storage_path from uploaded_artwork where id = $1", [row.config.reference.artwork_ids[0]]);
+  assert.equal(art.custom_design_id, row.id, "photo linked to the design");
+  const hoodie = await one("select g.base_price + (select sum(price) from print_locations where code in ('front','back'))::int p from custom_garment_types g where g.code = 'hoodie'");
+  assert.ok(row.unit_price >= hoodie.p, "front + back printing charged");
+
+  // staff see the photo and the request on the designs page
+  await becomeAdmin(page, "reference");
+  await page.goto(`${BASE}/en/admin/designs`);
+  await page.getByText("No design file — the customer wants it like these photos").first().waitFor();
+  await page.getByText("Same artwork as the photo, on the back, with my name").first().waitFor();
+  await page.getByRole("img", { name: "Customer reference photo" }).first().waitFor();
+  await page.screenshot({ path: `${SHOTS}/reference-admin.png` });
 });
 
 console.log(results.join("\n"));

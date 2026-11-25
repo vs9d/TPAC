@@ -18,6 +18,7 @@ import { PROPS, type Choice, type DesignerApi, type LayerInfo, type ReviewPiece,
 import { Inspector } from "./inspector";
 import { CreativeSpace, PieceCard } from "./studio";
 import { ReviewDialog } from "./review";
+import { ReferencePanel, emptyReference, type ReferenceState } from "./reference";
 
 const MAX_HISTORY = 60;
 const NUDGE = 1;
@@ -62,6 +63,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const [choice, setChoice] = useState<Choice>(() => resolveOptions(optionLite, {}).choice);
   const [notes, setNotes] = useState("");
   const [designName, setDesignName] = useState("");
+  // "I don't have the design": photos of a piece the customer wants copied
+  const [reference, setReference] = useState<ReferenceState>(emptyReference);
 
   // ------------------------------------------------------------------ editor state
   const [tab, setTab] = useState<TabId>("image");
@@ -811,12 +814,19 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   // ------------------------------------------------------------------ pricing
   const resolved = useMemo(() => resolveOptions(optionLite, choice), [optionLite, choice]);
   const totalQty = Object.values(sizes).reduce((n, q) => n + q, 0);
-  const usedLocations = useMemo(() => [...new Set(layers.filter((l) => !l.hidden).map((l) => l.location))], [layers]);
+  // placements picked for a "make it like this photo" request count like designed ones (same price per placement)
+  const refOn = reference.items.length > 0;
+  const refLocs = useMemo<PrintLocation[]>(() => {
+    if (!refOn) return [];
+    const allowed = reference.locations.filter((l) => garment.print_locations.includes(l));
+    return allowed.length ? allowed : garment.print_locations.includes("front") ? ["front"] : [garment.print_locations[0] as PrintLocation];
+  }, [refOn, reference.locations, garment.print_locations]);
+  const usedLocations = useMemo(() => [...new Set([...layers.filter((l) => !l.hidden).map((l) => l.location), ...refLocs])], [layers, refLocs]);
   const locPrice = usedLocations.reduce((n, l) => n + (locations.find((x) => x.code === l)?.price ?? 0), 0);
   const unit = garment.base_price + locPrice + resolved.price;
   // the other piece of a couple design: its own placements and sizes, priced the same way
   const other = couple ? piecesRef.current[piece === 0 ? 1 : 0] : null;
-  const otherUsed = other ? [...new Set((JSON.parse(other.objects) as { tpacLocation?: string; tpacHidden?: boolean }[]).filter((o) => !o.tpacHidden && o.tpacLocation).map((o) => o.tpacLocation!))] : [];
+  const otherUsed = other ? [...new Set([...(JSON.parse(other.objects) as { tpacLocation?: string; tpacHidden?: boolean }[]).filter((o) => !o.tpacHidden && o.tpacLocation).map((o) => o.tpacLocation!), ...refLocs])] : [];
   const otherQty = other ? Object.values(other.sizes).reduce((n, q) => n + q, 0) : 0;
   const otherUnit = garment.base_price + otherUsed.reduce((n, l) => n + (locations.find((x) => x.code === l)?.price ?? 0), 0) + resolved.price;
   const pct = tierPercent(tiers.filter((x) => x.is_active), totalQty + otherQty);
@@ -851,7 +861,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     }
   };
 
-  const hasContent = () => design().some((o) => !o.tpacHidden);
+  const hasContent = () => refOn || design().some((o) => !o.tpacHidden);
 
   /** Canvas objects → the payload saved with the design. */
   const toPayload = (objs: Tagged[]) => objs.map((o) => {
@@ -906,7 +916,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     const objs = design().filter((o) => !o.tpacHidden);
     const live = liveRef.current;
     const col = colors.find((c) => c.id === live.colorId);
-    const used = [...new Set(objs.map((o) => o.tpacLocation!).filter(Boolean))];
+    const used = [...new Set([...objs.map((o) => o.tpacLocation!).filter(Boolean), ...refLocs])];
     return {
       front: await compact(await exportView("front")), back: await compact(await exportView("back")), sides, raw,
       colorId: live.colorId, colorName: col ? (locale === "ar" ? col.name_ar : col.name_en) : "", colorHex: col?.hex, sizes: { ...live.sizes },
@@ -929,8 +939,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       const otherIdx = piece === 0 ? 1 : 0;
       const o = piecesRef.current[otherIdx];
       const otherEmpty = !o || !(JSON.parse(o.objects) as { tpacHidden?: boolean }[]).some((x) => !x.tpacHidden);
-      if (otherEmpty || qtyOf(o!.sizes) < 1) {
-        toast.error(otherEmpty ? t(`صمّم القطعة ${otherIdx + 1} كمان`, `Design piece ${otherIdx + 1} too`) : t(`اختار مقاس القطعة ${otherIdx + 1}`, `Pick a size for piece ${otherIdx + 1}`));
+      if ((otherEmpty && !refOn) || !o || qtyOf(o.sizes) < 1) {
+        toast.error(otherEmpty && !refOn ? t(`صمّم القطعة ${otherIdx + 1} كمان`, `Design piece ${otherIdx + 1} too`) : t(`اختار مقاس القطعة ${otherIdx + 1}`, `Pick a size for piece ${otherIdx + 1}`));
         await switchPiece(otherIdx as 0 | 1);
         return;
       }
@@ -990,7 +1000,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     startSaving(async () => {
       for (const [i, p] of pieces.entries()) {
         const label = pieces.length > 1 ? ` (${t(`للمرتبطين ${i + 1}/2`, `couple ${i + 1}/2`)})` : "";
-        const thumb = await downscale(p.front, 360);
+        // nothing drawn on the piece (only a photo request): the bag shows the customer's photo instead of a blank garment
+        const thumb = await downscale(p.objects.length === 0 && refOn ? reference.items[0]!.url : p.front, 360).catch(() => downscale(p.front, 360));
         let res: Awaited<ReturnType<typeof saveDesign>>;
         try {
           res = await saveDesign({
@@ -1000,6 +1011,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             name: (designName || (pieces.length > 1 ? t("تصميم للمرتبطين", "Couple design") : "")) ? `${designName || t("تصميم للمرتبطين", "Couple design")}${label}`.slice(0, 80) : undefined,
             options: resolved.choice,
             notes: notes || undefined,
+            reference: refOn ? { artwork_ids: reference.items.map((x) => x.id), note: reference.note.trim() || undefined, locations: refLocs } : undefined,
             preview_front: p.front,
             preview_back: p.back,
             preview_sides: p.raw.right || p.raw.left || p.raw.hood ? { right: p.raw.right, left: p.raw.left, hood: p.raw.hood } : undefined,
@@ -1035,6 +1047,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
         }
       }
       setReview(null);
+      setReference(emptyReference());
       toast.success(pieces.length > 1 ? t("انضافت القطعتين للسلة 💞", "Both pieces are in your bag 💞") : dict.designer.added);
       openDrawer(true);
     });
@@ -1065,7 +1078,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
 
   const availableLocations = locations.filter((l) => garment.print_locations.includes(l.code));
   const hereCount = layers.filter((l) => l.location === location && !l.hidden).length;
-  const anyContent = layers.some((l) => !l.hidden);
+  const anyContent = refOn || layers.some((l) => !l.hidden);
   const locLabel = dict.designer.locations[location] ?? location;
   const closeUp = location !== "front" && location !== "back";
   const openUpload = () => fileRef.current?.click();
@@ -1149,6 +1162,14 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
               </button>
             </div>
           )}
+
+          {/* no design of their own: a photo of a piece they liked + what they want */}
+          <div className="px-4 pt-3">
+            <ReferencePanel
+              value={reference} onChange={setReference} disabled={!ready}
+              locations={availableLocations.map((l) => l.code)} locationName={(l) => dict.designer.locations[l] ?? l}
+            />
+          </div>
 
           {/* placements */}
           <div className="flex justify-center gap-1 overflow-x-auto px-4 pb-1 pt-2" role="tablist" aria-label={dict.designer.location}>
@@ -1244,6 +1265,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             const list = garment.base_price + p.used.reduce((n, l) => n + (locations.find((x) => x.code === l)?.price ?? 0), 0) + resolved.price;
             return { front: p.front, back: p.back, sides: p.sides, colorName: p.colorName, colorHex: p.colorHex, sizes: p.sizes, placements: p.used.map((l) => dict.designer.locations[l] ?? l), unit: discountedUnit(list, pct), listUnit: list };
           })}
+          reference={refOn ? { urls: reference.items.map((x) => x.url), note: reference.note.trim() } : undefined}
           warnings={warnings} saving={saving} garmentName={locale === "ar" ? garment.name_ar : garment.name_en} extras={pickedRows.map(optionName)} pct={pct}
           notice={locale === "ar" ? settings.notice_ar : settings.notice_en}
           onClose={() => setReview(null)} onConfirm={confirmSave}
