@@ -23,7 +23,7 @@ select v.slug, v.name_ar, v.name_en, v.description_ar, v.description_en,
   'Heavyweight cotton-poly fleece, lined hood, kangaroo pocket and ribbed cuffs.',
   'طباعة DTF أو تطريز صغير على الصدر حسب التصميم.',
   'A small DTF print or embroidery on the chest, depending on the design.',
-  (select id from public.categories where slug = 'hoodies'), 90000, true, true, '{couples,hoodie,هودي,للمرتبطين}', now()
+  (select id from public.categories where slug = 'hoodies'), 50000, true, true, '{couples,hoodie,هودي,للمرتبطين}', now()
 from (values
   ('old-cinema-couple-hoodies', 'طقم زمن الطيبين', 'Golden Era Couple Set', 'على صدر كل هودي صورة صغيرة من زمن الطيبين مع قلوب حمراء — واحد إله وواحد إلها.
 
@@ -141,7 +141,7 @@ The price is for the full set (two hoodies). Pick each hoodie''s size on the pro
 -- only on a shop that already has its catalogue (on a brand-new database the seed comes later)
 where exists (select 1 from public.categories where slug = 'hoodies')
   and exists (select 1 from public.sizes where code = 'XXL')
-on conflict (slug) do update set description_ar = excluded.description_ar, description_en = excluded.description_en,
+on conflict (slug) do update set base_price = excluded.base_price, description_ar = excluded.description_ar, description_en = excluded.description_en,
   printing_ar = excluded.printing_ar, printing_en = excluded.printing_en;
 
 -- photos: one per colour version, black + white first
