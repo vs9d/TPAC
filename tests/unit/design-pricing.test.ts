@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { discountedUnit, nextTier, resolveOptions, tierPercent, type OptionLite } from "@/lib/design-pricing";
+import { discountedUnit, nextTier, placementCharges, placementsPrice, resolveOptions, tierPercent, type OptionLite } from "@/lib/design-pricing";
 import { SHAPES, SHAPE_IDS, TEMPLATES, TEXT_PRESETS_UI } from "@/lib/design-assets";
 
 const O = (group_code: OptionLite["group_code"], code: string, price: number, is_default = false): OptionLite => ({ id: `${group_code}-${code}`, group_code, code, price, is_default });
@@ -50,5 +50,21 @@ describe("designer assets", () => {
       if (i.kind === "text") expect(presets.has(i.preset)).toBe(true);
       else expect(SHAPE_IDS).toContain(i.shape);
     }
+  });
+});
+
+describe("print placements", () => {
+  const price: Record<string, number> = { front: 5000, back: 6000, sleeve: 3000 };
+  const of = (l: string) => price[l] ?? 0;
+  it("includes one placement in the garment price", () => {
+    expect(placementsPrice([], of)).toBe(0);
+    expect(placementsPrice(["front"], of)).toBe(0);
+    expect(placementsPrice(["sleeve"], of)).toBe(0);
+  });
+  it("charges every extra placement, keeping the most expensive one included", () => {
+    expect(placementsPrice(["front", "back"], of)).toBe(5000);
+    expect(placementsPrice(["front", "back", "sleeve"], of)).toBe(8000);
+    expect(placementsPrice(["front", "front"], of)).toBe(0);
+    expect([...placementCharges(["front", "back", "sleeve"], of)]).toEqual([["front", 5000], ["back", 0], ["sleeve", 3000]]);
   });
 });

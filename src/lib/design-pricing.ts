@@ -6,6 +6,22 @@ export interface OptionChoice { method?: string; finish?: string; fabric?: strin
 
 export const SINGLE_GROUPS = ["method", "finish", "fabric", "package"] as const;
 
+/**
+ * Printing on one placement is included in the garment price; every further placement adds its own price.
+ * The included one is the most expensive of those used, so a single design never costs more than the
+ * garment price, whichever side it is on. Returns the charge per used placement (0 for the included one).
+ */
+export function placementCharges(used: readonly string[], priceOf: (code: string) => number): Map<string, number> {
+  const list = [...new Set(used)];
+  const free = list.reduce<string | null>((best, l) => (best === null || priceOf(l) > priceOf(best) ? l : best), null);
+  return new Map(list.map((l) => [l, l === free ? 0 : priceOf(l)]));
+}
+export function placementsPrice(used: readonly string[], priceOf: (code: string) => number): number {
+  let n = 0;
+  for (const v of placementCharges(used, priceOf).values()) n += v;
+  return n;
+}
+
 /** Fills missing single-choice groups with their default, drops unknown codes. Returns the clean choice and its per-piece price. */
 export function resolveOptions(options: OptionLite[], choice: OptionChoice): { choice: Required<Pick<OptionChoice, "addons">> & OptionChoice; price: number; picked: OptionLite[] } {
   const picked: OptionLite[] = [];

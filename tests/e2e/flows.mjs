@@ -13,6 +13,11 @@ const SHOTS = process.env.E2E_SHOTS ?? "/tmp/tpac-e2e";
 mkdirSync(SHOTS, { recursive: true });
 const db = new pg.Pool({ host: "/tmp", port: Number(process.env.TPAC_PGPORT ?? 54329), user: "postgres", database: "tpac" });
 const one = async (sql, p = []) => (await db.query(sql, p)).rows[0];
+// one print placement is included in the garment price (the most expensive used); the others add their price
+const extraPlacements = async (locs) => {
+  const ps = (await db.query("select price from print_locations where code = any($1)", [locs])).rows.map((r) => r.price);
+  return ps.reduce((a, b) => a + b, 0) - Math.max(0, ...ps);
+};
 
 const browser = await chromium.launch();
 const results = [];
@@ -182,7 +187,7 @@ await flow("designer: text + uploaded artwork → bounded → priced → ordered
   await page.getByRole("button", { name: "Confirm & add to bag" }).click();
   await page.getByRole("dialog", { name: "Your bag" }).waitFor({ timeout: 20000 });
   const d = await one("select unit_price, print_locations, config, preview_front_path, size_code, batch_id from custom_designs order by created_at desc limit 1");
-  assert.equal(d.unit_price, 40000 + 8000 + 10000);
+  assert.equal(d.unit_price, 40000 + (await extraPlacements(d.print_locations)), "front + back: one placement included");
   assert.equal(d.size_code, "L");
   assert.deepEqual(d.print_locations.sort(), ["back", "front"]);
   const img = d.config.objects.find((o) => o.type === "image");
@@ -201,12 +206,11 @@ await flow("designer: text + uploaded artwork → bounded → priced → ordered
   await page.getByRole("button", { name: "Place order" }).click();
   await page.waitForURL(/success/);
   const o = await one("select has_custom_items, subtotal from orders where order_number = $1", [new URL(page.url()).searchParams.get("order")]);
-  assert.deepEqual(o, { has_custom_items: true, subtotal: 58000 });
+  assert.deepEqual(o, { has_custom_items: true, subtotal: d.unit_price });
 });
 
 let proOrder = null;
 await flow("designer pro: template, shape, layers, undo/redo, sizes, options, quantity discount, review, order", async (page) => {
-  const back = (await one("select price from print_locations where code = 'back'")).price;
   await page.goto(`${BASE}/en/design?garment=hoodie`);
   await page.locator("canvas").first().waitFor();
   await page.getByRole("tab", { name: "Ideas" }).click();
@@ -245,10 +249,10 @@ await flow("designer pro: template, shape, layers, undo/redo, sizes, options, qu
   await dlg.getByText(/Rush production/).waitFor();
   await dlg.getByRole("button", { name: "Confirm & add to bag" }).click();
   await page.getByRole("dialog", { name: "Your bag" }).waitFor({ timeout: 20000 });
-  const rows = (await db.query("select size_code, unit_price, options, options_price, batch_id, config from custom_designs where batch_id = (select batch_id from custom_designs order by created_at desc limit 1) order by size_code")).rows;
+  const rows = (await db.query("select size_code, unit_price, print_locations, options, options_price, batch_id, config from custom_designs where batch_id = (select batch_id from custom_designs order by created_at desc limit 1) order by size_code")).rows;
   assert.deepEqual(rows.map((r) => r.size_code), ["L", "M", "XL"], "one saved design per size");
   assert.equal(new Set(rows.map((r) => r.batch_id)).size, 1, "shared batch");
-  const unit = 40000 + back + 2000 + 2500 + 5000;
+  const unit = 40000 + (await extraPlacements(rows[0].print_locations ?? [])) + 2000 + 2500 + 5000;
   assert.ok(rows.every((r) => r.unit_price === unit && r.options_price === 9500), `list price per piece ${unit}`);
   assert.equal(rows[0].options.method, "vinyl");
   assert.deepEqual(rows[0].options.addons, ["rush"]);
@@ -1421,8 +1425,10 @@ await flow("studio: no design? upload a photo of a hoodie you liked + «I want o
   assert.equal(row.config.reference.artwork_ids.length, 1);
   const art = await one("select custom_design_id, storage_path from uploaded_artwork where id = $1", [row.config.reference.artwork_ids[0]]);
   assert.equal(art.custom_design_id, row.id, "photo linked to the design");
-  const hoodie = await one("select g.base_price + (select sum(price) from print_locations where code in ('front','back'))::int p from custom_garment_types g where g.code = 'hoodie'");
-  assert.ok(row.unit_price >= hoodie.p, "front + back printing charged");
+  const hoodie = await one("select base_price from custom_garment_types where code = 'hoodie'");
+  const extra = await extraPlacements(["front", "back"]);
+  assert.ok(extra > 0);
+  assert.equal(row.unit_price, hoodie.base_price + extra, "one placement included, the second one charged");
 
   // staff see the photo and the request on the designs page
   await becomeAdmin(page, "reference");

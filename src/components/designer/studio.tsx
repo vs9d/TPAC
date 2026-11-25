@@ -5,7 +5,7 @@ import { useI18n } from "@/components/i18n-provider";
 import { adminT } from "@/lib/admin-i18n";
 import { GARMENTS, type GarmentType, type PrintLocation } from "@/lib/garments";
 import { SHAPES, TEMPLATES, TEXT_PRESETS_UI, type DesignerFont } from "@/lib/design-assets";
-import { nextTier } from "@/lib/design-pricing";
+import { nextTier, placementCharges } from "@/lib/design-pricing";
 import { SizeGuideTable } from "@/components/product/size-guide";
 import { formatIQD, cn } from "@/lib/format";
 import type { Color, DesignerOptionRow, DesignerSettings, DesignerTierRow, GarmentTypeRow, PrintLocationRow } from "@/lib/types";
@@ -237,6 +237,7 @@ export function PieceCard({ garments, garmentCode, setGarmentCode, colors, color
   const name = (o: DesignerOptionRow) => (locale === "ar" ? o.name_ar : o.name_en);
   const fits = FITS_LIKE[single];
   const locPrice = (code: string) => locations.find((l) => l.code === code)?.price ?? 0;
+  const charges = placementCharges(used, locPrice);
 
   return (
     <section ref={sectionRef} className="studio-card scroll-mt-24" aria-labelledby="piece-title">
@@ -328,11 +329,11 @@ export function PieceCard({ garments, garmentCode, setGarmentCode, colors, color
             <p className="text-sm text-mute">{t("بعد ما تضيف تصميم. ارفع صورة أو اكتب كلمة حتى تبدأ.", "Once you add a design. Upload an image or write a word to start.")}</p>
           ) : (
             <ul className="space-y-2">
-              {used.map((l) => <li key={l} className="flex justify-between text-sm"><span className="flex items-center gap-2"><Check className="size-4 text-pine" /> {dict.designer.locations[l]}</span><span className="tabular-nums text-mute">+{formatIQD(locPrice(l), locale)}</span></li>)}
+              {used.map((l) => <li key={l} className="flex justify-between text-sm"><span className="flex items-center gap-2"><Check className="size-4 text-pine" /> {dict.designer.locations[l]}</span>{charges.get(l) === 0 ? <span className="text-xs font-bold text-pine">{t("مشمول بالسعر", "Included")}</span> : <span className="tabular-nums text-mute">+{formatIQD(charges.get(l) ?? 0, locale)}</span>}</li>)}
             </ul>
           )}
           <p className="mt-4 rounded-[1rem] bg-bone px-5 py-3.5 text-sm text-mute">
-            {t("كل مكان طباعة له سعره:", "Each placement has its own price:")} {locations.filter((l) => garment.print_locations.includes(l.code)).map((l) => `${dict.designer.locations[l.code]} +${formatIQD(l.price, locale)}`).join(" · ")}
+            {t("مكان طباعة واحد مشمول بسعر القطعة. كل مكان إضافي:", "One print placement is included in the price. Each extra placement:")} {locations.filter((l) => garment.print_locations.includes(l.code)).map((l) => `${dict.designer.locations[l.code]} +${formatIQD(l.price, locale)}`).join(" · ")}
           </p>
         </div>
 

@@ -111,6 +111,7 @@ export default async function AdminCustomizer({ params, searchParams }: { params
 
       {tab === "placements" && (
         <Card title={t("أماكن الطباعة", "Print placements")}>
+          <p className="mb-4 rounded-xl bg-bone p-3 text-sm text-mute">{t("أول مكان طباعة مشمول بسعر القطعة (إذا الزبون طبع على أكثر من مكان، الأغلى هو المشمول). السعر هنا يُضاف فقط على كل مكان إضافي.", "One placement is included in the garment price (with several, the most expensive one is included). The price here is only added for each extra placement.")}</p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {((l as PrintLocationRow[]) ?? []).map((p) => (
               <AdminForm key={p.code} action={savePrintLocation} className="space-y-2 rounded-2xl border border-line p-4">

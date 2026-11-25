@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { designSchema, fieldErrors } from "@/lib/validation";
 import { sniffMime, signedUrl } from "@/lib/storage";
-import { resolveOptions, type OptionLite } from "@/lib/design-pricing";
+import { placementsPrice, resolveOptions, type OptionLite } from "@/lib/design-pricing";
 import { customerUploadsEnabled } from "@/lib/designer-settings";
 import { normType, type ProductTypeRow } from "@/lib/print-config";
 import { podAreas, podTemplate } from "@/lib/pod-templates";
@@ -65,7 +65,7 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
   if (wanted.some(([g, c]) => c && !known.some((o) => o.group_code === g && o.code === c))) return { ok: false, error: "option_unavailable" };
   const chosen = resolveOptions(known, d.options);
   const optionsPrice = chosen.price;
-  const unitPrice = (garment.base_price as number) + used.reduce((n, l) => n + (priceByLoc.get(l) ?? 0), 0) + optionsPrice;
+  const unitPrice = (garment.base_price as number) + placementsPrice(used, (l) => priceByLoc.get(l) ?? 0) + optionsPrice;
 
   const artworkIds = [...new Set([...(d.objects.map((o) => o.artwork_id).filter(Boolean) as string[]), ...(d.reference?.artwork_ids ?? [])])];
   if (artworkIds.length) {

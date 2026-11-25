@@ -11,7 +11,7 @@ import { adminT } from "@/lib/admin-i18n";
 import { ARTBOARD, LOCATION_VIEW, garmentDataUrl, luminance, type GarmentType, type PrintLocation } from "@/lib/garments";
 import { fitInArtboard, podArea, podAreas, podPhoto, viewOf, type PodTemplate, type StudioView } from "@/lib/pod-templates";
 import { TEMPLATES, TEXT_PRESETS_UI, shapeById, type DesignerFont } from "@/lib/design-assets";
-import { discountedUnit, resolveOptions, tierPercent, type OptionLite } from "@/lib/design-pricing";
+import { discountedUnit, placementsPrice, resolveOptions, tierPercent, type OptionLite } from "@/lib/design-pricing";
 import { cn, formatIQD } from "@/lib/format";
 import type { Color, DesignerOptionRow, DesignerSettings, DesignerTierRow, GarmentTypeRow, PrintLocationRow } from "@/lib/types";
 import { PROPS, type Choice, type DesignerApi, type LayerInfo, type ReviewPiece, type TabId, type Tagged } from "./types";
@@ -822,13 +822,15 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     return allowed.length ? allowed : garment.print_locations.includes("front") ? ["front"] : [garment.print_locations[0] as PrintLocation];
   }, [refOn, reference.locations, garment.print_locations]);
   const usedLocations = useMemo(() => [...new Set([...layers.filter((l) => !l.hidden).map((l) => l.location), ...refLocs])], [layers, refLocs]);
-  const locPrice = usedLocations.reduce((n, l) => n + (locations.find((x) => x.code === l)?.price ?? 0), 0);
+  const priceOfLoc = (l: string) => locations.find((x) => x.code === l)?.price ?? 0;
+  // one placement is included in the garment price, extra placements add theirs
+  const locPrice = placementsPrice(usedLocations, priceOfLoc);
   const unit = garment.base_price + locPrice + resolved.price;
   // the other piece of a couple design: its own placements and sizes, priced the same way
   const other = couple ? piecesRef.current[piece === 0 ? 1 : 0] : null;
   const otherUsed = other ? [...new Set([...(JSON.parse(other.objects) as { tpacLocation?: string; tpacHidden?: boolean }[]).filter((o) => !o.tpacHidden && o.tpacLocation).map((o) => o.tpacLocation!), ...refLocs])] : [];
   const otherQty = other ? Object.values(other.sizes).reduce((n, q) => n + q, 0) : 0;
-  const otherUnit = garment.base_price + otherUsed.reduce((n, l) => n + (locations.find((x) => x.code === l)?.price ?? 0), 0) + resolved.price;
+  const otherUnit = garment.base_price + placementsPrice(otherUsed, priceOfLoc) + resolved.price;
   const pct = tierPercent(tiers.filter((x) => x.is_active), totalQty + otherQty);
   const unitAfter = discountedUnit(unit, pct);
   const grandTotal = unitAfter * totalQty + discountedUnit(otherUnit, pct) * otherQty;
@@ -1262,7 +1264,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       {review && (
         <ReviewDialog
           pieces={review.pieces.map((p) => {
-            const list = garment.base_price + p.used.reduce((n, l) => n + (locations.find((x) => x.code === l)?.price ?? 0), 0) + resolved.price;
+            const list = garment.base_price + placementsPrice(p.used, priceOfLoc) + resolved.price;
             return { front: p.front, back: p.back, sides: p.sides, colorName: p.colorName, colorHex: p.colorHex, sizes: p.sizes, placements: p.used.map((l) => dict.designer.locations[l] ?? l), unit: discountedUnit(list, pct), listUnit: list };
           })}
           reference={refOn ? { urls: reference.items.map((x) => x.url), note: reference.note.trim() } : undefined}
