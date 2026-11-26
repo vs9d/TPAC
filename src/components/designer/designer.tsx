@@ -63,6 +63,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const [choice, setChoice] = useState<Choice>(() => resolveOptions(optionLite, {}).choice);
   const [notes, setNotes] = useState("");
   const [designName, setDesignName] = useState("");
+  const [boxText, setBoxText] = useState("");
   // "I don't have the design": photos of a piece the customer wants copied
   const [reference, setReference] = useState<ReferenceState>(emptyReference);
 
@@ -813,6 +814,13 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
 
   // ------------------------------------------------------------------ pricing
   const resolved = useMemo(() => resolveOptions(optionLite, choice), [optionLite, choice]);
+  // the paid packaging option is the gift box: its own step, with the customer's words on the lid
+  const giftOption = useMemo(() => {
+    const paid = options.filter((o) => o.group_code === "package" && o.price > 0);
+    return paid.find((o) => o.code === "gift") ?? paid[0] ?? null;
+  }, [options]);
+  const giftOn = !!giftOption && resolved.choice.package === giftOption.code;
+  const boxFont = fonts.find((f) => /ruqaa/i.test(f.label))?.family;
   const totalQty = Object.values(sizes).reduce((n, q) => n + q, 0);
   // placements picked for a "make it like this photo" request count like designed ones (same price per placement)
   const refOn = reference.items.length > 0;
@@ -980,6 +988,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
 
   const pickedRows = resolved.picked.map((o) => options.find((x) => x.id === o.id)).filter((x): x is DesignerOptionRow => !!x);
   const optionName = (o: DesignerOptionRow) => (locale === "ar" ? o.name_ar : o.name_en);
+  // the gift box carries the customer's words with it in the bag, the review and the order
+  const optionLabel = (o: DesignerOptionRow) => (o.id === giftOption?.id && boxText.trim() ? `${optionName(o)} «${boxText.trim()}»` : optionName(o));
 
   const confirmSave = () => {
     if (!review) return;
@@ -997,7 +1007,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       uploads_disabled: t("رفع التصاميم الخاصة متوقف حالياً", "Uploading your own designs is paused right now"),
       save_failed: t("تعذّر حفظ التصميم — حاول بعد قليل", "Couldn't save the design — try again shortly"),
     };
-    const extras = pickedRows.filter((o) => o.group_code !== "package" || !o.is_default).map(optionName).join(" · ");
+    const extras = pickedRows.filter((o) => o.group_code !== "package" || o.price > 0).map(optionLabel).join(" · ");
     const pieces = review.pieces;
     startSaving(async () => {
       for (const [i, p] of pieces.entries()) {
@@ -1013,6 +1023,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             name: (designName || (pieces.length > 1 ? t("تصميم للمرتبطين", "Couple design") : "")) ? `${designName || t("تصميم للمرتبطين", "Couple design")}${label}`.slice(0, 80) : undefined,
             options: resolved.choice,
             notes: notes || undefined,
+            box_text: giftOn && boxText.trim() ? boxText.trim() : undefined,
             reference: refOn ? { artwork_ids: reference.items.map((x) => x.id), note: reference.note.trim() || undefined, locations: refLocs } : undefined,
             preview_front: p.front,
             preview_back: p.back,
@@ -1238,6 +1249,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             sizes={sizes} setSizes={setSizes} locations={availableLocations} used={usedLocations} options={options} choice={choice} setChoice={setChoice}
             tiers={tiers.filter((x) => x.is_active)} totalQty={totalQty} pct={pct} unit={unit} unitAfter={unitAfter} settings={settings} rush={resolved.choice.addons.includes("rush")}
             notes={notes} setNotes={setNotes} designName={designName} setDesignName={setDesignName} sectionRef={pieceRef}
+            giftOption={giftOption} boxText={boxText} setBoxText={setBoxText} boxFont={boxFont}
           />
         </div>
       </div>
@@ -1268,7 +1280,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             return { front: p.front, back: p.back, sides: p.sides, colorName: p.colorName, colorHex: p.colorHex, sizes: p.sizes, placements: p.used.map((l) => dict.designer.locations[l] ?? l), unit: discountedUnit(list, pct), listUnit: list };
           })}
           reference={refOn ? { urls: reference.items.map((x) => x.url), note: reference.note.trim() } : undefined}
-          warnings={warnings} saving={saving} garmentName={locale === "ar" ? garment.name_ar : garment.name_en} extras={pickedRows.map(optionName)} pct={pct}
+          warnings={warnings} saving={saving} garmentName={locale === "ar" ? garment.name_ar : garment.name_en} extras={pickedRows.map(optionLabel)} pct={pct}
           notice={locale === "ar" ? settings.notice_ar : settings.notice_en}
           onClose={() => setReview(null)} onConfirm={confirmSave}
           onFix={() => { setReview(null); wrapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }}

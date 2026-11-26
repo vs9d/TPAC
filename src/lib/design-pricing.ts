@@ -29,7 +29,11 @@ export function resolveOptions(options: OptionLite[], choice: OptionChoice): { c
   for (const g of SINGLE_GROUPS) {
     const inGroup = options.filter((o) => o.group_code === g);
     if (!inGroup.length) continue;
-    const hit = inGroup.find((o) => o.code === choice[g]) ?? inGroup.find((o) => o.is_default) ?? inGroup[0]!;
+    // packaging is the customer's choice: a paid box is never added on its own, even if it is marked default
+    const hit = g === "package"
+      ? inGroup.find((o) => o.code === choice[g]) ?? inGroup.find((o) => o.is_default && o.price === 0) ?? inGroup.find((o) => o.price === 0)
+      : inGroup.find((o) => o.code === choice[g]) ?? inGroup.find((o) => o.is_default) ?? inGroup[0]!;
+    if (!hit) continue;
     out[g] = hit.code;
     picked.push(hit);
   }

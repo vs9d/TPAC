@@ -17,6 +17,15 @@ describe("option resolution", () => {
     expect(r.choice.addons).toEqual(["rush", "tag"]);
     expect(resolveOptions(options, { method: "nope" }).choice.method).toBe("dtf");
   });
+  it("never adds a paid box on its own — packaging is the customer's choice", () => {
+    const withBox = [...options, O("package", "gift", 5000, true)];
+    expect(resolveOptions(withBox, {}).price).toBe(0);
+    expect(resolveOptions(withBox, {}).choice.package).toBeUndefined();
+    expect(resolveOptions(withBox, { package: "gift" }).price).toBe(5000);
+    const both = [...withBox, O("package", "standard", 0)];
+    expect(resolveOptions(both, {}).choice.package).toBe("standard");
+    expect(resolveOptions(both, {}).price).toBe(0);
+  });
   it("skips groups that have no options at all", () => {
     expect(resolveOptions([O("addon", "rush", 100)], { addons: ["rush"] }).choice.method).toBeUndefined();
   });

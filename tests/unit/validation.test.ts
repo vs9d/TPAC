@@ -102,6 +102,10 @@ describe("designer payload validation", () => {
     expect(designSchema.safeParse({ ...ok, objects: [], reference: { ...reference, artwork_ids: [V, V, V, V, V] } }).success).toBe(false);
     expect(designSchema.safeParse({ ...ok, objects: [], reference: { ...reference, note: "x".repeat(1001) } }).success).toBe(false);
   });
+  it("keeps the gift box words short", () => {
+    expect(designSchema.safeParse({ ...ok, box_text: "ليت العتاب يُرسل" }).success).toBe(true);
+    expect(designSchema.safeParse({ ...ok, box_text: "x".repeat(41) }).success).toBe(false);
+  });
   it("rejects empty designs, unknown placements, script-y previews", () => {
     expect(designSchema.safeParse({ ...ok, objects: [] }).success).toBe(false);
     expect(designSchema.safeParse({ ...ok, objects: [{ ...obj, location: "hat" }] }).success).toBe(false);

@@ -65,6 +65,9 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
   if (wanted.some(([g, c]) => c && !known.some((o) => o.group_code === g && o.code === c))) return { ok: false, error: "option_unavailable" };
   const chosen = resolveOptions(known, d.options);
   const optionsPrice = chosen.price;
+  // the customer's words for the gift box lid travel with the chosen options (ignored without a paid box)
+  const box = known.find((o) => o.group_code === "package" && o.code === chosen.choice.package && o.price > 0);
+  const storedOptions = box && d.box_text ? { ...chosen.choice, box_text: d.box_text } : chosen.choice;
   const unitPrice = (garment.base_price as number) + placementsPrice(used, (l) => priceByLoc.get(l) ?? 0) + optionsPrice;
 
   const artworkIds = [...new Set([...(d.objects.map((o) => o.artwork_id).filter(Boolean) as string[]), ...(d.reference?.artwork_ids ?? [])])];
@@ -114,7 +117,7 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
     artboard: { width: 600, height: 700 },
     objects: d.objects,
     ...(d.reference ? { reference: { artwork_ids: d.reference.artwork_ids, note: d.reference.note ?? null, locations: d.reference.locations } } : {}),
-    options: chosen.choice,
+    options: storedOptions,
     sizes: d.sizes,
   };
   const rows = sizeEntries.map(([size, quantity]) => ({ id: crypto.randomUUID(), size, quantity }));
@@ -132,7 +135,7 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
     notes: d.notes ? (d.name ? `${d.name} — ${d.notes}` : d.notes) : (d.name ?? null),
   });
   let { error } = await db.from("custom_designs").insert(
-    rows.map((r) => ({ ...base(r), notes: d.notes ?? null, batch_id: batchId, name: d.name ?? null, options: chosen.choice, options_price: optionsPrice })),
+    rows.map((r) => ({ ...base(r), notes: d.notes ?? null, batch_id: batchId, name: d.name ?? null, options: storedOptions, options_price: optionsPrice })),
   );
   // A database that has not run add-designer-pro.sql yet lacks the new columns: keep working without them
   // (the options and sizes are still kept inside `config`).

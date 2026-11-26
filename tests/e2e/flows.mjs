@@ -1439,6 +1439,47 @@ await flow("studio: no design? upload a photo of a hoodie you liked + «I want o
   await page.screenshot({ path: `${SHOTS}/reference-admin.png` });
 });
 
+await flow("studio: packaging is optional, gift box with the customer's words on the lid, no size hint", async (page) => {
+  // even when the admin marks the paid box as the default, nobody pays for it unless they pick it
+  await db.query("update designer_options set is_default = (code = 'gift') where group_code = 'package'");
+  const gift = await one("select name_en, price from designer_options where group_code = 'package' and code = 'gift'");
+  const base = (await one("select base_price from custom_garment_types where code = 'hoodie'")).base_price;
+  try {
+    await page.goto(`${BASE}/en/design?garment=hoodie`);
+    await page.locator("canvas").first().waitFor();
+    await page.getByRole("tab", { name: "Ideas" }).click();
+    await page.getByRole("button", { name: /Name & number/ }).click();
+    await page.getByText(/Elements on Back · 2/).waitFor();
+    assert.equal(await page.getByText(/fits roughly/).count(), 0, "size hint removed");
+    const bar = page.locator("div.fixed.inset-x-0.bottom-0");
+    const priceText = async () => (await bar.locator("p.display").innerText()).replace(/\D/g, "");
+    assert.equal(await priceText(), String(base), "one placement, no box: exactly the garment price");
+
+    const sw = page.getByRole("switch", { name: /Gift box/ });
+    assert.equal(await sw.getAttribute("aria-checked"), "false");
+    await page.getByRole("img", { name: /علبة هدية TPAC/ }).first().waitFor();
+    await sw.click();
+    await page.getByLabel("What should we write on the box?").fill("إلى أجمل قلب");
+    await page.getByRole("img", { name: /إلى أجمل قلب/ }).waitFor();
+    assert.equal(await priceText(), String(base + gift.price), "the box adds its price");
+    await page.screenshot({ path: `${SHOTS}/gift-box.png` });
+
+    await page.getByRole("button", { name: "Review & add to bag" }).click();
+    const dlg = page.getByRole("dialog", { name: "Review your design" });
+    await dlg.getByText(`${gift.name_en} «إلى أجمل قلب»`).first().waitFor({ timeout: 30000 });
+    await dlg.getByRole("button", { name: "Confirm & add to bag" }).click();
+    await page.getByRole("dialog", { name: "Your bag" }).waitFor({ timeout: 40000 });
+    const row = await one("select unit_price, options from custom_designs order by created_at desc limit 1");
+    assert.equal(row.options.package, "gift");
+    assert.equal(row.options.box_text, "إلى أجمل قلب");
+    assert.equal(row.unit_price, base + gift.price);
+    const lines = await page.evaluate(() => JSON.parse(localStorage.getItem("tpac-cart")).state.lines);
+    assert.ok(lines.some((l) => (l.snapshot?.extras ?? "").includes("«إلى أجمل قلب»")), "the words travel with the bag line");
+  } finally {
+    await db.query("update designer_options set is_default = (code = 'standard') where group_code = 'package'");
+  }
+});
+
 console.log(results.join("\n"));
 await browser.close();
 await db.end();

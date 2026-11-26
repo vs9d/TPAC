@@ -6,6 +6,7 @@ import { adminT } from "@/lib/admin-i18n";
 import { GARMENTS, type GarmentType, type PrintLocation } from "@/lib/garments";
 import { SHAPES, TEMPLATES, TEXT_PRESETS_UI, type DesignerFont } from "@/lib/design-assets";
 import { nextTier, placementCharges } from "@/lib/design-pricing";
+import { GiftBoxPicker } from "./gift-box";
 import { SizeGuideTable } from "@/components/product/size-guide";
 import { formatIQD, cn } from "@/lib/format";
 import type { Color, DesignerOptionRow, DesignerSettings, DesignerTierRow, GarmentTypeRow, PrintLocationRow } from "@/lib/types";
@@ -210,14 +211,15 @@ function Mini({ children, label, onClick, disabled, danger }: { children: React.
 
 const FIT: Record<string, string> = { tshirt: "REGULAR FIT", oversized: "OVERSIZED FIT", hoodie: "HEAVY FLEECE", sweatshirt: "CREWNECK", longsleeve: "LONG SLEEVE" };
 /** rough height / weight fit per size, for the hint under the size grid */
-const FITS_LIKE: Record<string, [string, string]> = { XS: ["155-162", "45-55"], S: ["160-168", "55-65"], M: ["165-173", "62-72"], L: ["170-178", "70-80"], XL: ["175-183", "78-90"], XXL: ["180-188", "88-100"], "3XL": ["185-193", "98-112"] };
 const groupTitle: Record<string, [string, string]> = { method: ["طريقة الطباعة", "Print method"], finish: ["اللمسة النهائية", "Finish"], fabric: ["الخامة", "Fabric"], package: ["التغليف", "Packaging"], addon: ["إضافات", "Extras"] };
 
-export function PieceCard({ garments, garmentCode, setGarmentCode, colors, colorId, setColorId, sizes, setSizes, locations, used, options, choice, setChoice, tiers, totalQty, pct, unit, unitAfter, settings, rush, notes, setNotes, designName, setDesignName, sectionRef }: {
+export function PieceCard({ garments, garmentCode, setGarmentCode, colors, colorId, setColorId, sizes, setSizes, locations, used, options, choice, setChoice, tiers, totalQty, pct, unit, unitAfter, settings, rush, notes, setNotes, designName, setDesignName, sectionRef, giftOption, boxText, setBoxText, boxFont }: {
   garments: GarmentTypeRow[]; garmentCode: string; setGarmentCode: (c: GarmentTypeRow["code"]) => void;
   colors: Color[]; colorId: string; setColorId: (id: string) => void;
   sizes: Record<string, number>; setSizes: (s: Record<string, number>) => void;
   locations: PrintLocationRow[]; used: PrintLocation[];
+  /** the paid gift box (package group), shown as its own step */
+  giftOption?: DesignerOptionRow | null; boxText: string; setBoxText: (v: string) => void; boxFont?: string;
   options: DesignerOptionRow[]; choice: Choice; setChoice: (c: Choice) => void;
   tiers: DesignerTierRow[]; totalQty: number; pct: number; unit: number; unitAfter: number; settings: DesignerSettings; rush: boolean;
   notes: string; setNotes: (s: string) => void; designName: string; setDesignName: (s: string) => void;
@@ -232,10 +234,11 @@ export function PieceCard({ garments, garmentCode, setGarmentCode, colors, color
   const single = picked[0]?.[0] ?? "";
   const singleQty = picked[0]?.[1] ?? 1;
   const nt = nextTier(tiers, totalQty);
-  const groups = useMemo(() => (["method", "finish", "fabric", "package", "addon"] as const).filter((g) => options.some((o) => o.group_code === g)), [options]);
+  // the gift box has its own step; the other packaging choices stay with the printing options
+  const listed = useMemo(() => options.filter((o) => o.id !== giftOption?.id), [options, giftOption]);
+  const groups = useMemo(() => (["method", "finish", "fabric", "package", "addon"] as const).filter((g) => listed.some((o) => o.group_code === g)), [listed]);
   const extraPicked = options.filter((o) => o.price > 0 && (o.group_code === "addon" ? choice.addons.includes(o.code) : choice[o.group_code as "method"] === o.code));
   const name = (o: DesignerOptionRow) => (locale === "ar" ? o.name_ar : o.name_en);
-  const fits = FITS_LIKE[single];
   const locPrice = (code: string) => locations.find((l) => l.code === code)?.price ?? 0;
   const charges = placementCharges(used, locPrice);
 
@@ -298,7 +301,6 @@ export function PieceCard({ garments, garmentCode, setGarmentCode, colors, color
                   <button key={s} aria-pressed={single === s} onClick={() => setSizes({ [s]: singleQty })} className={cn("h-12 rounded-xl border text-base font-medium transition", single === s ? "border-pine bg-pine-soft/60 text-pine" : "border-line bg-paper hover:border-ink/30")}>{s}</button>
                 ))}
               </div>
-              {fits && <p className="mt-3 text-sm text-mute">{t(`قياس ${single} يناسب تقريباً طول ${fits[0]} سم ووزن ${fits[1]} كغ.`, `Size ${single} fits roughly ${fits[0]} cm tall and ${fits[1]} kg.`)}</p>}
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-semibold">{t("الكمية", "Quantity")}</span>
@@ -337,6 +339,13 @@ export function PieceCard({ garments, garmentCode, setGarmentCode, colors, color
           </p>
         </div>
 
+        {giftOption && (
+          <GiftBoxPicker
+            option={giftOption} on={choice.package === giftOption.code} text={boxText} setText={setBoxText} font={boxFont}
+            onToggle={() => setChoice({ ...choice, package: choice.package === giftOption.code ? undefined : giftOption.code })}
+          />
+        )}
+
         {/* options (collapsed: defaults are fine for most people) */}
         {groups.length > 0 && (
           <details className="group border-t border-line pt-6">
@@ -349,7 +358,7 @@ export function PieceCard({ garments, garmentCode, setGarmentCode, colors, color
                 <div key={g}>
                   <p className="mb-2 text-xs font-semibold text-mute">{groupTitle[g]![locale === "ar" ? 0 : 1]}</p>
                   <div className="flex flex-wrap gap-2">
-                    {options.filter((o) => o.group_code === g).map((o) => {
+                    {listed.filter((o) => o.group_code === g).map((o) => {
                       const on = g === "addon" ? choice.addons.includes(o.code) : choice[g] === o.code;
                       return (
                         <button
@@ -357,7 +366,7 @@ export function PieceCard({ garments, garmentCode, setGarmentCode, colors, color
                           role={g === "addon" ? "checkbox" : "radio"}
                           aria-checked={on}
                           title={(locale === "ar" ? o.description_ar : o.description_en) ?? undefined}
-                          onClick={() => setChoice(g === "addon" ? { ...choice, addons: on ? choice.addons.filter((c) => c !== o.code) : [...choice.addons, o.code] } : { ...choice, [g]: o.code })}
+                          onClick={() => setChoice(g === "addon" ? { ...choice, addons: on ? choice.addons.filter((c) => c !== o.code) : [...choice.addons, o.code] } : g === "package" && on ? { ...choice, package: undefined } : { ...choice, [g]: o.code })}
                           className={cn("rounded-full border px-4 py-2 text-sm font-semibold transition", on ? "border-pine bg-pine-soft/60 text-pine" : "border-line bg-paper hover:border-ink/30")}
                         >
                           {on && <Check className="me-1 inline size-3.5" />}{name(o)}{o.price > 0 && <span className="ms-1.5 text-xs font-normal text-mute">+{formatIQD(o.price, locale)}</span>}

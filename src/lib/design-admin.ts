@@ -17,7 +17,7 @@ export interface DesignRow {
   id: string; batch_id: string | null; name: string | null; user_id: string | null;
   garment_type: string; color_id: string; size_code: string; print_locations: string[];
   config: { version?: number; objects?: DesignObjectCfg[]; sizes?: Record<string, number>; options?: Record<string, unknown>; areas?: Record<string, { x: number; y: number; width: number; height: number; cm: { width: number; height: number } }>; previews?: { right?: string; left?: string; hood?: string }; reference?: DesignReferenceCfg };
-  options: { method?: string; finish?: string; fabric?: string; package?: string; addons?: string[] } | null;
+  options: { method?: string; finish?: string; fabric?: string; package?: string; addons?: string[]; box_text?: string } | null;
   options_price: number; preview_front_path: string | null; preview_back_path: string | null;
   unit_price: number; notes: string | null; created_at: string;
 }
@@ -48,7 +48,11 @@ export async function optionNames(supabase: SB): Promise<Map<string, { ar: strin
 export function optionList(d: Pick<DesignRow, "options">, names: Map<string, { ar: string; en: string }>, locale: "ar" | "en"): string[] {
   const o = d.options ?? {};
   const keyed: [string, string | undefined][] = [["method", o.method], ["finish", o.finish], ["fabric", o.fabric], ["package", o.package], ...(o.addons ?? []).map((a): [string, string] => ["addon", a])];
-  return keyed.filter(([, c]) => c).map(([g, c]) => names.get(`${g}:${c}`)?.[locale] ?? String(c));
+  return keyed.filter(([, c]) => c).map(([g, c]) => {
+    const label = names.get(`${g}:${c}`)?.[locale] ?? String(c);
+    // the words the customer wants on the gift box lid
+    return g === "package" && o.box_text ? `${label} — «${o.box_text}»` : label;
+  });
 }
 
 export async function loadArtwork(supabase: SB, rows: DesignRow[]): Promise<{ art: Map<string, ArtworkRow>; urls: Record<string, string> }> {

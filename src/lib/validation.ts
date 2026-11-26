@@ -218,6 +218,8 @@ export const designSchema = z.object({
     addons: z.array(z.string().regex(/^[a-z0-9_]{2,32}$/)).max(12).optional(),
   }).default({}),
   objects: z.array(designObject).max(40),
+  /** words printed on the gift box lid (only kept when a paid box is chosen) */
+  box_text: trimmed(40).optional(),
   /** photos of a design the customer wants copied (instead of, or next to, their own design) */
   reference: designReference.optional(),
   notes: trimmed(1000).optional(),
