@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Canvas as FabricCanvas, FabricObject, IText as FabricIText } from "fabric";
-import { Copy, Download, Eye, EyeOff, HeartHandshake, Loader2, Move, Redo2, ShoppingBag, Type as TypeIcon, Undo2, Upload, X } from "lucide-react";
+import { Copy, Download, Eye, EyeOff, HeartHandshake, Loader2, Move, Redo2, Send, Share2, ShoppingBag, Type as TypeIcon, Undo2, Upload, X } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { useCart } from "@/components/cart/store";
 import { toast } from "@/components/ui/toast";
@@ -19,11 +19,15 @@ import { Inspector } from "./inspector";
 import { CreativeSpace, PieceCard } from "./studio";
 import { ReviewDialog } from "./review";
 import { ReferencePanel, emptyReference, type ReferenceState } from "./reference";
+import { ShareDialog, ShareBanner } from "./share";
+import { createDesignShare, getDesignShare, savePartnerPiece, type SharedPiece } from "@/lib/actions/share";
+import { publishCommunityDesign } from "@/lib/actions/community";
+import type { CommunityForStudio } from "@/lib/data/community";
 
 const MAX_HISTORY = 60;
 const NUDGE = 1;
 
-export function Designer({ garments, locations, colors, fonts, options, tiers, settings, initialGarment, initialColor, initialCouple = false, templates = {} }: {
+export function Designer({ garments, locations, colors, fonts, options, tiers, settings, initialGarment, initialColor, initialCouple = false, initialShare = null, shareMissing = false, initialCommunity = null, templates = {} }: {
   garments: GarmentTypeRow[];
   locations: PrintLocationRow[];
   colors: Color[];
@@ -35,6 +39,12 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   initialColor?: string;
   /** open straight in couples mode (two pieces) — from the couples page */
   initialCouple?: boolean;
+  /** a couple design opened from a shared link: the owner, or the partner designing the second piece */
+  initialShare?: { token: string; role: "owner" | "partner"; garment_type: string; pieces: SharedPiece[]; partner_done_at: string | null; from_name: string | null } | null;
+  /** the shared link was wrong or has expired */
+  shareMissing?: boolean;
+  /** a design from the community page, opened to order it */
+  initialCommunity?: CommunityForStudio | null;
   /** admin-managed photos + print areas per garment code (Dashboard → Print designer → Printing images) */
   templates?: Record<string, PodTemplate | null>;
 }) {
@@ -64,6 +74,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const [notes, setNotes] = useState("");
   const [designName, setDesignName] = useState("");
   const [boxText, setBoxText] = useState("");
+  // offer the design to the community page (waits for the admin's approval)
+  const [publish, setPublish] = useState({ on: false, title: "", name: "", phone: "" });
   // "I don't have the design": photos of a piece the customer wants copied
   const [reference, setReference] = useState<ReferenceState>(emptyReference);
 
@@ -492,9 +504,117 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
 
   // links from the couples page open with two pieces ready
   useEffect(() => {
-    if (ready && initialCouple) startCouple();
+    if (ready && initialCouple && !initialShare) startCouple();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
+
+  // ------------------------------------------------------------------ shared couple design (two people, one link)
+  const [shareToken, setShareToken] = useState<string | null>(initialShare?.token ?? null);
+  const role = initialShare?.role ?? "owner";
+  const [shareOpen, setShareOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [partnerDone, setPartnerDone] = useState<string | null>(initialShare?.partner_done_at ?? null);
+  const [sent, setSent] = useState(false);
+  const asStored = (p: SharedPiece) => ({ objects: JSON.stringify(p.objects ?? []), colorId: p.colorId, sizes: p.sizes });
+  /** Shows one stored piece on the canvas (with its colour and sizes) — same steps as switching pieces. */
+  const showStored = async (to: 0 | 1, stored: { objects: string; colorId: string; sizes: Record<string, number> }) => {
+    const okSizes = Object.fromEntries(Object.entries(stored.sizes).filter(([k, q]) => garment.sizes.includes(k) && q > 0));
+    const colorOk = garmentColors.some((c) => c.id === stored.colorId) ? stored.colorId : garmentColors[0]?.id ?? liveRef.current.colorId;
+    const sz = Object.keys(okSizes).length ? okSizes : { [garment.sizes.includes("L") ? "L" : garment.sizes[0]!]: 1 };
+    const col = colors.find((c) => c.id === colorOk);
+    stateRef.current = { ...stateRef.current, colorId: colorOk, colorHex: col?.hex ?? stateRef.current.colorHex };
+    liveRef.current = { piece: to, sizes: sz, colorId: colorOk };
+    setColorId(colorOk);
+    setSizes(sz);
+    setPiece(to);
+    await loadObjects(stored.objects);
+  };
+  useEffect(() => {
+    if (!ready) return;
+    if (shareMissing) toast.error(t("الرابط منتهي أو غير صحيح — تكدر تبدي تصميم جديد", "This link has expired or is wrong — you can start a new design"));
+    if (initialShare && initialShare.pieces.length === 2) {
+      const [p0, p1] = initialShare.pieces.map(asStored) as [ReturnType<typeof asStored>, ReturnType<typeof asStored>];
+      const show: 0 | 1 = initialShare.role === "partner" ? 1 : 0;
+      piecesRef.current = show === 0 ? [null, p1] : [p0, null];
+      setCouple(true);
+      void showStored(show, show === 0 ? p0 : p1);
+    } else if (initialCommunity) {
+      void (async () => {
+        if (initialCommunity.color_id && garmentColors.some((c) => c.id === initialCommunity.color_id)) {
+          await showStored(0, { objects: JSON.stringify(initialCommunity.objects), colorId: initialCommunity.color_id, sizes: liveRef.current.sizes });
+        } else await loadObjects(JSON.stringify(initialCommunity.objects));
+        toast.success(t(`«${initialCommunity.title}» — عدّل عليه إذا تحب، واختار قياسك`, `“${initialCommunity.title}” — change it if you like, then pick your size`));
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
+
+  /** Both pieces as plain data (the one on the canvas included). */
+  const piecesNow = (): SharedPiece[] => {
+    const cur = liveRef.current;
+    return ([0, 1] as const).map((i) => {
+      const st = i === cur.piece ? { objects: serialize(), colorId: cur.colorId, sizes: cur.sizes } : piecesRef.current[i];
+      return st ? { objects: JSON.parse(st.objects), colorId: st.colorId, sizes: st.sizes } : { objects: [], colorId: cur.colorId, sizes: { ...cur.sizes } };
+    });
+  };
+  const inviteHref = shareToken && typeof window !== "undefined" ? `${window.location.origin}/${locale}/design?share=${shareToken}&as=partner` : "";
+  const invitePartner = async () => {
+    if (shareToken) { setShareOpen(true); return; }
+    setSharing(true);
+    try {
+      const r = await createDesignShare({ garment_type: garmentCode, pieces: piecesNow() });
+      if (!r.ok) {
+        toast.error(r.error === "too_large" ? t("التصميم كبير — احذف صورة وحاول مرة ثانية", "The design is too large — remove an image and try again") : r.error === "rate_limited" ? dict.checkout.errors.rate_limited! : dict.common.somethingWrong);
+        return;
+      }
+      setShareToken(r.token);
+      // the owner's own address keeps the link: reopening it shows the partner's piece too
+      window.history.replaceState(null, "", `/${locale}/design?share=${r.token}`);
+      setShareOpen(true);
+    } finally {
+      setSharing(false);
+    }
+  };
+  // the owner waits for the partner's piece (checked every few seconds while the page is open)
+  useEffect(() => {
+    if (!shareToken || role !== "owner") return;
+    const tick = async () => {
+      if (document.hidden) return;
+      const r = await getDesignShare(shareToken).catch(() => null);
+      if (!r?.ok || !r.partner_done_at || r.partner_done_at === partnerDone) return;
+      setPartnerDone(r.partner_done_at);
+      const p1 = asStored(r.pieces[1]!);
+      if (liveRef.current.piece === 1) await showStored(1, p1);
+      else piecesRef.current[1] = p1;
+      setTick((n) => n + 1);
+      toast.success(t("وصل تصميم شريكك للقطعة 2 💞", "Your partner's piece 2 has arrived 💞"));
+    };
+    const id = setInterval(() => void tick(), 6000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shareToken, role, partnerDone]);
+  /** The partner sends the second piece back to the owner. */
+  const sendToOwner = async () => {
+    if (!shareToken) return;
+    const p1 = piecesNow()[1]!;
+    if (!(p1.objects as { tpacHidden?: boolean }[]).some((o) => !o.tpacHidden)) {
+      toast.error(t("صمّم القطعة 2 قبل الإرسال", "Design piece 2 before sending"));
+      if (liveRef.current.piece !== 1) await switchPiece(1);
+      return;
+    }
+    setSharing(true);
+    try {
+      const r = await savePartnerPiece(shareToken, p1);
+      if (!r.ok) {
+        toast.error(r.error === "not_found" ? t("الرابط منتهي", "This link has expired") : r.error === "too_large" ? t("التصميم كبير — احذف صورة وحاول مرة ثانية", "The design is too large — remove an image and try again") : dict.common.somethingWrong);
+        return;
+      }
+      setSent(true);
+      toast.success(t("وصل تصميمك لشريكك 💞", "Your design is on its way to your partner 💞"));
+    } finally {
+      setSharing(false);
+    }
+  };
 
   // ------------------------------------------------------------------ adding things
   const placeNew = useCallback((o: Tagged, kind: "image" | "text" | "shape", loc: PrintLocation = stateRef.current.location, dy = 0, dx = 0) => {
@@ -931,7 +1051,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     return {
       front: await compact(await exportView("front")), back: await compact(await exportView("back")), sides, raw,
       colorId: live.colorId, colorName: col ? (locale === "ar" ? col.name_ar : col.name_en) : "", colorHex: col?.hex, sizes: { ...live.sizes },
-      used, objects: toPayload(objs),
+      used, objects: toPayload(objs), fabric: serialize(),
     };
   };
   const qtyOf = (z: Record<string, number>) => Object.values(z).reduce((n, q) => n + q, 0);
@@ -1008,9 +1128,14 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       uploads_disabled: t("رفع التصاميم الخاصة متوقف حالياً", "Uploading your own designs is paused right now"),
       save_failed: t("تعذّر حفظ التصميم — حاول بعد قليل", "Couldn't save the design — try again shortly"),
     };
+    if (publish.on && (publish.title.trim().length < 2 || publish.name.trim().length < 2)) {
+      toast.error(t("اكتب اسم التصميم واسمك حتى ننشره", "Write a design title and your name to publish it"));
+      return;
+    }
     const extras = pickedRows.filter((o) => o.group_code !== "package" || o.price > 0).map(optionLabel).join(" · ");
     const pieces = review.pieces;
     startSaving(async () => {
+      let firstSaved: string | null = null;
       for (const [i, p] of pieces.entries()) {
         const label = pieces.length > 1 ? ` (${t(`للمرتبطين ${i + 1}/2`, `couple ${i + 1}/2`)})` : "";
         // nothing drawn on the piece (only a photo request): the bag shows the customer's photo instead of a blank garment
@@ -1025,6 +1150,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             options: resolved.choice,
             notes: notes || undefined,
             box_text: giftOn && boxText.trim() ? boxText.trim() : undefined,
+            community_design_id: initialCommunity?.id,
             reference: refOn ? { artwork_ids: reference.items.map((x) => x.id), note: reference.note.trim() || undefined, locations: refLocs } : undefined,
             preview_front: p.front,
             preview_back: p.back,
@@ -1040,6 +1166,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
           toast.error((pieces.length > 1 ? t(`القطعة ${i + 1}: `, `Piece ${i + 1}: `) : "") + (errorText[res.error] ?? dict.common.somethingWrong));
           return;
         }
+        if (i === 0) firstSaved = res.lines[0]?.design_id ?? null;
         const col = colors.find((c) => c.id === p.colorId);
         for (const l of res.lines) {
           addToCart({
@@ -1059,6 +1186,13 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             },
           });
         }
+      }
+      // offered to the community page: the first saved piece, with its layout
+      const firstId = firstSaved;
+      if (publish.on && firstId && pieces.length === 1 && pieces[0]!.fabric) {
+        const pr = await publishCommunityDesign({ design_id: firstId, title: publish.title.trim(), designer_name: publish.name.trim(), designer_phone: publish.phone.trim() || undefined, fabric: JSON.parse(pieces[0]!.fabric) }).catch(() => null);
+        if (pr?.ok) toast.success(t("وصل تصميمك لصفحة «تصاميم الزبائن» — يظهر بعد موافقتنا", "Your design was sent to “Customer designs” — it appears once we approve it"));
+        else toast.error(t("انضاف للسلة، بس ما قدرنا ننشره — حاول مرة ثانية من تصميم جديد", "Added to your bag, but we couldn't publish it"));
       }
       setReview(null);
       setReference(emptyReference());
@@ -1121,6 +1255,11 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
           </div>
 
           {/* one piece, or two for a couple */}
+          {initialShare || shareToken ? (
+            <div className="px-5 pt-3 sm:px-7">
+              <ShareBanner role={role} fromName={initialShare?.from_name ?? null} partnerDone={!!partnerDone} sent={sent} onOpen={() => setShareOpen(true)} />
+            </div>
+          ) : null}
           <div className="px-5 pt-3 sm:px-7">
             {couple ? (
               <div className="flex items-center gap-1.5">
@@ -1135,8 +1274,9 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
                     );
                   })}
                 </div>
+                {role === "owner" && <IconBtn label={t("خلّي شريكك يصمّم القطعة 2", "Let your partner design piece 2")} onClick={() => void invitePartner()}>{sharing ? <Loader2 className="size-5 animate-spin" /> : <Share2 className="size-5" />}</IconBtn>}
                 <IconBtn label={t("انسخ التصميم للقطعة الثانية", "Copy this design to the other piece")} onClick={copyToOther}><Copy className="size-5" /></IconBtn>
-                <IconBtn label={t("رجوع لقطعة وحدة", "Back to one piece")} onClick={() => { if (confirm(t("تحذف تصميم القطعة الثانية وترجع لقطعة وحدة؟", "Remove the second piece and go back to one?"))) void stopCouple(); }}><X className="size-5" /></IconBtn>
+                {role === "owner" && <IconBtn label={t("رجوع لقطعة وحدة", "Back to one piece")} onClick={() => { if (confirm(t("تحذف تصميم القطعة الثانية وترجع لقطعة وحدة؟", "Remove the second piece and go back to one?"))) void stopCouple(); }}><X className="size-5" /></IconBtn>}
               </div>
             ) : (
               <button type="button" onClick={startCouple} disabled={!ready} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-pine/50 px-4 py-2.5 text-sm font-bold text-pine transition hover:bg-pine-soft">
@@ -1262,7 +1402,11 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             <p className="text-xs text-mute">{couple ? t("القطعتين مع الطباعة", "Both pieces with printing") : t("السعر مع الطباعة", "Price with printing")}{totalQty + otherQty > 1 && ` · ${totalQty + otherQty} ${t("قطع", "pcs")}`}{pct > 0 && <span className="ms-1.5 rounded-full bg-pine-soft px-1.5 py-0.5 font-bold text-pine">-{pct}%</span>}</p>
             <p className="display text-2xl tabular-nums">{formatIQD(grandTotal, locale)}</p>
           </div>
-          {anyContent ? (
+          {role === "partner" ? (
+            <button onClick={() => void sendToOwner()} disabled={sharing || uploading || !ready || sent} className="btn btn-brand h-14 min-w-[44%] rounded-2xl px-6 text-base sm:min-w-64">
+              {sharing ? <Loader2 className="size-5 animate-spin" /> : <><Send className="size-5" /> {sent ? t("انرسل ✓", "Sent ✓") : t("إرسال التصميم لشريكك", "Send to your partner")}</>}
+            </button>
+          ) : anyContent ? (
             <button onClick={openReview} disabled={saving || uploading || preparing || !ready} className="btn btn-brand h-14 min-w-[44%] rounded-2xl px-6 text-base sm:min-w-64">
               {preparing || saving ? <Loader2 className="size-5 animate-spin" /> : <><ShoppingBag className="size-5" /> {t("مراجعة وإضافة للسلة", "Review & add to bag")}</>}
             </button>
@@ -1274,6 +1418,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
         </div>
       </div>
 
+      {shareOpen && inviteHref && <ShareDialog href={inviteHref} onClose={() => setShareOpen(false)} />}
+
       {review && (
         <ReviewDialog
           pieces={review.pieces.map((p) => {
@@ -1281,6 +1427,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             return { front: p.front, back: p.back, sides: p.sides, colorName: p.colorName, colorHex: p.colorHex, sizes: p.sizes, placements: p.used.map((l) => dict.designer.locations[l] ?? l), unit: discountedUnit(list, pct), listUnit: list };
           })}
           reference={refOn ? { urls: reference.items.map((x) => x.url), note: reference.note.trim() } : undefined}
+          publish={!couple && role === "owner" && !initialCommunity && review.pieces[0]!.objects.length > 0 ? { value: publish, onChange: setPublish } : undefined}
           warnings={warnings} saving={saving} garmentName={locale === "ar" ? garment.name_ar : garment.name_en} extras={pickedRows.map(optionLabel)} pct={pct}
           notice={locale === "ar" ? settings.notice_ar : settings.notice_en}
           onClose={() => setReview(null)} onConfirm={confirmSave}

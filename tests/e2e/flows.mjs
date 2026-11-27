@@ -442,6 +442,7 @@ await flow("feedback: tap ripple, top toasts, hero slideshow with admin-uploaded
   const size = page.locator('[role=radiogroup][aria-label="اختر المقاس"] [role=radio]:not([data-disabled=true])').first();
   await size.click();
   const add = page.getByRole("button", { name: "أضف إلى السلة" }).first();
+  await add.scrollIntoViewIfNeeded();
   const box = await add.boundingBox();
   await page.mouse.move(box.x + 20, box.y + 20);
   await page.mouse.down();
@@ -1526,6 +1527,181 @@ await flow("gift box on any product: words on the lid, priced per piece by the s
   } finally {
     await db.query("update designer_options set is_active = true where group_code = 'package'");
   }
+});
+
+const pngFile = async (name, color) => {
+  const sharp = require("sharp");
+  const f = `${SHOTS}/${name}.png`;
+  writeFileSync(f, await sharp({ create: { width: 500, height: 500, channels: 3, background: color } }).png().toBuffer());
+  return f;
+};
+
+await flow("couple design by link: partner designs piece 2 on their phone → owner sees it → both in the bag", async (page) => {
+  await db.query(readFileSync(new URL("../../supabase/add-share-group-community.sql", import.meta.url), "utf8"));
+  await page.goto(`${BASE}/en/design?garment=hoodie&couple=1`);
+  await page.getByRole("tab", { name: "Piece 2" }).waitFor();
+  await page.getByRole("tab", { name: "Ideas" }).click();
+  await page.getByRole("button", { name: /Name & number/ }).click();
+  await page.getByText(/Elements on Back · 2/).waitFor();
+  await page.getByRole("button", { name: "Let your partner design piece 2" }).click();
+  const dlg = page.getByRole("dialog", { name: "Design it together" });
+  const link = await dlg.locator("input").inputValue();
+  assert.match(link, /\/en\/design\?share=[A-Za-z0-9_-]{20,}&as=partner$/);
+  assert.match(page.url(), /share=/, "the owner's address keeps the link");
+  const token = new URL(link).searchParams.get("share");
+  await dlg.getByRole("button", { name: "Close" }).click();
+  await page.getByText("Waiting for your partner to design piece 2").waitFor();
+
+  // the partner, on a phone
+  const ctx2 = await browser.newContext({ ...devices["iPhone 13"] });
+  const p2 = await ctx2.newPage();
+  const errors2 = [];
+  p2.on("pageerror", (e) => errors2.push(e.message));
+  await p2.goto(link);
+  await p2.getByText(/wants you to design piece 2/).waitFor();
+  assert.equal(await p2.getByRole("tab", { name: "Piece 2" }).getAttribute("aria-selected"), "true");
+  // the studio opens on the front
+  assert.equal(await p2.getByRole("tab", { name: "Front", exact: true }).getAttribute("aria-selected"), "true");
+  await p2.locator("input[type=file]").first().setInputFiles(await pngFile("partner-art", "#E3963C"));
+  await p2.getByText(/Elements on Front · 1/).waitFor({ timeout: 20000 });
+  await p2.getByRole("button", { name: "Send to your partner" }).click();
+  await p2.getByText(/Sent! Your partner sees it now/).waitFor({ timeout: 20000 });
+  assert.deepEqual(errors2, []);
+  const draft = await one("select data, partner_done_at from design_drafts where token = $1", [token]);
+  assert.ok(draft.partner_done_at, "partner's piece recorded");
+  const img = draft.data.pieces[1].objects.find((o) => o.tpacArtworkId);
+  assert.ok(img && img.src === `/api/art/${img.tpacArtworkId}?share=${token}`, "the image is served for both people");
+  // the image is only served with the right link
+  assert.equal((await p2.request.get(`${BASE}${img.src}`)).status(), 200);
+  assert.equal((await p2.request.get(`${BASE}/api/art/${img.tpacArtworkId}?share=${"x".repeat(24)}`)).status(), 404);
+  const other = await one("select id from uploaded_artwork where id <> $1 limit 1", [img.tpacArtworkId]);
+  if (other) assert.equal((await p2.request.get(`${BASE}/api/art/${other.id}?share=${token}`)).status(), 404);
+  await ctx2.close();
+
+  // back on the owner's page: the piece arrives by itself
+  await page.getByText("Your partner's piece 2 is here").waitFor({ timeout: 25000 });
+  await page.getByRole("tab", { name: "Piece 2" }).click();
+  await page.getByRole("tab", { name: "Front", exact: true }).click();
+  await page.getByText(/Elements on Front · 1/).first().waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: "Review & add to bag" }).click();
+  const review = page.getByRole("dialog", { name: "Review your design" });
+  await review.getByRole("region", { name: "Piece 2" }).waitFor({ timeout: 30000 });
+  await review.getByRole("button", { name: "Confirm & add both" }).click();
+  await page.getByRole("dialog", { name: "Your bag" }).waitFor({ timeout: 40000 });
+  const rows = (await db.query("select config from custom_designs order by created_at desc limit 2")).rows;
+  assert.ok(rows.some((r) => r.config.objects.some((o) => o.artwork_id === img.tpacArtworkId)), "the partner's image is in the order");
+});
+
+await flow("group order by link: organiser → members add name + size → totals → sent as a quotation request", async (page, ctx) => {
+  await db.query("delete from rate_limits");
+  await page.goto(`${BASE}/ar/group?product=baghdad-oversized-tee`);
+  await page.getByText("المنتج:").waitFor();
+  await page.fill("input[name=title]", "دفعة هندسة ٢٠٢٦");
+  await page.fill("input[name=organizer_name]", "مصطفى");
+  await page.fill("input[name=organizer_phone]", "07701112233");
+  await page.getByRole("button", { name: "سوّي الرابط" }).click();
+  await page.waitForURL(/\/ar\/group\/manage\/[A-Za-z0-9_-]{20,}\?new=1/);
+  const manage = page.url();
+  const link = await page.locator('input[aria-label="رابط المجموعة"]').inputValue();
+  assert.match(link, /\/ar\/group\/[a-z0-9]{6,16}$/);
+
+  const m = await browser.newContext({ ...devices["iPhone 13"] });
+  const mp = await m.newPage();
+  await mp.goto(link);
+  await mp.getByRole("heading", { name: "دفعة هندسة ٢٠٢٦" }).waitFor();
+  const join = async (name, size, print, extra = 0) => {
+    await mp.fill("input[name=name]", name);
+    await mp.getByRole("radio", { name: size, exact: true }).click();
+    if (print) await mp.fill("input[name=print_name]", print);
+    for (let i = 0; i < extra; i++) await mp.getByRole("button", { name: "+" }).click();
+    await mp.getByRole("button", { name: "سجّلني" }).click();
+    await mp.getByText(`تم تسجيلك يا ${name}`).waitFor({ timeout: 15000 });
+  };
+  await join("علي", "L", "ALI");
+  await mp.getByRole("button", { name: "سجّل شخص ثاني" }).click();
+  await join("سارة", "M", "", 1);
+  await mp.screenshot({ path: `${SHOTS}/group-join.png` });
+
+  await page.goto(manage);
+  await page.getByText("2 شخص · 3 قطعة").waitFor();
+  await page.getByText("L × 1").first().waitFor();
+  await page.getByText("M × 2").first().waitFor();
+  await page.screenshot({ path: `${SHOTS}/group-manage.png`, fullPage: true });
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "إرسال الطلب لـ TPAC" }).click();
+  await page.getByText(/انرسل الطلب لـ TPAC/).first().waitFor({ timeout: 15000 });
+  const r = await one("select b.estimated_quantity, b.size_breakdown, b.printing_requirements, b.organization_name, b.phone, g.status from bulk_order_requests b join group_orders g on g.id = b.group_order_id where g.title = 'دفعة هندسة ٢٠٢٦' order by b.created_at desc limit 1");
+  assert.equal(r.estimated_quantity, 3);
+  assert.deepEqual(r.size_breakdown, { L: 1, M: 2 });
+  assert.match(r.printing_requirements, /علي — L — يُطبع: «ALI»/);
+  assert.equal(r.status, "submitted");
+  assert.equal(r.phone, "9647701112233");
+  await mp.reload();
+  await mp.getByText(/التسجيل انتهى/).waitFor();
+  await m.close();
+});
+
+await flow("community designs: publish from the studio → admin approves → public page → order it → designer credited", async (page, ctx) => {
+  await db.query("delete from rate_limits");
+  const title = `Night drive ${Date.now() % 100000}`;
+  await page.goto(`${BASE}/en/design?garment=hoodie`);
+  await page.getByRole("button", { name: /Upload your design for the/ }).first().waitFor();
+  await page.locator("input[type=file]").first().setInputFiles(await pngFile("community-art", "#376352"));
+  await page.getByText(/Elements on Front · 1/).waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: "Review & add to bag" }).click();
+  const dlg = page.getByRole("dialog", { name: "Review your design" });
+  await dlg.getByRole("checkbox", { name: /Publish my design/ }).check();
+  await dlg.getByLabel("Design title").fill(title);
+  await dlg.getByLabel("Your name").fill("Zainab");
+  await dlg.getByLabel("Phone for rewards").fill("07701234567");
+  await dlg.getByRole("button", { name: "Confirm & add to bag" }).click();
+  await page.getByText(/it appears once we approve it/).waitFor({ timeout: 40000 });
+  const c = await one("select id, status, artwork_ids, fabric, designer_phone from community_designs where title = $1", [title]);
+  assert.equal(c.status, "pending");
+  assert.equal(c.artwork_ids.length, 1);
+  assert.equal(c.designer_phone, "9647701234567");
+  assert.ok(c.fabric.every((o) => !String(o.src ?? "").startsWith("blob:")), "no browser-only addresses kept");
+  // not public before approval
+  await page.goto(`${BASE}/en/community`);
+  assert.equal(await page.getByText(title).count(), 0);
+  assert.equal((await page.request.get(`${BASE}/api/art/${c.artwork_ids[0]}?community=${c.id}`)).status(), 404);
+
+  await becomeAdmin(page, "community");
+  await page.goto(`${BASE}/en/admin/community`);
+  const card = page.locator("section").filter({ hasText: `«${title}»` });
+  await card.getByRole("button", { name: "Approve & publish" }).click();
+  await waitFor("select status, image_front from community_designs where id = $1", [c.id], (r) => r.status === "approved" && !!r.image_front);
+
+  await page.goto(`${BASE}/en/community`);
+  await page.getByText(title).waitFor();
+  await page.getByRole("link", { name: title }).getByText("by Zainab").waitFor();
+  await page.screenshot({ path: `${SHOTS}/community.png` });
+  const art = page.waitForResponse((r) => r.url().includes(`/api/art/${c.artwork_ids[0]}?community=${c.id}`) && r.status() === 200, { timeout: 20000 });
+  await page.getByRole("link", { name: title }).click();
+  await art;
+  await page.getByText(`“${title}”`, { exact: false }).waitFor();
+  await page.getByText(/Elements on Front · 1/).waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: "Review & add to bag" }).click();
+  const dlg2 = page.getByRole("dialog", { name: "Review your design" });
+  assert.equal(await dlg2.getByRole("checkbox", { name: /Publish my design/ }).count(), 0, "a community design is not published again");
+  await dlg2.getByRole("button", { name: "Confirm & add to bag" }).click();
+  await page.getByRole("dialog", { name: "Your bag" }).waitFor({ timeout: 40000 });
+  const d = await one("select community_design_id from custom_designs order by created_at desc limit 1");
+  assert.equal(d.community_design_id, c.id, "the order credits the designer");
+  // checkout, then the dashboard shows the sale and the reward owed
+  await page.evaluate(() => { const s = JSON.parse(localStorage.getItem("tpac-cart")); s.state.lines = s.state.lines.slice(-1); localStorage.setItem("tpac-cart", JSON.stringify(s)); });
+  await page.goto(`${BASE}/en/checkout`);
+  await page.fill("#customer_name", "Community Buyer");
+  await page.fill("#phone", "07809990011");
+  await page.selectOption("#governorate", "najaf");
+  await page.fill("#city", "Kufa");
+  await page.fill("#address_line", "Main road");
+  await page.getByRole("button", { name: "Place order" }).click();
+  await page.waitForURL(/success/);
+  await page.goto(`${BASE}/en/admin/community?status=approved`);
+  const mine = page.locator("section").filter({ hasText: `«${title}»` });
+  await mine.getByText("1 pcs").waitFor();
+  await mine.getByText("2,000 IQD").first().waitFor();
 });
 
 console.log(results.join("\n"));

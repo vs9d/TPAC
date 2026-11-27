@@ -13,6 +13,10 @@ export const LIMITS = {
   newsletter: { max: 5, window: 3600 },
   review: { max: 10, window: 3600 },
   design: { max: 30, window: 3600 },
+  share: { max: 60, window: 3600 },
+  group: { max: 10, window: 3600 },
+  groupJoin: { max: 30, window: 3600 },
+  community: { max: 10, window: 3600 },
 } as const;
 
 /**

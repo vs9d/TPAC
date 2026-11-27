@@ -76,6 +76,13 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
     if ((art ?? []).length !== artworkIds.length) return { ok: false, error: "artwork_missing" };
   }
 
+  // a piece ordered from the community page credits its designer (only approved designs count)
+  let communityId: string | null = null;
+  if (d.community_design_id) {
+    const { data: cd } = await db.from("community_designs").select("id, status").eq("id", d.community_design_id).maybeSingle();
+    if (cd?.status === "approved") communityId = cd.id as string;
+  }
+
   const front = decodeImage(d.preview_front);
   const back = decodeImage(d.preview_back);
   if (!front || !back) return { ok: false, error: "invalid_preview" };
@@ -135,7 +142,7 @@ export async function saveDesign(input: unknown): Promise<SaveDesignResult> {
     notes: d.notes ? (d.name ? `${d.name} — ${d.notes}` : d.notes) : (d.name ?? null),
   });
   let { error } = await db.from("custom_designs").insert(
-    rows.map((r) => ({ ...base(r), notes: d.notes ?? null, batch_id: batchId, name: d.name ?? null, options: storedOptions, options_price: optionsPrice })),
+    rows.map((r) => ({ ...base(r), notes: d.notes ?? null, batch_id: batchId, name: d.name ?? null, options: storedOptions, options_price: optionsPrice, ...(communityId ? { community_design_id: communityId } : {}) })),
   );
   // A database that has not run add-designer-pro.sql yet lacks the new columns: keep working without them
   // (the options and sizes are still kept inside `config`).

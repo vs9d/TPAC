@@ -52,4 +52,6 @@ export interface ReviewPiece {
   sizes: Record<string, number>;
   used: string[];
   objects: unknown[];
+  /** the studio layout itself, to open it again (community page) */
+  fabric?: string;
 }

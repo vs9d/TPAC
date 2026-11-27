@@ -1,3 +1,5 @@
+import { getDesignShare } from "@/lib/actions/share";
+import { getCommunityDesignForStudio } from "@/lib/data/community";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Cairo, Tajawal, Almarai, Changa, Lalezar, Reem_Kufi, Aref_Ruqaa, Amiri, El_Messiri, Marhey, Rakkas, Alexandria, Noto_Kufi_Arabic, Bebas_Neue, Anton, Oswald, Montserrat, Playfair_Display, Pacifico, Lobster, Permanent_Marker, Bangers, Black_Ops_One, Staatliches, Righteous } from "next/font/google";
@@ -81,12 +83,17 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return { title: t.designer.title, description: t.designer.subtitle, alternates: { canonical: `/${locale}/design`, languages: { ar: "/ar/design", en: "/en/design" } } };
 }
 
-export default async function DesignPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ garment?: string; color?: string; couple?: string }> }) {
+export default async function DesignPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ garment?: string; color?: string; couple?: string; share?: string; as?: string; community?: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const dict = getDictionary(locale);
   const t = adminT(locale);
-  const { garment, color, couple } = await searchParams;
+  const { garment, color, couple, share, as, community } = await searchParams;
+  // a couple design shared by link: the owner (?share=…) or the partner (?share=…&as=partner)
+  const shared = share ? await getDesignShare(share) : null;
+  const initialShare = shared?.ok ? { token: share!, role: as === "partner" ? ("partner" as const) : ("owner" as const), garment_type: shared.garment_type, pieces: shared.pieces, partner_done_at: shared.partner_done_at, from_name: shared.from_name } : null;
+  // a design from the community page, opened to order it (or to change it first)
+  const fromCommunity = community && /^[0-9a-f-]{36}$/.test(community) ? await getCommunityDesignForStudio(community) : null;
   let garments: GarmentTypeRow[] = [];
   let locations: PrintLocationRow[] = [];
   let options: DesignerOptionRow[] = [];
@@ -150,7 +157,7 @@ export default async function DesignPage({ params, searchParams }: { params: Pro
       ) : garments.length === 0 ? (
         <p className="py-20 text-center text-mute">{dict.common.serviceUnavailable}</p>
       ) : (
-        <Designer garments={garments} locations={locations} colors={colors} fonts={FONTS} options={options} tiers={tiers} settings={settings} initialGarment={garment} initialColor={color} initialCouple={couple === "1"} templates={templates} />
+        <Designer garments={garments} locations={locations} colors={colors} fonts={FONTS} options={options} tiers={tiers} settings={settings} initialGarment={initialShare?.garment_type ?? fromCommunity?.garment_type ?? garment} initialColor={color} initialCouple={couple === "1"} initialShare={initialShare} shareMissing={!!share && !initialShare} initialCommunity={fromCommunity} templates={templates} />
       )}
       <DesignFaq items={faq} locale={locale} />
     </div>

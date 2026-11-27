@@ -25,6 +25,7 @@ export default async function BulkPage({ params }: { params: Promise<{ locale: s
           <p className="eyebrow mb-4 text-amber">{dict.nav.bulk}</p>
           <h1 className="display max-w-4xl text-5xl md:text-7xl">{dict.bulk.title}</h1>
           <p className="mt-5 max-w-xl text-lg text-paper/70">{dict.bulk.subtitle}</p>
+          <Link href={`/${locale}/group`} className="btn btn-accent mt-6 h-12">{locale === "ar" ? "أو سوّي رابط جماعي وكل واحد يسجل قياسه" : "Or make a group link where everyone adds their size"}</Link>
           <ol className="mt-12 grid gap-6 md:grid-cols-3">
             {dict.bulk.steps.map((s, i) => (
               <li key={s} className="border-t border-paper/20 pt-5">

@@ -311,6 +311,9 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
           <button onClick={() => addToCart(true)} disabled={!!variant && stock <= 0} className="btn btn-outline mt-3 h-12 w-full">
             {dict.product.buyNow}
           </button>
+          <Link href={`/${locale}/group?product=${product.slug}`} className="mt-3 flex items-center justify-center gap-2 text-sm font-semibold text-pine underline-offset-4 hover:underline">
+            {locale === "ar" ? "تطلبون كمجموعة؟ سوّي رابط وكل واحد يسجل قياسه" : "Ordering as a group? Make a link and everyone adds their size"}
+          </Link>
           {product.is_customizable && customStudio && (
             <Link href={`/${locale}/design?garment=${garment}${color ? `&color=${color.code}` : ""}`} className="btn btn-accent mt-3 h-12 w-full">
               <Paintbrush className="size-4" /> {dict.product.customizeThis}
