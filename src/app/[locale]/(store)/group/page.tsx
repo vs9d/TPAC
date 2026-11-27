@@ -4,6 +4,7 @@ import { Link2, Send, Users } from "lucide-react";
 import { isLocale } from "@/lib/i18n/config";
 import { getProductBySlug } from "@/lib/data/catalog";
 import { GroupCreateForm } from "@/components/group/create-form";
+import { getPreviewKits } from "@/lib/data/group";
 
 const TYPE_BY_CATEGORY: Record<string, string> = { hoodies: "hoodie", "t-shirts": "tshirt", "oversized-t-shirts": "oversized", sweatshirts: "sweatshirt" };
 
@@ -23,6 +24,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const ar = locale === "ar";
   const { product: slug } = await searchParams;
   const p = slug && /^[a-z0-9-]{1,160}$/.test(slug) ? await getProductBySlug(slug).catch(() => null) : null;
+  const kits = p ? [] : await getPreviewKits().catch(() => []);
   const product = p ? { slug: p.slug, name: ar ? p.name_ar : p.name_en, type: TYPE_BY_CATEGORY[p.category?.slug ?? ""] ?? (p.tags.some((t) => /hoodie|هودي/i.test(t)) ? "hoodie" : "tshirt") } : null;
   const steps = ar
     ? [["سوّي الرابط", "اسم المجموعة والقطعة والفكرة."], ["دزه بالكروب", "كل واحد يسجل اسمه وقياسه والاسم اللي ينطبع."], ["أرسل القائمة", "تشوف المجموع وترسله لنا، ونرجع لك بالسعر."]]
@@ -49,8 +51,8 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
           </ol>
         </div>
       </section>
-      <div className="container-x max-w-2xl py-12 md:py-16">
-        <GroupCreateForm product={product} />
+      <div className="container-x max-w-3xl py-12 md:py-16">
+        <GroupCreateForm product={product} kits={kits} />
       </div>
     </div>
   );

@@ -1619,7 +1619,7 @@ await flow("group order by link: organiser → members add name + size → total
   };
   await join("علي", "L", "ALI");
   await mp.getByRole("button", { name: "سجّل شخص ثاني" }).click();
-  await join("سارة", "M", "", 1);
+  await join("سارة", "M", "SARA", 1);
   await mp.screenshot({ path: `${SHOTS}/group-join.png` });
 
   await page.goto(manage);
@@ -1633,7 +1633,7 @@ await flow("group order by link: organiser → members add name + size → total
   const r = await one("select b.estimated_quantity, b.size_breakdown, b.printing_requirements, b.organization_name, b.phone, g.status from bulk_order_requests b join group_orders g on g.id = b.group_order_id where g.title = 'دفعة هندسة ٢٠٢٦' order by b.created_at desc limit 1");
   assert.equal(r.estimated_quantity, 3);
   assert.deepEqual(r.size_breakdown, { L: 1, M: 2 });
-  assert.match(r.printing_requirements, /علي — L — يُطبع: «ALI»/);
+  assert.match(r.printing_requirements, /علي — L — يُطبع على الخلف: «ALI»/);
   assert.equal(r.status, "submitted");
   assert.equal(r.phone, "9647701112233");
   await mp.reload();
@@ -1707,6 +1707,89 @@ await flow("community designs: publish from the studio → admin approves → pu
   const mine = page.locator("section").filter({ hasText: `«${title}»` });
   await mine.getByText("1 pcs").waitFor();
   await mine.getByText("2,000 IQD").first().waitFor();
+});
+
+await flow("group order with the organiser's design: fixed front, each name on the back (live preview), or each member's own design", async (page) => {
+  await db.query(readFileSync(new URL("../../supabase/add-group-templates.sql", import.meta.url), "utf8"));
+  await db.query("delete from rate_limits");
+  const make = async (title, kind) => {
+    await page.goto(`${BASE}/en/group`);
+    await page.fill("input[name=title]", title);
+    await page.fill("input[name=organizer_name]", "Mustafa");
+    await page.fill("input[name=organizer_phone]", "07701112244");
+    await page.getByRole("radio", { name: "Hoodie" }).click();
+    await page.getByRole("button", { name: "Upload front design" }).click();
+    await page.getByLabel("Design file").setInputFiles(await pngFile(`group-front-${kind}`, "#E3963C"));
+    await page.getByRole("button", { name: "Remove Front design" }).waitFor({ timeout: 20000 });
+    await page.getByRole("radio", { name: kind === "name" ? "Their name" : "Their own design" }).click();
+    // the front holds the organiser's design, so it is not offered for the members
+    const where = page.getByRole("radiogroup", { name: "Placement" });
+    assert.equal(await where.getByRole("radio", { name: "Front", exact: true }).count(), 0);
+    await where.getByRole("radio", { name: "Back", exact: true }).click();
+    if (kind === "name") {
+      await page.getByRole("radio", { name: "#E3963C" }).click();
+      await page.getByLabel("Sample name").fill("TEST");
+      await page.getByRole("img", { name: "Back" }).locator("text", { hasText: "TEST" }).waitFor();
+    }
+    await page.screenshot({ path: `${SHOTS}/group-template-${kind}.png`, fullPage: true });
+    await page.getByRole("button", { name: "Create the link" }).click();
+    await page.waitForURL(/\/en\/group\/manage\//);
+    return { manage: page.url(), link: await page.locator('input[aria-label="Group link"]').inputValue() };
+  };
+
+  // 1) the organiser's front design + every member's name on the back
+  const a = await make("Team Hawks", "name");
+  const g = await one("select code, garment, color_id, template from group_orders where title = 'Team Hawks' order by created_at desc limit 1");
+  assert.equal(g.garment, "hoodie");
+  assert.ok(g.color_id && g.template.fixed.front, "colour and fixed front design saved");
+  assert.deepEqual([g.template.member.kind, g.template.member.placement, g.template.member.color], ["name", "back", "#E3963C"]);
+  const m = await browser.newContext({ ...devices["iPhone 13"] });
+  const mp = await m.newPage();
+  const fixedArt = mp.waitForResponse((r) => r.url().includes(`/api/art/${g.template.fixed.front}?group=${g.code}`) && r.status() === 200, { timeout: 20000 });
+  await mp.goto(a.link);
+  await fixedArt;
+  await mp.fill("input[name=name]", "Hasan");
+  await mp.getByRole("radio", { name: "XL", exact: true }).click();
+  // the name is required and shows on the back right away
+  await mp.getByRole("button", { name: "Add me" }).click();
+  await mp.getByText(/Write the name to print on the back/).waitFor();
+  await mp.getByLabel(/Name to print on the back/).fill("HASAN 10");
+  await mp.getByRole("img", { name: "Back" }).locator("text", { hasText: "HASAN 10" }).waitFor();
+  await mp.screenshot({ path: `${SHOTS}/group-member-name.png`, fullPage: true });
+  await mp.getByRole("button", { name: "Add me" }).click();
+  await mp.getByText("You're on the list, Hasan").waitFor({ timeout: 15000 });
+  await m.close();
+  // nobody can use the group link to read other files
+  const other = await one("select id from uploaded_artwork where id <> $1 limit 1", [g.template.fixed.front]);
+  assert.equal((await page.request.get(`${BASE}/api/art/${other.id}?group=${g.code}`)).status(), 404);
+  await page.goto(a.manage);
+  await page.getByRole("img", { name: /Back — Hasan/ }).locator("text", { hasText: "HASAN 10" }).waitFor();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Send the order to TPAC" }).click();
+  await page.getByText(/Sent to TPAC/).first().waitFor({ timeout: 15000 });
+  const req = await one("select id, notes, printing_requirements from bulk_order_requests where organization_name = 'Team Hawks' order by created_at desc limit 1");
+  assert.match(req.printing_requirements, /Hasan — XL — يُطبع على الخلف: «HASAN 10»/);
+  assert.match(req.notes, /تصميم المنظّم \(ملفات مرفقة\): الأمام/);
+  assert.equal((await one("select bulk_request_id from uploaded_artwork where id = $1", [g.template.fixed.front])).bulk_request_id, req.id, "the organiser's design goes with the request");
+
+  // 2) every member uploads their own design for the back
+  await db.query("delete from rate_limits");
+  const b = await make("Art Club", "design");
+  const m2 = await browser.newContext({ ...devices["iPhone 13"] });
+  const p2 = await m2.newPage();
+  await p2.goto(b.link);
+  await p2.fill("input[name=name]", "Noor");
+  await p2.getByRole("radio", { name: "M", exact: true }).click();
+  await p2.getByLabel("Your design file").setInputFiles(await pngFile("member-design", "#376352"));
+  await p2.getByText("Done — change image").waitFor({ timeout: 20000 });
+  await p2.getByRole("img", { name: "Back" }).locator("image").nth(1).waitFor({ state: "attached" });
+  await p2.getByRole("button", { name: "Add me" }).click();
+  await p2.getByText("You're on the list, Noor").waitFor({ timeout: 15000 });
+  await m2.close();
+  const mem = await one("select m.artwork_id from group_order_members m join group_orders g on g.id = m.group_id where g.title = 'Art Club' order by m.created_at desc limit 1");
+  assert.ok(mem.artwork_id, "the member's design is kept");
+  await page.goto(b.manage);
+  await page.getByRole("img", { name: "Noor's design" }).waitFor();
 });
 
 console.log(results.join("\n"));

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CalendarClock, Users } from "lucide-react";
 import { isLocale } from "@/lib/i18n/config";
-import { getGroupByCode } from "@/lib/data/group";
+import { getGroupByCode, getPreviewKits } from "@/lib/data/group";
 import { GroupJoinForm } from "@/components/group/join-form";
 import { BULK_SIZES } from "@/lib/validation";
 import { formatDate } from "@/lib/format";
@@ -17,6 +17,8 @@ export default async function GroupJoinPage({ params }: { params: Promise<{ loca
   const found = await getGroupByCode(code);
   if (!found) notFound();
   const { group: g, count } = found;
+  const kit = g.garment ? (await getPreviewKits().catch(() => [])).find((k) => k.garment === g.garment) ?? null : null;
+  const fixed = Object.fromEntries(Object.entries(g.template.fixed).filter(([, v]) => v).map(([k, v]) => [k, `/api/art/${v}?group=${g.code}`]));
   const sizes = g.product?.sizes.length ? BULK_SIZES.filter((s) => g.product!.sizes.includes(s)) : [...BULK_SIZES];
   return (
     <div className="container-x max-w-2xl space-y-6 py-10 md:py-14">
@@ -44,7 +46,7 @@ export default async function GroupJoinPage({ params }: { params: Promise<{ loca
       {g.closed ? (
         <p className="rounded-2xl bg-bone p-5 text-center font-semibold">{g.status === "submitted" ? (ar ? "انرسل الطلب لـ TPAC — التسجيل انتهى." : "The order was sent to TPAC — the list is closed.") : (ar ? "التسجيل انغلق. تواصل ويا المنظّم." : "The list is closed. Contact the organiser.")}</p>
       ) : (
-        <GroupJoinForm code={g.code} sizes={sizes} allowNames={g.allow_names} />
+        <GroupJoinForm code={g.code} sizes={sizes} template={g.template} kit={kit} colorId={g.color_id} fixed={fixed} />
       )}
     </div>
   );

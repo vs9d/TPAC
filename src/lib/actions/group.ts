@@ -5,8 +5,9 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
-import { phoneSchema, fieldErrors, BULK_PRODUCT_TYPES, BULK_SIZES } from "@/lib/validation";
+import { phoneSchema, fieldErrors, uuid, BULK_PRODUCT_TYPES, BULK_SIZES } from "@/lib/validation";
 import { notifyAdmin } from "@/lib/notifications";
+import { groupTemplateSchema, PLACEMENT_LABEL, type GroupTemplate } from "@/lib/group-template";
 
 type Fail = { ok: false; error: string; fields?: Record<string, string> };
 const text = (min: number, max: number) => z.string().trim().min(min, "required").max(max, "max");
@@ -23,7 +24,21 @@ const createSchema = z.object({
   idea: z.string().trim().max(1000).optional(),
   allow_names: z.boolean(),
   deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // the piece itself (own design): garment, colour, the organiser's fixed design(s), what members add
+  garment: z.enum(["hoodie", "tshirt", "sweatshirt", "oversized"]).optional(),
+  color_id: uuid.optional(),
+  template: groupTemplateSchema.optional(),
 });
+
+/** Images uploaded through the studio uploader in the last day, by this same person, not used elsewhere yet. */
+async function freshArtwork(ids: string[], userId: string | null): Promise<boolean> {
+  if (!ids.length) return true;
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data } = await createAdminClient().from("uploaded_artwork").select("id, uploaded_by, storage_path, bulk_request_id").in("id", ids).gte("created_at", since);
+  const ok = ((data ?? []) as { id: string; uploaded_by: string | null; storage_path: string; bulk_request_id: string | null }[])
+    .filter((a) => a.storage_path.startsWith("uploads/design/") && !a.bulk_request_id && (a.uploaded_by ?? null) === userId);
+  return ok.length === new Set(ids).size;
+}
 
 /** An organiser opens a group order: returns the members' link code and the organiser's own token. */
 export async function createGroupOrder(input: unknown): Promise<{ ok: true; code: string; token: string } | Fail> {
@@ -39,12 +54,18 @@ export async function createGroupOrder(input: unknown): Promise<{ ok: true; code
     productId = (p?.id as string | undefined) ?? null;
   }
   const session = await getSession();
+  // a store product brings its own design; otherwise the organiser's template describes the piece
+  const template: GroupTemplate = d.template ?? groupTemplateSchema.parse({ member: { kind: d.allow_names ? "name" : "none" } });
+  if (productId) template.fixed = {};
+  if (template.member.kind !== "none" && template.fixed[template.member.placement]) return { ok: false, error: "validation", fields: { placement: "taken" } };
+  if (!(await freshArtwork(Object.values(template.fixed).filter(Boolean) as string[], session?.userId ?? null))) return { ok: false, error: "artwork" };
   const token = randomBytes(18).toString("base64url");
   for (let i = 0; i < 4; i++) {
     const code = randomBytes(6).toString("base64url").toLowerCase().replace(/[^a-z0-9]/g, "").padEnd(8, "x").slice(0, 8);
     const { error } = await db.from("group_orders").insert({
       code, admin_token: token, title: d.title, organizer_name: d.organizer_name, organizer_phone: d.organizer_phone,
-      product_id: productId, product_type: d.product_type, idea: d.idea || null, allow_names: d.allow_names,
+      product_id: productId, product_type: productId ? d.product_type : d.garment ?? d.product_type, idea: d.idea || null, allow_names: template.member.kind === "name",
+      garment: productId ? null : d.garment ?? null, color_id: productId ? null : d.color_id ?? null, template,
       deadline: d.deadline ?? null, user_id: session?.userId ?? null,
     });
     if (!error) return { ok: true, code, token };
@@ -62,6 +83,7 @@ const joinSchema = z.object({
   quantity: z.coerce.number().int().min(1).max(20),
   print_name: z.string().trim().max(30).optional(),
   note: z.string().trim().max(200).optional(),
+  artwork_id: uuid.optional(),
 });
 
 /** A member adds their name and size through the group link. */
@@ -71,15 +93,24 @@ export async function joinGroupOrder(code: string, input: unknown): Promise<{ ok
   if (!parsed.success) return { ok: false, error: "validation", fields: fieldErrors(parsed.error) };
   if (!(await rateLimit("groupJoin"))) return { ok: false, error: "rate_limited" };
   const db = createAdminClient();
-  const { data: g } = await db.from("group_orders").select("id, status, deadline, allow_names").eq("code", code).maybeSingle();
+  const { data: g } = await db.from("group_orders").select("id, status, deadline, allow_names, template").eq("code", code).maybeSingle();
   if (!g) return { ok: false, error: "not_found" };
   if (g.status !== "open" || (g.deadline && new Date(`${g.deadline}T23:59:59`) < new Date())) return { ok: false, error: "closed" };
   const { count } = await db.from("group_order_members").select("id", { count: "exact", head: true }).eq("group_id", g.id);
   if ((count ?? 0) >= MAX_MEMBERS) return { ok: false, error: "full" };
   const d = parsed.data;
+  const kind = (g.template as GroupTemplate | null)?.member?.kind ?? (g.allow_names ? "name" : "none");
+  // what the organiser asked each member to add is required
+  if (kind === "name" && !d.print_name) return { ok: false, error: "validation", fields: { print_name: "required" } };
+  if (kind === "design") {
+    if (!d.artwork_id) return { ok: false, error: "validation", fields: { artwork: "required" } };
+    const session = await getSession();
+    if (!(await freshArtwork([d.artwork_id], session?.userId ?? null))) return { ok: false, error: "artwork" };
+  }
   const { data, error } = await db.from("group_order_members").insert({
     group_id: g.id, name: d.name, size_code: d.size_code, quantity: d.quantity,
-    print_name: g.allow_names ? d.print_name || null : null, note: d.note || null,
+    print_name: kind === "name" ? d.print_name || null : null, note: d.note || null,
+    artwork_id: kind === "design" ? d.artwork_id : null,
   }).select("id").single();
   if (error || !data) return { ok: false, error: "generic" };
   return { ok: true, id: data.id as string };
@@ -119,8 +150,9 @@ export async function submitGroupOrder(token: string): Promise<{ ok: true; reque
   if (!g) return { ok: false, error: "not_found" };
   if (g.status === "submitted") return { ok: false, error: "already" };
   const db = createAdminClient();
-  const { data: members } = await db.from("group_order_members").select("name, size_code, quantity, print_name, note").eq("group_id", g.id).order("created_at");
-  const list = (members ?? []) as { name: string; size_code: string; quantity: number; print_name: string | null; note: string | null }[];
+  const { data: members } = await db.from("group_order_members").select("name, size_code, quantity, print_name, note, artwork_id").eq("group_id", g.id).order("created_at");
+  const list = (members ?? []) as { name: string; size_code: string; quantity: number; print_name: string | null; note: string | null; artwork_id: string | null }[];
+  const tpl = (g.template ?? {}) as Partial<GroupTemplate>;
   if (!list.length) return { ok: false, error: "empty" };
   const sizes: Record<string, number> = {};
   for (const m of list) sizes[m.size_code] = (sizes[m.size_code] ?? 0) + m.quantity;
@@ -130,7 +162,14 @@ export async function submitGroupOrder(token: string): Promise<{ ok: true; reque
     const { data: p } = await db.from("products").select("name_ar, slug").eq("id", g.product_id).maybeSingle();
     if (p) product = `المنتج: ${p.name_ar} — /ar/product/${p.slug}\n`;
   }
-  const names = list.map((m, i) => `${i + 1}. ${m.name} — ${m.size_code}${m.quantity > 1 ? ` × ${m.quantity}` : ""}${m.print_name ? ` — يُطبع: «${m.print_name}»` : ""}${m.note ? ` (${m.note})` : ""}`).join("\n");
+  const where = tpl.member ? PLACEMENT_LABEL[tpl.member.placement][0] : "";
+  const names = list.map((m, i) => `${i + 1}. ${m.name} — ${m.size_code}${m.quantity > 1 ? ` × ${m.quantity}` : ""}${m.print_name ? ` — يُطبع على ${where}: «${m.print_name}»` : ""}${m.artwork_id ? ` — تصميمه على ${where} (ملف مرفق)` : ""}${m.note ? ` (${m.note})` : ""}`).join("\n");
+  let piece = "";
+  if (g.garment) {
+    const { data: col } = g.color_id ? await db.from("colors").select("name_ar").eq("id", g.color_id).maybeSingle() : { data: null };
+    const fixedAt = Object.entries(tpl.fixed ?? {}).filter(([, v]) => v).map(([k]) => PLACEMENT_LABEL[k as keyof typeof PLACEMENT_LABEL][0]);
+    piece = `القطعة: ${g.garment}${col ? ` — ${col.name_ar}` : ""}\n${fixedAt.length ? `تصميم المنظّم (ملفات مرفقة): ${fixedAt.join("، ")}\n` : ""}${tpl.member && tpl.member.kind !== "none" ? `كل شخص يضيف ${tpl.member.kind === "name" ? `اسمه (${tpl.member.font}، ${tpl.member.color})` : "تصميمه"} على ${where}\n` : ""}`;
+  }
   const { data: req, error } = await db.from("bulk_order_requests").insert({
     organization_name: g.title,
     contact_name: g.organizer_name,
@@ -141,7 +180,7 @@ export async function submitGroupOrder(token: string): Promise<{ ok: true; reque
     quantity_max: total,
     size_breakdown: sizes,
     printing_requirements: names.slice(0, 20000),
-    notes: `${product}طلب جماعي برابط (${list.length} شخص).${g.idea ? `\nالفكرة: ${g.idea}` : ""}`,
+    notes: `${product}${piece}طلب جماعي برابط (${list.length} شخص).${g.idea ? `\nالفكرة: ${g.idea}` : ""}`,
     group_order_id: g.id,
     user_id: g.user_id,
   }).select("id, request_number").single();
@@ -150,6 +189,9 @@ export async function submitGroupOrder(token: string): Promise<{ ok: true; reque
     return { ok: false, error: "generic" };
   }
   await db.from("group_orders").update({ status: "submitted", bulk_request_id: req.id, updated_at: new Date().toISOString() }).eq("id", g.id);
+  // the organiser's design and every member's design go with the request (files for production)
+  const files = [...Object.values(tpl.fixed ?? {}), ...list.map((m) => m.artwork_id)].filter((x): x is string => !!x);
+  if (files.length) await db.from("uploaded_artwork").update({ bulk_request_id: req.id }).in("id", files).is("bulk_request_id", null);
   after(() => notifyAdmin("bulk_request.created", `طلب جماعي جديد ${req.request_number}`, `${g.title} — ${g.organizer_name} — ${total} قطعة`, `/ar/admin/bulk/${req.id}`));
   return { ok: true, request_number: req.request_number as string };
 }
