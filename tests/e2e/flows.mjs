@@ -1689,8 +1689,12 @@ await flow("community designs: publish from the studio → admin approves → pu
   const art = page.waitForResponse((r) => r.url().includes(`/api/art/${c.artwork_ids[0]}?community=${c.id}`) && r.status() === 200, { timeout: 20000 });
   await page.getByRole("link", { name: title }).click();
   await art;
-  await page.getByText(`“${title}”`, { exact: false }).waitFor();
-  await page.getByText(/Elements on Front · 1/).waitFor({ timeout: 20000 });
+  await page.getByText(`“${title}”`, { exact: false }).first().waitFor();
+  // ordered exactly as made: no tools, no garment or colour choice
+  await page.getByText(/Every piece you order supports Zainab/).waitFor();
+  assert.equal(await page.getByRole("tab", { name: "Text" }).isVisible(), false, "no design tools");
+  assert.equal(await page.getByRole("radio", { name: "Black", exact: true }).count(), 0, "colour is fixed");
+  assert.equal(await page.getByRole("button", { name: /Upload your design for the/ }).count(), 0);
   await page.getByRole("button", { name: "Review & add to bag" }).click();
   const dlg2 = page.getByRole("dialog", { name: "Review your design" });
   assert.equal(await page.getByRole("button", { name: /Publish your design on/ }).count(), 0, "a community design is not published again");

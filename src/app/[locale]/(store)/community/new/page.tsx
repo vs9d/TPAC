@@ -28,7 +28,7 @@ export default async function CommunityNewPage({ params }: { params: Promise<{ l
       <header className="mb-8 max-w-3xl space-y-3">
         <p className="eyebrow flex items-center gap-2 text-pine"><Sparkles className="size-4" aria-hidden="true" /> {ar ? "تصاميم الزبائن" : "Customer designs"}</p>
         <h1 className="display text-[2.05rem] leading-[1.2] sm:text-5xl">{ar ? "صمّم وانشر تصميمك" : "Design and publish"}</h1>
-        <p className="text-base leading-relaxed text-mute">{ar ? "صمّم براحتك، وبعدها اضغط «انشر تصميمي». بعد موافقتنا يظهر بصفحة تصاميم الزبائن، والناس تكدر تطلبه، وأنت تاخذ مكافأة على كل قطعة. هذي الصفحة للنشر بس — ما ينطلب شي ولا ينضاف للسلة." : "Design freely, then press “Publish my design”. Once approved it appears on Customer designs, others can order it, and you get a reward for every piece. This page is only for publishing — nothing is ordered or added to a bag."}</p>
+        <p className="text-base leading-relaxed text-mute">{ar ? "عندك فكرة؟ هسه وقتها 🎨 صمّم براحتك واضغط «انشر تصميمي». بعد موافقتنا يظهر بصفحة تصاميم الزبائن، والناس تلبسه بكل العراق، وأنت تاخذ مكافأة على كل قطعة تنباع — إحنا نطبع ونوصّل، أنت بس أبدع. هذي الصفحة للنشر بس — ما ينطلب شي ولا ينضاف للسلة." : "Design freely, then press “Publish my design”. Once approved it appears on Customer designs, others can order it, and you get a reward for every piece. This page is only for publishing — nothing is ordered or added to a bag."}</p>
         <Link href={`/${locale}/community`} className="inline-block text-sm font-semibold underline">{ar ? "شوف تصاميم الزبائن" : "See customer designs"}</Link>
       </header>
       {studio.garments.length > 0 && (

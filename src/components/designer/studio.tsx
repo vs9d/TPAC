@@ -213,7 +213,7 @@ const FIT: Record<string, string> = { tshirt: "REGULAR FIT", oversized: "OVERSIZ
 /** rough height / weight fit per size, for the hint under the size grid */
 const groupTitle: Record<string, [string, string]> = { method: ["طريقة الطباعة", "Print method"], finish: ["اللمسة النهائية", "Finish"], fabric: ["الخامة", "Fabric"], package: ["التغليف", "Packaging"], addon: ["إضافات", "Extras"] };
 
-export function PieceCard({ garments, garmentCode, setGarmentCode, colors, colorId, setColorId, sizes, setSizes, locations, used, options, choice, setChoice, tiers, totalQty, pct, unit, unitAfter, settings, rush, notes, setNotes, designName, setDesignName, sectionRef, giftOption, boxText, setBoxText, boxFont, pickOnly = false }: {
+export function PieceCard({ garments, garmentCode, setGarmentCode, colors, colorId, setColorId, sizes, setSizes, locations, used, options, choice, setChoice, tiers, totalQty, pct, unit, unitAfter, settings, rush, notes, setNotes, designName, setDesignName, sectionRef, giftOption, boxText, setBoxText, boxFont, pickOnly = false, lockPiece = false }: {
   garments: GarmentTypeRow[]; garmentCode: string; setGarmentCode: (c: GarmentTypeRow["code"]) => void;
   colors: Color[]; colorId: string; setColorId: (id: string) => void;
   sizes: Record<string, number>; setSizes: (s: Record<string, number>) => void;
@@ -222,6 +222,8 @@ export function PieceCard({ garments, garmentCode, setGarmentCode, colors, color
   giftOption?: DesignerOptionRow | null; boxText: string; setBoxText: (v: string) => void; boxFont?: string;
   /** only the garment and its colour (publishing a design: nothing is ordered) */
   pickOnly?: boolean;
+  /** garment and colour fixed (a community design is ordered exactly as made) */
+  lockPiece?: boolean;
   options: DesignerOptionRow[]; choice: Choice; setChoice: (c: Choice) => void;
   tiers: DesignerTierRow[]; totalQty: number; pct: number; unit: number; unitAfter: number; settings: DesignerSettings; rush: boolean;
   notes: string; setNotes: (s: string) => void; designName: string; setDesignName: (s: string) => void;
@@ -253,6 +255,9 @@ export function PieceCard({ garments, garmentCode, setGarmentCode, colors, color
       <div className="mx-5 mt-4 border-t border-line sm:mx-7" />
 
       <div className="space-y-8 px-5 py-6 sm:px-7">
+        {lockPiece ? (
+          <p className="rounded-2xl bg-bone px-4 py-3 text-sm"><span className="font-semibold">{locale === "ar" ? garment.name_ar : garment.name_en}</span> · <span className="inline-flex items-center gap-1.5"><span className="size-3.5 rounded-full border border-line" style={{ background: colors.find((c) => c.id === colorId)?.hex }} aria-hidden="true" />{(() => { const c = colors.find((x) => x.id === colorId); return c ? (locale === "ar" ? c.name_ar : c.name_en) : ""; })()}</span></p>
+        ) : (<>
         {/* 01 — garment */}
         <div>
           <p className="step-label">01 / {t("نوع القطعة", "Garment")}</p>
@@ -289,6 +294,7 @@ export function PieceCard({ garments, garmentCode, setGarmentCode, colors, color
           </div>
         </div>
 
+        </>)}
         {!pickOnly && (<>
         {/* 03 — size */}
         <div>

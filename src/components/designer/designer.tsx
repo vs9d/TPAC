@@ -194,6 +194,10 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   }, [snapshot]);
 
   /** Re-applies clipping / visibility / guides for the current view. */
+  // a community design is ordered exactly as its designer made it: nothing can be changed
+  const lockAll = mode === "order" && !!initialCommunity;
+  const lockAllRef = useRef(lockAll);
+  lockAllRef.current = lockAll;
   const groupRef = useRef(group);
   groupRef.current = group;
   const backdropCache = useRef(new Map<string, string>());
@@ -256,7 +260,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     for (const o of c.getObjects() as Tagged[]) {
       if (o.tpacKind === "guide") continue;
       const onView = !!o.tpacLocation && viewOf(tpl(g), o.tpacLocation) === v && !o.tpacHidden;
-      o.set({ visible: onView, selectable: onView, evented: onView, lockMovementX: !!o.tpacLocked, lockMovementY: !!o.tpacLocked, lockScalingX: !!o.tpacLocked, lockScalingY: !!o.tpacLocked, lockRotation: !!o.tpacLocked, hasControls: !o.tpacLocked });
+      const frozen = lockAllRef.current;
+      o.set({ visible: onView, selectable: onView && !frozen, evented: onView && !frozen, lockMovementX: !!o.tpacLocked, lockMovementY: !!o.tpacLocked, lockScalingX: !!o.tpacLocked, lockScalingY: !!o.tpacLocked, lockRotation: !!o.tpacLocked, hasControls: !o.tpacLocked });
       if (o.tpacLocation) {
         const a = areaMap[o.tpacLocation];
         o.clipPath = new F.Rect({ originX: "left", originY: "top", left: a.x, top: a.y, width: a.width, height: a.height, absolutePositioned: true });
@@ -627,7 +632,10 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
         if (initialCommunity.color_id && garmentColors.some((c) => c.id === initialCommunity.color_id)) {
           await showStored(0, { objects: JSON.stringify(initialCommunity.objects), colorId: initialCommunity.color_id, sizes: liveRef.current.sizes });
         } else await loadObjects(JSON.stringify(initialCommunity.objects));
-        toast.success(t(`«${initialCommunity.title}» — عدّل عليه إذا تحب، واختار قياسك`, `“${initialCommunity.title}” — change it if you like, then pick your size`));
+        for (const o of design()) o.tpacLocked = true;
+        await renderScene();
+        syncLayers();
+        toast.success(t(`«${initialCommunity.title}» — اختار قياسك واطلبه`, `“${initialCommunity.title}” — pick your size and order it`));
       })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -858,6 +866,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       const c = canvasRef.current;
       const o = design().find((x) => x.tpacId === id);
       if (!c || !o) return;
+      if (lockAllRef.current) return;
       if (action === "delete") {
         // in a group order the member's name is what gets printed for them: it can change, not go
         if (o.tpacGroupName) {
@@ -1369,7 +1378,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
               <ShareBanner role={role} fromName={initialShare?.from_name ?? null} partnerDone={!!partnerDone} sent={sent} onOpen={() => setShareOpen(true)} />
             </div>
           ) : null}
-          <div className={cn("px-5 pt-3 sm:px-7", mode !== "order" && "hidden")}>
+          <div className={cn("px-5 pt-3 sm:px-7", (mode !== "order" || lockAll) && "hidden")}>
             {couple ? (
               <div className="flex items-center gap-1.5">
                 <div className="flex flex-1 gap-1 rounded-2xl bg-bone p-1" role="tablist" aria-label={t("القطع", "Pieces")}>
@@ -1415,7 +1424,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
           </div>
 
           {/* first step, under the garment so the whole piece stays visible */}
-          {ready && hereCount === 0 && !selected && (
+          {ready && hereCount === 0 && !selected && !lockAll && (
             <div className="flex flex-wrap items-center justify-center gap-2 px-4 pt-3">
               <button type="button" onClick={openUpload} disabled={uploading} className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-pine px-5 py-3 text-[15px] font-bold leading-tight text-white shadow-[0_10px_24px_-14px_rgba(0,0,0,.55)] transition active:scale-[.98] sm:max-w-xs dark:text-night">
                 {uploading ? <Loader2 className="size-5 animate-spin" /> : <Upload className="size-5" />} {t(`ارفع تصميمك على ${locLabel}`, `Upload your design for the ${locLabel.toLowerCase()}`)}
@@ -1427,7 +1436,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
           )}
 
           {/* no design of their own: a photo of a piece they liked + what they want */}
-          <div className={cn("px-4 pt-3", mode !== "order" && "hidden")}>
+          <div className={cn("px-4 pt-3", (mode !== "order" || lockAll) && "hidden")}>
             <ReferencePanel
               value={reference} onChange={setReference} disabled={!ready}
               locations={availableLocations.map((l) => l.code)} locationName={(l) => dict.designer.locations[l] ?? l}
@@ -1461,7 +1470,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
           </p>
           {closeUp && <p className="-mt-2 pb-4 text-center text-[11px] text-mute">{t(`منطقة الطباعة ${area(location).cm.width}×${area(location).cm.height} سم`, `Print area ${area(location).cm.width}×${area(location).cm.height} cm`)}</p>}
 
-          {selected && selected.tpacKind && selected.tpacKind !== "guide" && (
+          {selected && !lockAll && selected.tpacKind && selected.tpacKind !== "guide" && (
             <div className="border-t border-line">
               <Inspector
               key={selected.tpacId}
@@ -1495,7 +1504,15 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
 
         {/* ------------------------------ tools + piece */}
         <div className="space-y-5 lg:col-span-5">
-          <div ref={creativeRef} className="scroll-mt-24">
+          {lockAll && initialCommunity && (
+            <section className="studio-card space-y-2 p-5 sm:p-7" aria-label={t("تصميم من تصاميم الزبائن", "A customer design")}>
+              <p className="text-xs font-semibold text-pine">{t("من تصاميم الزبائن", "From customer designs")}</p>
+              <h2 className="display text-2xl">«{initialCommunity.title}»</h2>
+              <p className="text-sm text-mute">{t(`تصميم ${initialCommunity.designer_name}. يوصلك مثل ما صمّمه بالضبط — بنفس القطعة واللون.`, `By ${initialCommunity.designer_name}. You get it exactly as designed — same garment and colour.`)}</p>
+              <p className="rounded-2xl bg-pine-soft px-4 py-3 text-sm font-semibold text-pine">{t(`💚 كل قطعة تطلبها من هذا التصميم تدعم ${initialCommunity.designer_name} — ياخذ مكافأة على كل بيعة. شكراً لأنك تدعم المبدعين العراقيين.`, `💚 Every piece you order supports ${initialCommunity.designer_name} — they get a reward for every sale. Thank you for backing local creators.`)}</p>
+            </section>
+          )}
+          <div ref={creativeRef} className={cn("scroll-mt-24", lockAll && "hidden")}>
             <CreativeSpace
               tab={tab} setTab={setTab} api={api} ready={ready} uploading={uploading} openUpload={openUpload} fonts={fonts}
               location={location} locationLabel={locLabel} layers={layers} selectedId={selected?.tpacId}
@@ -1506,7 +1523,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
           {mode === "group" && group ? (
             <GroupJoinCard group={group} value={joinValue} onChange={setJoinValue} joined={joined} onAgain={() => setJoined(null)} />
           ) : (
-          <PieceCard pickOnly={mode === "publish"}
+          <PieceCard pickOnly={mode === "publish"} lockPiece={lockAll}
             garments={garments} garmentCode={garmentCode} setGarmentCode={setGarmentCode} colors={garmentColors} colorId={colorId} setColorId={setColorId}
             sizes={sizes} setSizes={setSizes} locations={availableLocations} used={usedLocations} options={options} choice={choice} setChoice={setChoice}
             tiers={tiers.filter((x) => x.is_active)} totalQty={totalQty} pct={pct} unit={unit} unitAfter={unitAfter} settings={settings} rush={resolved.choice.addons.includes("rush")}
