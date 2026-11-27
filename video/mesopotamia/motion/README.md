@@ -22,3 +22,14 @@ node render_tt.js video 0 71.5 tt.mp4      # uses tiktok.html + tiktok.js (clip 
 python3 audio_tt.py                         # -> audio_tt.wav (same instruments, re-scored for the cut)
 ffmpeg -i tt.mp4 -i audio_tt.wav -c:v copy -c:a aac -b:a 192k -shortest tiktok.mp4
 ```
+
+## TikTok cut with voiceover (78.7 s)
+
+Same cut, re-timed so every shot fits its ElevenLabs line. Put the voiceover at `vo/vo44.wav`
+(mono, 44.1 kHz); `audio_vo.py` lists where each line sits in that file and where it lands in the video.
+
+```bash
+node render_vo.js video 0 78.7 tt_vo.mp4
+python3 audio_vo.py                         # -> audio_vo.wav (voice + ducked music/SFX)
+ffmpeg -i tt_vo.mp4 -i audio_vo.wav -c:v copy -c:a aac -b:a 192k -shortest tiktok_voice.mp4
+```
