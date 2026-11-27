@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { OrderRow } from "@/components/account/order-row";
 import { formatDate } from "@/lib/format";
 import { markNotificationsRead } from "@/lib/actions/account";
+import { PushToggle } from "@/components/pwa/push-toggle";
+import { isStaffRole } from "@/lib/auth";
 
 export const metadata = { robots: { index: false } };
 
@@ -35,6 +37,7 @@ export default async function AccountOverview({ params }: { params: Promise<{ lo
           <h2 className="display text-2xl">{dict.account.notifications}</h2>
           {unread && <form action={markNotificationsRead}><button className="text-xs underline">✓</button></form>}
         </div>
+        <PushToggle context={isStaffRole(session.profile?.role) ? "staff" : "orders"} className="mb-4" />
         {notes?.length ? (
           <ul className="divide-y divide-line border-y border-line">
             {notes.map((n) => (

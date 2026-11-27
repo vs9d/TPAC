@@ -1,3 +1,4 @@
+import { PushToggle } from "@/components/pwa/push-toggle";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { isLocale } from "@/lib/i18n/config";
@@ -17,6 +18,7 @@ export default async function CreatorNotifications({ params }: { params: Promise
     <section className="space-y-4">
       <MarkCreatorRead unread={list.filter((n) => !n.read_at).length} />
       <h2 className="display text-2xl">{ar ? "الإشعارات" : "Notifications"}</h2>
+      <PushToggle context="creator" />
       {list.length === 0 ? <p className="rounded-[1.5rem] bg-bone p-8 text-center text-mute">{ar ? "ماكو إشعارات بعد." : "No notifications yet."}</p> : (
         <ul className="divide-y divide-line rounded-[1.5rem] border border-line bg-paper">
           {list.map((n) => (

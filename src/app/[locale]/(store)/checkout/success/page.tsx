@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 import { isLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n";
+import { getSession } from "@/lib/auth";
+import { PushToggle } from "@/components/pwa/push-toggle";
 
 export const metadata: Metadata = { robots: { index: false } };
 
@@ -13,6 +15,7 @@ export default async function SuccessPage({ params, searchParams }: { params: Pr
   const dict = getDictionary(locale);
   const { order } = await searchParams;
   const orderNumber = order && /^TP\d{4,10}$/.test(order) ? order : null;
+  const session = await getSession();
   return (
     <div className="container-x flex flex-col items-center py-24 text-center">
       <CheckCircle2 className="size-14 text-pine" strokeWidth={1.4} />
@@ -24,6 +27,8 @@ export default async function SuccessPage({ params, searchParams }: { params: Pr
           <p className="display mt-1 text-3xl" dir="ltr">{orderNumber}</p>
         </div>
       )}
+      {/* signed in: offer order updates on the phone right when they matter */}
+      {session && <PushToggle className="mt-8 w-full max-w-md text-start" />}
       <div className="mt-10 flex flex-wrap justify-center gap-3">
         <Link href={`/${locale}/track${orderNumber ? `?order=${orderNumber}` : ""}`} className="btn btn-primary">{dict.checkout.trackOrder}</Link>
         <Link href={`/${locale}/shop`} className="btn btn-outline">{dict.cart.continueShopping}</Link>

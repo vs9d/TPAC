@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { isLocale } from "@/lib/i18n/config";
 import { requireStaff } from "@/lib/auth";
 import { AdminShell } from "@/components/admin/shell";
+import { InstallPrompt } from "@/components/pwa/install";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ export default async function AdminLayout({ children, params }: { children: Reac
   return (
     <AdminShell role={session.profile!.role} name={session.profile?.full_name ?? session.email ?? ""} badges={{ notifications: unread ?? 0, bulk: newBulk ?? 0, orders: newOrders ?? 0 }}>
       {children}
+      <InstallPrompt />
     </AdminShell>
   );
 }

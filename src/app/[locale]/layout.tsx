@@ -10,6 +10,8 @@ import { Toaster } from "@/components/ui/toast";
 import { PressFeedback } from "@/components/ui/press-feedback";
 import { NavProgress } from "@/components/ui/nav-progress";
 import { FormKeeper } from "@/components/ui/form-keeper";
+import { RegisterServiceWorker } from "@/components/pwa/register-sw";
+import { INSTALL_CAPTURE_SCRIPT } from "@/lib/pwa";
 import { publicEnv } from "@/lib/env";
 
 const cairo = Cairo({ subsets: ["arabic", "latin"], variable: "--font-cairo", display: "swap" });
@@ -42,6 +44,9 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     twitter: { card: "summary_large_image" },
     icons: { icon: "/favicon.png", apple: "/brand/apple-icon.png" },
     manifest: "/manifest.webmanifest",
+    // opened from the iPhone home screen: full screen, TPAC name, status bar over the page colour
+    appleWebApp: { capable: true, title: "TPAC", statusBarStyle: "default" },
+    formatDetection: { telephone: false },
   };
 }
 
@@ -59,6 +64,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
     <html lang={locale} dir={dir(locale)} className={`${cairo.variable} ${readex.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: INSTALL_CAPTURE_SCRIPT }} />
       </head>
       <body className="min-h-dvh antialiased">
         <I18nProvider locale={locale} dict={dict}>
@@ -67,6 +73,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
           <PressFeedback />
           <FormKeeper />
           <Toaster />
+          <RegisterServiceWorker />
         </I18nProvider>
       </body>
     </html>

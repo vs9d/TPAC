@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, emailConfigured } from "./email";
 import { creatorEmail } from "./email-templates";
 import { emailContext } from "./index";
+import { pushToUsers } from "./push";
 
 /** Account and payout emails are always sent; the rest follow the creator's email setting. */
 const ALWAYS = new Set(["account", "wallet"]);
@@ -19,6 +20,7 @@ interface CreatorRow { user_id: string; username: string; display_name: string; 
  * Without an email provider the rows are marked "skipped" — never reported as sent.
  */
 export async function processCreatorEmails(limit = 30): Promise<{ sent: number; skipped: number; failed: number }> {
+  await pushCreatorNotifications().catch((e) => console.error("creator push", e));
   const out = { sent: 0, skipped: 0, failed: 0 };
   const db = createAdminClient();
   const stale = new Date(Date.now() - 10 * 60_000).toISOString();
@@ -61,4 +63,18 @@ export async function processCreatorEmails(limit = 30): Promise<{ sent: number; 
     }
   }
   return out;
+}
+
+/** Each new creator notification also goes to the creator's phone once (claimed by setting pushed_at first). */
+async function pushCreatorNotifications(limit = 50) {
+  const db = createAdminClient();
+  const since = new Date(Date.now() - 86_400_000).toISOString();
+  const { data } = await db.from("creator_notifications").select("id").is("pushed_at", null).gte("created_at", since).order("created_at").limit(limit);
+  const ids = ((data ?? []) as { id: string }[]).map((r) => r.id);
+  if (!ids.length) return;
+  const { data: claimed } = await db.from("creator_notifications").update({ pushed_at: new Date().toISOString() }).in("id", ids).is("pushed_at", null).select("id, creator_id, title, body, link");
+  for (const n of (claimed ?? []) as { id: string; creator_id: string; title: string; body: string | null; link: string | null }[]) {
+    const path = n.link && n.link.startsWith("/") && !n.link.startsWith("//") ? n.link : "/creator-studio/notifications";
+    await pushToUsers([n.creator_id], { title: n.title, body: n.body ?? "", url: `/ar${path}`, tag: `creator-${n.id}` });
+  }
 }

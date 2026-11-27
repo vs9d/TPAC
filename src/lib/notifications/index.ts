@@ -148,7 +148,21 @@ export async function notifyOrder(orderId: string, event: "created" | "status_ch
     // WhatsApp: own queue (opt-in, one message per status, retries, editable templates) — see whatsapp-queue.ts
     tasks.push(enqueueOrderWhatsApp(orderId, order.status).then(() => processWhatsAppQueue(10)).then(() => undefined));
 
+    // the customer's phone (installed app / browser that allowed notifications)
+    if (order.user_id && customerEvents.includes(order.status)) {
+      tasks.push(import("./push").then((p) => p.pushToUsers([order.user_id], {
+        title: `${status[l]} — ${order.order_number}`,
+        body: l === "ar" ? `المبلغ ${formatIQD(order.total, "ar")} · دوس حتى تتابع طلبك` : `Total ${formatIQD(order.total, "en")} · tap to follow your order`,
+        url: `/${l}/track?order=${encodeURIComponent(order.order_number)}`, tag: `order-${order.id}`,
+      })).then(() => undefined).catch((e) => console.error("push", e)));
+    }
+
     if (event === "created" && settings.admin_new_order) {
+      // the team's phones
+      tasks.push(import("./push").then(async (p) => p.pushToUsers(await p.staffUserIds(), {
+        title: `طلب جديد ${order.order_number}${order.has_custom_items ? " (تصميم خاص)" : ""}`,
+        body: `${formatIQD(order.total, "ar")} — ${order.governorate}`, url: `/ar/admin/orders/${order.id}`, tag: `admin-order-${order.id}`,
+      })).then(() => undefined).catch((e) => console.error("push", e)));
       const admin = adminRecipients(settings);
       const adminTitle = `طلب جديد ${order.order_number}${order.has_custom_items ? " (تصميم خاص)" : ""}`;
       const adminBody = `${order.customer_name} — ${order.phone} — ${formatIQD(order.total, "ar")} — ${order.governorate}`;

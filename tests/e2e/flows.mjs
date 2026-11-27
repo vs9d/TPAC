@@ -1989,6 +1989,75 @@ await flow("TPAC Creators: join → approval → design on the official mockup w
   await adminCtx.close();
 });
 
+await flow("app (PWA): manifest, service worker, offline page, install on iPhone, phone notifications", async (page, ctx) => {
+  // the manifest: installable, with maskable icons and shortcuts
+  const man = await (await page.request.get(`${BASE}/manifest.webmanifest`)).json();
+  assert.equal(man.display, "standalone");
+  assert.ok(man.icons.some((i) => i.purpose === "maskable" && i.sizes === "512x512"), "maskable icon");
+  assert.ok(man.shortcuts.length >= 3);
+  for (const i of man.icons) assert.equal((await page.request.get(`${BASE}${i.src}`)).status(), 200, i.src);
+  // the service worker and the offline page are served as files (not redirected to /ar/...)
+  const sw = await page.request.get(`${BASE}/sw.js`, { maxRedirects: 0 });
+  assert.equal(sw.status(), 200);
+  assert.match(sw.headers()["cache-control"] ?? "", /no-cache/);
+  assert.equal((await page.request.get(`${BASE}/offline.html`, { maxRedirects: 0 })).status(), 200);
+
+  // the worker installs; offline, a page shows the friendly offline screen
+  await page.goto(`${BASE}/ar`);
+  await page.waitForFunction(async () => !!(await navigator.serviceWorker.getRegistration("/"))?.active, null, { timeout: 45000 });
+  await page.reload();
+  await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 45000 });
+  await ctx.setOffline(true);
+  await page.goto(`${BASE}/ar/shop`).catch(() => undefined);
+  await page.getByText("ماكو اتصال بالإنترنت").waitFor();
+  await ctx.setOffline(false);
+  // prices are never served from the cache: back online, the real page
+  await page.goto(`${BASE}/ar/shop`);
+  assert.equal(await page.getByText("ماكو اتصال بالإنترنت").count(), 0);
+
+  // iPhone (Safari, not installed): the menu offers the app with step-by-step instructions
+  const phone = await browser.newContext({ ...devices["iPhone 13"], serviceWorkers: "block" });
+  const ip = await phone.newPage();
+  await ip.goto(`${BASE}/ar`);
+  await ip.getByRole("button", { name: /القائمة|Menu/ }).first().click();
+  await ip.getByRole("navigation", { name: "القائمة" }).getByRole("button", { name: "نزّل تطبيق TPAC" }).click();
+  const sheet = ip.getByRole("dialog", { name: "نزّل تطبيق TPAC" });
+  await sheet.getByText("إضافة إلى الشاشة الرئيسية").waitFor();
+  await ip.screenshot({ path: `${SHOTS}/pwa-ios-install.png` });
+  await sheet.getByRole("button", { name: "تمام" }).click();
+  // the banner after a few seconds on a browsing page, dismissable for two weeks
+  await ip.goto(`${BASE}/ar/shop`);
+  const banner = ip.getByRole("region", { name: "تطبيق TPAC" });
+  await banner.waitFor({ timeout: 12000 });
+  await banner.getByRole("button", { name: "مو هسه" }).click();
+  await ip.reload();
+  await ip.waitForTimeout(7000);
+  assert.equal(await banner.count(), 0, "dismissed banner stays hidden");
+  // opened from the home screen (installed): no install offers anywhere
+  const installed = await browser.newContext({ ...devices["iPhone 13"], serviceWorkers: "block" });
+  await installed.addInitScript(() => Object.defineProperty(navigator, "standalone", { get: () => true }));
+  const app = await installed.newPage();
+  await app.goto(`${BASE}/ar/shop`);
+  await app.getByRole("button", { name: /القائمة|Menu/ }).first().click();
+  await app.waitForTimeout(800);
+  assert.equal(await app.getByRole("button", { name: "نزّل تطبيق TPAC" }).count(), 0);
+  await installed.close();
+
+  // phone notifications: a signed-in iPhone user who hasn't installed the app is asked to install first
+  const email = `push${Date.now()}@example.com`;
+  await ip.goto(`${BASE}/ar/account/register`);
+  await ip.fill("#full_name", "Push Test");
+  await ip.fill("#email", email);
+  await ip.fill("#phone", `0772${String(Date.now()).slice(-7)}`);
+  await ip.fill("#password", "push-pass-2026");
+  await ip.fill("#confirm", "push-pass-2026");
+  await ip.getByRole("button", { name: "إنشاء الحساب" }).click();
+  await ip.waitForURL(/account$/);
+  await ip.getByText(/بالآيفون الإشعارات تشتغل من تطبيق TPAC/).waitFor();
+  await phone.close();
+
+});
+
 mailServer.close();
 console.log(results.join("\n"));
 await browser.close();

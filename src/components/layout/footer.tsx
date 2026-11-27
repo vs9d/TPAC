@@ -1,4 +1,5 @@
 import { whatsappNumber } from "@/lib/whatsapp";
+import { InstallAppLink } from "@/components/pwa/install";
 import Link from "next/link";
 import Image from "next/image";
 import type { Locale } from "@/lib/i18n/config";
@@ -54,6 +55,7 @@ export function Footer({ locale, dict, settings, categories }: { locale: Locale;
             <li><Link href={L("/group")} className="hover:text-amber">{locale === "ar" ? "طلب جماعي برابط" : "Group order by link"}</Link></li>
             <li><Link href={L("/community")} className="hover:text-amber">{locale === "ar" ? "تصاميم الزبائن" : "Customer designs"}</Link></li>
             <li><Link href={L("/creators")} className="hover:text-amber">TPAC Creators</Link></li>
+            <li><InstallAppLink className="hover:text-amber" /></li>
             <li><Link href={L("/portfolio")} className="hover:text-amber">{locale === "ar" ? "أعمالنا" : "Our work"}</Link></li>
             <li><Link href={L("/pages/privacy")} className="hover:text-amber">{dict.footer.privacy}</Link></li>
             <li><Link href={L("/pages/terms")} className="hover:text-amber">{dict.footer.terms}</Link></li>

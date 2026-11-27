@@ -3,13 +3,14 @@ import Link from "next/link";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Menu, Search, ShoppingBag, User, X, Heart, Paintbrush, Building2, Star, PackageSearch, LayoutDashboard, Ruler, Images, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Menu, Search, ShoppingBag, User, X, Heart, Paintbrush, Building2, Star, PackageSearch, LayoutDashboard, Ruler, Images, Sparkles, Download } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { useCart, cartCount } from "@/components/cart/store";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { LocaleSwitch } from "./locale-switch";
 import { SearchOverlay } from "./search-overlay";
+import { InstallAppLink } from "@/components/pwa/install";
 import { cn } from "@/lib/format";
 
 export interface NavCategory { slug: string; name_ar: string; name_en: string }
@@ -174,6 +175,9 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
                 </div>
               </div>
               <div className="space-y-2 border-t border-line p-4">
+                <InstallAppLink className="flex h-11 w-full items-center justify-center gap-2 rounded-full border border-pine text-sm font-bold text-pine">
+                  <Download className="size-4" aria-hidden /> {locale === "ar" ? "نزّل تطبيق TPAC" : "Get the TPAC app"}
+                </InstallAppLink>
                 <div className="flex items-center gap-2">
                   <ThemeToggle />
                   <Suspense fallback={null}>

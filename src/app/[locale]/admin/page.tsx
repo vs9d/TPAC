@@ -1,3 +1,4 @@
+import { PushToggle } from "@/components/pwa/push-toggle";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { isLocale } from "@/lib/i18n/config";
@@ -45,6 +46,7 @@ export default async function AdminHome({ params, searchParams }: { params: Prom
           <Link key={d} href={`?days=${d}`} className={`btn btn-sm ${d === days ? "btn-primary" : "btn-outline"}`}>{d} {t("يوم", "days")}</Link>
         ))}
       />
+      <PushToggle context="staff" />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label={t("إجمالي المبيعات", "Total sales")} value={formatIQD(s.total_sales ?? 0, locale)} hint={t(`آخر ${days} يوم (غير الملغية)`, `Last ${days} days (excl. cancelled)`)} />
         <Stat label={t("الإيرادات المحققة", "Realised revenue")} value={formatIQD(s.revenue ?? 0, locale)} hint={t("الطلبات المسلّمة بدون التوصيل", "Delivered, excl. delivery")} tone="good" />
