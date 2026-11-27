@@ -1,3 +1,4 @@
+window.OPTS = window.OPTS || { bars: true, subs: true };
 // Mesopotamia time-travel motion film — deterministic canvas renderer.
 // renderFrame(t) draws the frame at time t (seconds).
 const C = document.getElementById('c'), G = C.getContext('2d');
@@ -54,7 +55,7 @@ function post(g, t, fi) {
   const v = g.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * 1.05);
   v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.55)'); g.fillStyle = v; g.fillRect(0, 0, W, H);
   g.save(); g.globalAlpha = .045; g.globalCompositeOperation = 'overlay'; g.imageSmoothingEnabled = false; g.drawImage(GRAIN[fi % 4], 0, 0, W, H); g.restore();
-  g.fillStyle = '#000'; g.fillRect(0, 0, W, 54); g.fillRect(0, H - 54, W, 54);
+  if (window.OPTS.bars) { g.fillStyle = '#000'; g.fillRect(0, 0, W, 54); g.fillRect(0, H - 54, W, 54); }
 }
 
 // ---------- characters ----------
@@ -933,7 +934,7 @@ function renderFrame(t, fi = 0) {
   // scene-cut fades (short dip)
   for (const sc of S) { const d = Math.min(Math.abs(t - sc.s), 99); if (d < .12 && sc.s > 0) { G.fillStyle = rgba('#000', (1 - d / .12) * .5); G.fillRect(0, 0, W, H); } }
   post(G, t, fi);
-  for (const sb of SUBS) if (t >= sb.s && t < sb.e) { const a = ss(sb.s, sb.s + .3, t) * (1 - ss(sb.e - .3, sb.e, t)); drawSub(G, sb, a, (1 - ss(sb.s, sb.s + .4, t)) * 18); }
+  if (window.OPTS.subs) for (const sb of SUBS) if (t >= sb.s && t < sb.e) { const a = ss(sb.s, sb.s + .3, t) * (1 - ss(sb.e - .3, sb.e, t)); drawSub(G, sb, a, (1 - ss(sb.s, sb.s + .4, t)) * 18); }
   if (t < .25) { G.fillStyle = rgba('#000', 1 - t / .25); G.fillRect(0, 0, W, H); }
 }
 window.renderFrame = renderFrame; window.DURATION = DURATION;

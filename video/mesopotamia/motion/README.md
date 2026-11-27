@@ -14,3 +14,11 @@ ffmpeg -i video.mp4 -i audio.wav -c:v copy -c:a aac -b:a 192k -shortest final.mp
 - `scene.js` — every scene, character and subtitle, drawn on a canvas; `renderFrame(t)` is deterministic.
 - `audio.py` — soundtrack (lyre, ney, frame drum, choir in D hijaz) and sound effects, timed to the scenes.
 - `node render.js stills 12,95,130 out/` renders single preview frames.
+
+## TikTok cut (9:16, 1080×1920, 71.5 s)
+
+```bash
+node render_tt.js video 0 71.5 tt.mp4      # uses tiktok.html + tiktok.js (clip list, headline, vertical subtitles)
+python3 audio_tt.py                         # -> audio_tt.wav (same instruments, re-scored for the cut)
+ffmpeg -i tt.mp4 -i audio_tt.wav -c:v copy -c:a aac -b:a 192k -shortest tiktok.mp4
+```
