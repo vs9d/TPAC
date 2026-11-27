@@ -11,9 +11,11 @@ import { PLACEMENT_LABEL, type GroupPlacement, type PreviewKit } from "@/lib/gro
 import { GroupPieceView } from "./preview";
 
 /** The organiser's page: the link to share, who joined with which size, and sending it to TPAC. */
-export function GroupManage({ token, group, members, requestNumber, kit, fixed, memberArt }: {
+export function GroupManage({ token, group, members, requestNumber, kit, fixed, memberArt, previews = {} }: {
   token: string; group: GroupOrder; members: GroupMember[]; requestNumber: string | null;
   kit: PreviewKit | null; fixed: Partial<Record<GroupPlacement, string>>; memberArt: Record<string, string>;
+  /** each member's own piece as they designed it in the studio */
+  previews?: Record<string, { front: string; back: string | null }>;
 }) {
   const { locale, dict } = useI18n();
   const ar = locale === "ar";
@@ -66,11 +68,23 @@ export function GroupManage({ token, group, members, requestNumber, kit, fixed, 
       {kit && (
         <section className="space-y-3 rounded-[1.5rem] border border-line bg-paper p-5" aria-label={ar ? "القطعة" : "The piece"}>
           <h2 className="font-bold">{ar ? "القطعة" : "The piece"}{kind !== "none" && <span className="ms-2 text-sm font-normal text-mute">{ar ? `· كل واحد يضيف ${kind === "name" ? "اسمه" : "تصميمه"} على ${where}` : `· everyone adds their ${kind === "name" ? "name" : "design"} on the ${where.toLowerCase()}`}</span>}</h2>
+          {peek && previews[peek.id] ? (
+            <div className="grid grid-cols-2 gap-3">
+              {([["front", previews[peek.id]!.front], ["back", previews[peek.id]!.back]] as const).map(([v, src]) => src && (
+                <figure key={v} className="overflow-hidden rounded-2xl bg-bone">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt={`${v === "front" ? (ar ? "الأمام" : "Front") : ar ? "الخلف" : "Back"} — ${peek.name}`} className="block aspect-[6/7] w-full object-contain" />
+                  <figcaption className="py-1.5 text-center text-xs font-bold">{v === "front" ? (ar ? "الأمام" : "Front") : ar ? "الخلف" : "Back"} — {peek.name}</figcaption>
+                </figure>
+              ))}
+            </div>
+          ) : (
           <div className="grid grid-cols-2 gap-3">
             {(["front", "back"] as const).map((v) => (
               <GroupPieceView key={v} kit={kit} colorId={group.color_id} view={v} fixed={fixed} template={group.template} member={{ name: peek?.print_name ?? "", image: peek?.artwork_id ? memberArt[peek.artwork_id] : null }} label={`${v === "front" ? (ar ? "الأمام" : "Front") : ar ? "الخلف" : "Back"}${peek ? ` — ${peek.name}` : ""}`} />
             ))}
           </div>
+          )}
           {members.length > 0 && <p className="text-xs text-mute">{ar ? "اضغط على أي اسم بالقائمة حتى تشوف قطعته." : "Tap a name in the list to see their piece."}</p>}
         </section>
       )}

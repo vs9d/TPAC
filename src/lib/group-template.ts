@@ -39,3 +39,11 @@ export interface PreviewKit {
   views: Partial<Record<"front" | "back", KitView>>;
   areas: Record<GroupPlacement, { x: number; y: number; width: number; height: number }>;
 }
+
+/** What the studio needs to open a group's piece for one member. */
+export interface GroupStudio {
+  code: string; title: string; organizer: string; garment: string; colorId: string | null;
+  template: GroupTemplate; fixedUrls: Partial<Record<GroupPlacement, string>>; sizes: string[];
+}
+/** The studio text style the organiser's name font maps to. */
+export const NAME_PRESET: Record<NameFont, [string, string]> = { block: ["lalezar", "impact"], kufi: ["kufi", "kufi"], script: ["ruqaa", "ruqaa"] };

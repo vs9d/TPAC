@@ -24,7 +24,9 @@ export default async function GroupManagePage({ params, searchParams }: { params
   const artIds = members.map((m) => m.artwork_id).filter((x): x is string => !!x);
   const { data: arts } = artIds.length ? await createAdminClient().from("uploaded_artwork").select("id, storage_path").in("id", artIds) : { data: [] };
   const paths = new Map(((arts ?? []) as { id: string; storage_path: string }[]).map((a) => [a.id, a.storage_path]));
-  const signed = await signedUrls([...paths.values()]);
+  const previewPaths = members.flatMap((m) => [m.preview_front_path, m.preview_back_path].filter((x): x is string => !!x));
+  const signed = await signedUrls([...paths.values(), ...previewPaths]);
+  const previews = Object.fromEntries(members.filter((m) => m.preview_front_path && signed[m.preview_front_path]).map((m) => [m.id, { front: signed[m.preview_front_path!]!, back: m.preview_back_path ? signed[m.preview_back_path] ?? null : null }]));
   const memberArt = Object.fromEntries([...paths.entries()].map(([id, p]) => [id, signed[p]]).filter(([, u]) => u)) as Record<string, string>;
   return (
     <div className="container-x max-w-3xl space-y-6 py-10 md:py-14">
@@ -38,7 +40,7 @@ export default async function GroupManagePage({ params, searchParams }: { params
         </p>
         {fresh && <p className="rounded-2xl bg-amber/15 px-4 py-3 text-sm font-semibold">{ar ? "انسوّى الرابط ✓ احفظ هالصفحة بالمفضلة أو انسخ عنوانها، لأن منها تدير الطلب." : "Your link is ready ✓ Bookmark this page or copy its address — it's where you manage the order."}</p>}
       </header>
-      <GroupManage token={token} group={g} members={members} requestNumber={request_number} kit={kit} fixed={fixed} memberArt={memberArt} />
+      <GroupManage token={token} group={g} members={members} requestNumber={request_number} kit={kit} fixed={fixed} memberArt={memberArt} previews={previews} />
     </div>
   );
 }

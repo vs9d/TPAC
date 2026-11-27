@@ -7,6 +7,7 @@ import { getSession } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { phoneSchema, fieldErrors, uuid, BULK_PRODUCT_TYPES, BULK_SIZES } from "@/lib/validation";
 import { notifyAdmin } from "@/lib/notifications";
+import { sniffMime } from "@/lib/storage";
 import { groupTemplateSchema, PLACEMENT_LABEL, type GroupTemplate } from "@/lib/group-template";
 
 type Fail = { ok: false; error: string; fields?: Record<string, string> };
@@ -84,7 +85,20 @@ const joinSchema = z.object({
   print_name: z.string().trim().max(30).optional(),
   note: z.string().trim().max(200).optional(),
   artwork_id: uuid.optional(),
+  // designed in the studio: the member's layout and previews of both sides
+  design: z.object({
+    fabric: z.array(z.record(z.string(), z.unknown())).max(40),
+    preview_front: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000),
+    preview_back: z.string().regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/).max(2_500_000),
+  }).optional(),
 });
+
+function decodeImage(dataUrl: string): { buf: Buffer; mime: string } | null {
+  const m = /^data:(image\/(?:jpeg|png));base64,(.+)$/.exec(dataUrl);
+  if (!m) return null;
+  const buf = Buffer.from(m[2]!, "base64");
+  return sniffMime(buf) === m[1] ? { buf, mime: m[1]! } : null;
+}
 
 /** A member adds their name and size through the group link. */
 export async function joinGroupOrder(code: string, input: unknown): Promise<{ ok: true; id: string } | Fail> {
@@ -102,15 +116,36 @@ export async function joinGroupOrder(code: string, input: unknown): Promise<{ ok
   const kind = (g.template as GroupTemplate | null)?.member?.kind ?? (g.allow_names ? "name" : "none");
   // what the organiser asked each member to add is required
   if (kind === "name" && !d.print_name) return { ok: false, error: "validation", fields: { print_name: "required" } };
-  if (kind === "design") {
-    if (!d.artwork_id) return { ok: false, error: "validation", fields: { artwork: "required" } };
-    const session = await getSession();
-    if (!(await freshArtwork([d.artwork_id], session?.userId ?? null))) return { ok: false, error: "artwork" };
+  const session = await getSession();
+  // images in the member's studio layout: only their own fresh uploads
+  const artIds = [...new Set((d.design?.fabric ?? []).map((o) => o.tpacArtworkId).filter((x): x is string => typeof x === "string" && /^[0-9a-f-]{36}$/.test(x)))];
+  if (kind === "design" && !d.artwork_id && !d.design?.fabric.length) return { ok: false, error: "validation", fields: { artwork: "required" } };
+  const own = [...artIds, ...(d.artwork_id ? [d.artwork_id] : [])];
+  if (own.length && !(await freshArtwork(own, session?.userId ?? null))) return { ok: false, error: "artwork" };
+  if (d.design && JSON.stringify(d.design.fabric).length > 300_000) return { ok: false, error: "too_large" };
+  const id = crypto.randomUUID();
+  let front: string | null = null;
+  let back: string | null = null;
+  if (d.design) {
+    const f = decodeImage(d.design.preview_front);
+    const b = decodeImage(d.design.preview_back);
+    if (!f || !b) return { ok: false, error: "validation" };
+    const ext = (m: string) => (m === "image/png" ? "png" : "jpg");
+    front = `groups/${g.id}/${id}/front.${ext(f.mime)}`;
+    back = `groups/${g.id}/${id}/back.${ext(b.mime)}`;
+    const bucket = db.storage.from("design-uploads");
+    const [u1, u2] = await Promise.all([
+      bucket.upload(front, f.buf, { contentType: f.mime, upsert: false }),
+      bucket.upload(back, b.buf, { contentType: b.mime, upsert: false }),
+    ]);
+    if (u1.error || u2.error) return { ok: false, error: "storage_failed" };
   }
+  const fabric = d.design?.fabric.map((o) => (typeof o.tpacArtworkId === "string" ? { ...o, src: "" } : o)) ?? null;
   const { data, error } = await db.from("group_order_members").insert({
-    group_id: g.id, name: d.name, size_code: d.size_code, quantity: d.quantity,
+    id, group_id: g.id, name: d.name, size_code: d.size_code, quantity: d.quantity,
     print_name: kind === "name" ? d.print_name || null : null, note: d.note || null,
-    artwork_id: kind === "design" ? d.artwork_id : null,
+    artwork_id: d.artwork_id ?? null, design: fabric, artwork_ids: artIds,
+    preview_front_path: front, preview_back_path: back,
   }).select("id").single();
   if (error || !data) return { ok: false, error: "generic" };
   return { ok: true, id: data.id as string };
@@ -150,8 +185,8 @@ export async function submitGroupOrder(token: string): Promise<{ ok: true; reque
   if (!g) return { ok: false, error: "not_found" };
   if (g.status === "submitted") return { ok: false, error: "already" };
   const db = createAdminClient();
-  const { data: members } = await db.from("group_order_members").select("name, size_code, quantity, print_name, note, artwork_id").eq("group_id", g.id).order("created_at");
-  const list = (members ?? []) as { name: string; size_code: string; quantity: number; print_name: string | null; note: string | null; artwork_id: string | null }[];
+  const { data: members } = await db.from("group_order_members").select("name, size_code, quantity, print_name, note, artwork_id, artwork_ids, preview_front_path").eq("group_id", g.id).order("created_at");
+  const list = (members ?? []) as { name: string; size_code: string; quantity: number; print_name: string | null; note: string | null; artwork_id: string | null; artwork_ids: string[] | null; preview_front_path: string | null }[];
   const tpl = (g.template ?? {}) as Partial<GroupTemplate>;
   if (!list.length) return { ok: false, error: "empty" };
   const sizes: Record<string, number> = {};
@@ -163,7 +198,7 @@ export async function submitGroupOrder(token: string): Promise<{ ok: true; reque
     if (p) product = `المنتج: ${p.name_ar} — /ar/product/${p.slug}\n`;
   }
   const where = tpl.member ? PLACEMENT_LABEL[tpl.member.placement][0] : "";
-  const names = list.map((m, i) => `${i + 1}. ${m.name} — ${m.size_code}${m.quantity > 1 ? ` × ${m.quantity}` : ""}${m.print_name ? ` — يُطبع على ${where}: «${m.print_name}»` : ""}${m.artwork_id ? ` — تصميمه على ${where} (ملف مرفق)` : ""}${m.note ? ` (${m.note})` : ""}`).join("\n");
+  const names = list.map((m, i) => `${i + 1}. ${m.name} — ${m.size_code}${m.quantity > 1 ? ` × ${m.quantity}` : ""}${m.print_name ? ` — يُطبع على ${where}: «${m.print_name}»` : ""}${m.artwork_id || m.artwork_ids?.length ? ` — صوره بالملفات المرفقة` : ""}${m.preview_front_path ? " — صمّم قطعته (المعاينة بصفحة الطلب الجماعي)" : ""}${m.note ? ` (${m.note})` : ""}`).join("\n");
   let piece = "";
   if (g.garment) {
     const { data: col } = g.color_id ? await db.from("colors").select("name_ar").eq("id", g.color_id).maybeSingle() : { data: null };
@@ -190,7 +225,7 @@ export async function submitGroupOrder(token: string): Promise<{ ok: true; reque
   }
   await db.from("group_orders").update({ status: "submitted", bulk_request_id: req.id, updated_at: new Date().toISOString() }).eq("id", g.id);
   // the organiser's design and every member's design go with the request (files for production)
-  const files = [...Object.values(tpl.fixed ?? {}), ...list.map((m) => m.artwork_id)].filter((x): x is string => !!x);
+  const files = [...Object.values(tpl.fixed ?? {}), ...list.flatMap((m) => [m.artwork_id, ...(m.artwork_ids ?? [])])].filter((x): x is string => !!x);
   if (files.length) await db.from("uploaded_artwork").update({ bulk_request_id: req.id }).in("id", files).is("bulk_request_id", null);
   after(() => notifyAdmin("bulk_request.created", `طلب جماعي جديد ${req.request_number}`, `${g.title} — ${g.organizer_name} — ${total} قطعة`, `/ar/admin/bulk/${req.id}`));
   return { ok: true, request_number: req.request_number as string };

@@ -8,7 +8,7 @@ import { GROUP_PLACEMENTS, parseTemplate, type GroupTemplate, type PreviewKit } 
 import type { GarmentType } from "@/lib/garments";
 
 export interface GroupProduct { name_ar: string; name_en: string; slug: string; image: string | null; sizes: string[] }
-export interface GroupMember { id: string; name: string; size_code: string; quantity: number; print_name: string | null; note: string | null; created_at: string; artwork_id: string | null }
+export interface GroupMember { id: string; name: string; size_code: string; quantity: number; print_name: string | null; note: string | null; created_at: string; artwork_id: string | null; preview_front_path: string | null; preview_back_path: string | null; artwork_ids: string[] | null }
 export interface GroupOrder {
   id: string; code: string; title: string; organizer_name: string; organizer_phone: string; product_type: string;
   idea: string | null; allow_names: boolean; deadline: string | null; status: "open" | "closed" | "submitted";
@@ -92,7 +92,7 @@ export async function getGroupByToken(token: string): Promise<{ group: GroupOrde
   const { data } = await db.from("group_orders").select("*").eq("admin_token", token).maybeSingle();
   if (!data) return null;
   const [{ data: members }, req] = await Promise.all([
-    db.from("group_order_members").select("id, name, size_code, quantity, print_name, note, created_at, artwork_id").eq("group_id", data.id).order("created_at"),
+    db.from("group_order_members").select("id, name, size_code, quantity, print_name, note, created_at, artwork_id, preview_front_path, preview_back_path, artwork_ids").eq("group_id", data.id).order("created_at"),
     data.bulk_request_id ? db.from("bulk_order_requests").select("request_number").eq("id", data.bulk_request_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   return { group: shape(data, await product(data.product_id as string | null)), members: (members ?? []) as GroupMember[], request_number: (req.data?.request_number as string | undefined) ?? null };

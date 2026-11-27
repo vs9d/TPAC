@@ -5,6 +5,7 @@ import { isLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n";
 import { adminT } from "@/lib/admin-i18n";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { signedUrls } from "@/lib/storage";
 import { PageHeader, Card, Pill, BULK_TONE } from "@/components/admin/ui";
 import { AdminForm, Input, Select, Textarea, Submit } from "@/components/admin/form";
@@ -25,7 +26,13 @@ export default async function AdminBulkDetail({ params }: { params: Promise<{ lo
     supabase.from("uploaded_artwork").select("*").eq("bulk_request_id", id),
     supabase.from("quotations").select("*").eq("bulk_request_id", id).order("created_at", { ascending: false }),
   ]);
-  const urls = await signedUrls((art ?? []).map((a) => a.storage_path));
+  // a group order: every member's own piece as they designed it (staff read it with the service key: no public policy)
+  type Member = { id: string; name: string; size_code: string; quantity: number; print_name: string | null; preview_front_path: string | null; preview_back_path: string | null };
+  const { data: members } = r.group_order_id
+    ? await createAdminClient().from("group_order_members").select("id, name, size_code, quantity, print_name, preview_front_path, preview_back_path").eq("group_id", r.group_order_id).order("created_at")
+    : { data: [] };
+  const people = (members ?? []) as Member[];
+  const urls = await signedUrls([...(art ?? []).map((a) => a.storage_path), ...people.flatMap((m) => [m.preview_front_path, m.preview_back_path].filter((x): x is string => !!x))]);
   const { data: unit } = await supabase.rpc("bulk_unit_price", { p_product_type: r.product_type, p_quantity: r.estimated_quantity });
   const sizes = Object.entries((r.size_breakdown ?? {}) as Record<string, number>);
   const suggested = (sizes.length ? sizes.map(([size, q]) => ({ size, quantity: q })) : [{ size: "", quantity: r.estimated_quantity }]).map((x) => ({
@@ -70,6 +77,26 @@ export default async function AdminBulkDetail({ params }: { params: Promise<{ lo
               </div>
             )}
           </Card>
+          {people.length > 0 && (
+            <Card title={t(`قطع الأشخاص (${people.length})`, `Each person's piece (${people.length})`)}>
+              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {people.map((m) => (
+                  <li key={m.id} className="rounded-2xl border border-line p-2">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[m.preview_front_path, m.preview_back_path].map((p, k) => p && urls[p] ? (
+                        <a key={k} href={urls[p]} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl bg-bone">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={urls[p]} alt={`${m.name} — ${k === 0 ? t("الأمام", "front") : t("الخلف", "back")}`} className="aspect-[6/7] w-full object-contain" />
+                        </a>
+                      ) : <div key={k} className="aspect-[6/7] rounded-xl bg-bone" />)}
+                    </div>
+                    <p className="mt-2 text-sm font-semibold">{m.name} · {m.size_code}{m.quantity > 1 ? ` × ${m.quantity}` : ""}</p>
+                    {m.print_name && <p className="text-xs text-mute" dir="auto">«{m.print_name}»</p>}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
           {(quotes ?? []).map((q) => (
             <Card key={q.id} title={`${t("عرض السعر", "Quotation")} ${q.quote_number}`} actions={<Pill tone={q.status === "approved" ? "good" : q.status === "converted" ? "dark" : "neutral"}>{q.status}</Pill>}>
               <QuotationEditor requestId={id} quotation={q as QuotationData} suggested={suggested} />

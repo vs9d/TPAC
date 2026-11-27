@@ -213,13 +213,15 @@ const FIT: Record<string, string> = { tshirt: "REGULAR FIT", oversized: "OVERSIZ
 /** rough height / weight fit per size, for the hint under the size grid */
 const groupTitle: Record<string, [string, string]> = { method: ["طريقة الطباعة", "Print method"], finish: ["اللمسة النهائية", "Finish"], fabric: ["الخامة", "Fabric"], package: ["التغليف", "Packaging"], addon: ["إضافات", "Extras"] };
 
-export function PieceCard({ garments, garmentCode, setGarmentCode, colors, colorId, setColorId, sizes, setSizes, locations, used, options, choice, setChoice, tiers, totalQty, pct, unit, unitAfter, settings, rush, notes, setNotes, designName, setDesignName, sectionRef, giftOption, boxText, setBoxText, boxFont }: {
+export function PieceCard({ garments, garmentCode, setGarmentCode, colors, colorId, setColorId, sizes, setSizes, locations, used, options, choice, setChoice, tiers, totalQty, pct, unit, unitAfter, settings, rush, notes, setNotes, designName, setDesignName, sectionRef, giftOption, boxText, setBoxText, boxFont, pickOnly = false }: {
   garments: GarmentTypeRow[]; garmentCode: string; setGarmentCode: (c: GarmentTypeRow["code"]) => void;
   colors: Color[]; colorId: string; setColorId: (id: string) => void;
   sizes: Record<string, number>; setSizes: (s: Record<string, number>) => void;
   locations: PrintLocationRow[]; used: PrintLocation[];
   /** the paid gift box (package group), shown as its own step */
   giftOption?: DesignerOptionRow | null; boxText: string; setBoxText: (v: string) => void; boxFont?: string;
+  /** only the garment and its colour (publishing a design: nothing is ordered) */
+  pickOnly?: boolean;
   options: DesignerOptionRow[]; choice: Choice; setChoice: (c: Choice) => void;
   tiers: DesignerTierRow[]; totalQty: number; pct: number; unit: number; unitAfter: number; settings: DesignerSettings; rush: boolean;
   notes: string; setNotes: (s: string) => void; designName: string; setDesignName: (s: string) => void;
@@ -287,6 +289,7 @@ export function PieceCard({ garments, garmentCode, setGarmentCode, colors, color
           </div>
         </div>
 
+        {!pickOnly && (<>
         {/* 03 — size */}
         <div>
           <div className="flex items-center justify-between">
@@ -402,6 +405,7 @@ export function PieceCard({ garments, garmentCode, setGarmentCode, colors, color
           )}
           <p className="mt-3 text-xs text-mute">{t("التجهيز", "Ready in")} {rush ? `${settings.rush_days} ${t("أيام", "days")}` : `${settings.lead_days_min}–${settings.lead_days_max} ${t("أيام عمل", "working days")}`} {t("ثم الشحن.", "then dispatch.")}</p>
         </div>
+        </>)}
       </div>
     </section>
   );

@@ -29,12 +29,12 @@ export default async function CommunityPage({ params }: { params: Promise<{ loca
           <p className="eyebrow mb-4 text-amber">{ar ? "من صنع زبائننا" : "Made by our customers"}</p>
           <h1 className="display max-w-3xl text-4xl md:text-6xl">{ar ? "تصاميم الزبائن" : "Customer designs"}</h1>
           <p className="mt-4 max-w-xl text-lg text-paper/70">{ar ? "تصاميم صمّمها زبائننا بالاستوديو ونشروها. اطلب أي واحد كما هو أو غيّر عليه — وصاحبه ياخذ مكافأة على كل قطعة." : "Made in our studio and shared by customers. Order one as it is or change it — its designer gets a reward for every piece."}</p>
-          <Link href={`/${locale}/design`} className="btn btn-accent mt-6 h-12"><Sparkles className="size-5" /> {ar ? "صمّم مالتك وانشره" : "Design yours and share it"}</Link>
+          <Link href={`/${locale}/community/new`} className="btn btn-accent mt-6 h-12"><Sparkles className="size-5" /> {ar ? "صمّم مالتك وانشره" : "Design yours and share it"}</Link>
         </div>
       </section>
       <div className="container-x py-12 md:py-16">
         {designs.length === 0 ? (
-          <p className="rounded-[1.5rem] bg-bone p-8 text-center text-mute">{ar ? "قريباً — أول التصاميم بالطريق. صمّم مالتك واختار «انشر تصميمي» عند الإضافة للسلة." : "Coming soon — design yours and choose “Publish my design” when adding it to your bag."}</p>
+          <p className="rounded-[1.5rem] bg-bone p-8 text-center text-mute">{ar ? "قريباً — أول التصاميم بالطريق. كون أول واحد: صمّم مالتك وانشره." : "Coming soon — be the first: design yours and publish it."}</p>
         ) : (
           <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
             {designs.map((d) => (

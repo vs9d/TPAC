@@ -1644,13 +1644,18 @@ await flow("group order by link: organiser → members add name + size → total
 await flow("community designs: publish from the studio → admin approves → public page → order it → designer credited", async (page, ctx) => {
   await db.query("delete from rate_limits");
   const title = `Night drive ${Date.now() % 100000}`;
-  await page.goto(`${BASE}/en/design?garment=hoodie`);
+  // the community page's button opens a studio that only publishes
+  await page.goto(`${BASE}/en/community`);
+  await page.getByRole("link", { name: "Design yours and share it" }).click();
+  await page.waitForURL(/\/en\/community\/new$/);
   await page.getByRole("button", { name: /Upload your design for the/ }).first().waitFor();
+  assert.equal(await page.getByRole("button", { name: "Review & add to bag" }).count(), 0, "nothing to order here");
+  assert.equal(await page.getByText("Price with printing").count(), 0, "no price on the publishing page");
   await page.locator("input[type=file]").first().setInputFiles(await pngFile("community-art", "#376352"));
   await page.getByText(/Elements on Front · 1/).waitFor({ timeout: 20000 });
   const designsBefore = (await one("select count(*)::int n from custom_designs")).n;
   // publishing is its own step: nothing goes to the bag
-  await page.getByRole("button", { name: /Publish your design on/ }).click();
+  await page.getByRole("button", { name: "Publish my design" }).click();
   const dlg = page.getByRole("dialog", { name: "Publish your design" });
   await dlg.getByRole("img", { name: "Front" }).waitFor();
   await dlg.getByLabel("Design title").fill(title);
@@ -1711,6 +1716,7 @@ await flow("community designs: publish from the studio → admin approves → pu
 
 await flow("group order with the organiser's design: fixed front, each name on the back (live preview), or each member's own design", async (page) => {
   await db.query(readFileSync(new URL("../../supabase/add-group-templates.sql", import.meta.url), "utf8"));
+  await db.query(readFileSync(new URL("../../supabase/add-group-studio.sql", import.meta.url), "utf8"));
   await db.query("delete from rate_limits");
   const make = async (title, kind) => {
     await page.goto(`${BASE}/en/group`);
@@ -1747,28 +1753,36 @@ await flow("group order with the organiser's design: fixed front, each name on t
   const mp = await m.newPage();
   const fixedArt = mp.waitForResponse((r) => r.url().includes(`/api/art/${g.template.fixed.front}?group=${g.code}`) && r.status() === 200, { timeout: 20000 });
   await mp.goto(a.link);
+  await mp.locator("canvas").first().waitFor();
   await fixedArt;
-  await mp.fill("input[name=name]", "Hasan");
+  // the full studio: the name is already on the back, ready to type, move and resize
+  await mp.getByText(/Elements on Back · 1/).waitFor({ timeout: 20000 });
+  assert.equal(await mp.getByRole("tab", { name: "Front", exact: true }).count(), 0, "the organiser's front is not editable");
+  await mp.getByLabel("Your name").fill("Hasan");
   await mp.getByRole("radio", { name: "XL", exact: true }).click();
-  // the name is required and shows on the back right away
-  await mp.getByRole("button", { name: "Add me" }).click();
-  await mp.getByText(/Write the name to print on the back/).waitFor();
-  await mp.getByLabel(/Name to print on the back/).fill("HASAN 10");
-  await mp.getByRole("img", { name: "Back" }).locator("text", { hasText: "HASAN 10" }).waitFor();
-  await mp.screenshot({ path: `${SHOTS}/group-member-name.png`, fullPage: true });
-  await mp.getByRole("button", { name: "Add me" }).click();
-  await mp.getByText("You're on the list, Hasan").waitFor({ timeout: 15000 });
+  await mp.getByRole("button", { name: "Add me to the order" }).click();
+  await mp.getByText(/Write your name on the piece/).waitFor();
+  await mp.getByLabel("Text", { exact: true }).first().fill("HASAN 10");
+  // and add something of their own: an image on the back too
+  await mp.locator("input[type=file]").first().setInputFiles(await pngFile("member-extra", "#376352"));
+  await mp.getByText(/Elements on Back · 2/).waitFor({ timeout: 20000 });
+  await mp.screenshot({ path: `${SHOTS}/group-member-name.png` });
+  await mp.getByRole("button", { name: "Add me to the order" }).click();
+  await mp.getByText("You're on the list, Hasan").first().waitFor({ timeout: 30000 });
   await m.close();
+  const mem1 = await one("select m.print_name, m.design, m.artwork_ids, m.preview_front_path, m.preview_back_path from group_order_members m join group_orders g on g.id = m.group_id where g.title = 'Team Hawks' order by m.created_at desc limit 1");
+  assert.equal(mem1.print_name, "HASAN 10");
+  assert.ok(mem1.design.length === 2 && mem1.artwork_ids.length === 1 && mem1.preview_front_path && mem1.preview_back_path, "the member's own piece is kept");
   // nobody can use the group link to read other files
   const other = await one("select id from uploaded_artwork where id <> $1 limit 1", [g.template.fixed.front]);
   assert.equal((await page.request.get(`${BASE}/api/art/${other.id}?group=${g.code}`)).status(), 404);
   await page.goto(a.manage);
-  await page.getByRole("img", { name: /Back — Hasan/ }).locator("text", { hasText: "HASAN 10" }).waitFor();
+  await page.getByRole("img", { name: "Back — Hasan" }).waitFor();
   page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Send the order to TPAC" }).click();
   await page.getByText(/Sent to TPAC/).first().waitFor({ timeout: 15000 });
   const req = await one("select id, notes, printing_requirements from bulk_order_requests where organization_name = 'Team Hawks' order by created_at desc limit 1");
-  assert.match(req.printing_requirements, /Hasan — XL — يُطبع على الخلف: «HASAN 10»/);
+  assert.match(req.printing_requirements, /Hasan — XL — يُطبع على الخلف: «HASAN 10» — صوره بالملفات المرفقة/);
   assert.match(req.notes, /تصميم المنظّم \(ملفات مرفقة\): الأمام/);
   assert.equal((await one("select bulk_request_id from uploaded_artwork where id = $1", [g.template.fixed.front])).bulk_request_id, req.id, "the organiser's design goes with the request");
 
@@ -1778,18 +1792,21 @@ await flow("group order with the organiser's design: fixed front, each name on t
   const m2 = await browser.newContext({ ...devices["iPhone 13"] });
   const p2 = await m2.newPage();
   await p2.goto(b.link);
-  await p2.fill("input[name=name]", "Noor");
+  await p2.locator("canvas").first().waitFor();
+  await p2.getByRole("button", { name: /Upload your design for the back/ }).first().waitFor({ timeout: 20000 });
+  await p2.getByLabel("Your name").fill("Noor");
   await p2.getByRole("radio", { name: "M", exact: true }).click();
-  await p2.getByLabel("Your design file").setInputFiles(await pngFile("member-design", "#376352"));
-  await p2.getByText("Done — change image").waitFor({ timeout: 20000 });
-  await p2.getByRole("img", { name: "Back" }).locator("image").nth(1).waitFor({ state: "attached" });
-  await p2.getByRole("button", { name: "Add me" }).click();
-  await p2.getByText("You're on the list, Noor").waitFor({ timeout: 15000 });
+  await p2.getByRole("button", { name: "Add me to the order" }).click();
+  await p2.getByText(/Add your design on the marked placement/).waitFor();
+  await p2.locator("input[type=file]").first().setInputFiles(await pngFile("member-design", "#376352"));
+  await p2.getByText(/Elements on Back · 1/).waitFor({ timeout: 20000 });
+  await p2.getByRole("button", { name: "Add me to the order" }).click();
+  await p2.getByText("You're on the list, Noor").first().waitFor({ timeout: 30000 });
   await m2.close();
-  const mem = await one("select m.artwork_id from group_order_members m join group_orders g on g.id = m.group_id where g.title = 'Art Club' order by m.created_at desc limit 1");
-  assert.ok(mem.artwork_id, "the member's design is kept");
+  const mem = await one("select m.artwork_ids, m.preview_back_path from group_order_members m join group_orders g on g.id = m.group_id where g.title = 'Art Club' order by m.created_at desc limit 1");
+  assert.ok(mem.artwork_ids.length === 1 && mem.preview_back_path, "the member's design is kept");
   await page.goto(b.manage);
-  await page.getByRole("img", { name: "Noor's design" }).waitFor();
+  await page.getByRole("img", { name: "Back — Noor" }).waitFor();
 });
 
 console.log(results.join("\n"));

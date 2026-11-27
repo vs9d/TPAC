@@ -18,9 +18,11 @@ export type Tagged = FabricObject & {
   tpacFilters?: { grayscale?: boolean; invert?: boolean };
   tpacFontLabel?: string;
   tpacLabel?: string;
+  /** the member's name in a group order (what gets printed for them) */
+  tpacGroupName?: boolean;
 };
 
-export const PROPS = ["tpacId", "tpacLocation", "tpacKind", "tpacArtworkId", "tpacShape", "tpacLocked", "tpacHidden", "tpacPx", "tpacVector", "tpacFilters", "tpacFontLabel", "tpacLabel"];
+export const PROPS = ["tpacId", "tpacLocation", "tpacKind", "tpacArtworkId", "tpacShape", "tpacLocked", "tpacHidden", "tpacPx", "tpacVector", "tpacFilters", "tpacFontLabel", "tpacLabel", "tpacGroupName"];
 
 export interface LayerInfo { id: string; kind: Kind; label: string; location: PrintLocation; hidden: boolean; locked: boolean }
 

@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Canvas as FabricCanvas, FabricObject, IText as FabricIText } from "fabric";
-import { Copy, Download, Eye, EyeOff, HeartHandshake, Loader2, Move, Redo2, Send, Share2, ShoppingBag, Sparkles, Type as TypeIcon, Undo2, Upload, X } from "lucide-react";
+import { Check, Copy, Download, Eye, EyeOff, HeartHandshake, Loader2, Move, Redo2, Send, Share2, ShoppingBag, Sparkles, Type as TypeIcon, Undo2, Upload, X } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { useCart } from "@/components/cart/store";
 import { toast } from "@/components/ui/toast";
@@ -23,12 +23,15 @@ import { ShareDialog, ShareBanner } from "./share";
 import { createDesignShare, getDesignShare, savePartnerPiece, type SharedPiece } from "@/lib/actions/share";
 import { publishCommunityDesign } from "@/lib/actions/community";
 import { PublishDialog, type PublishForm } from "./publish";
+import { GroupJoinCard, type GroupJoinValue } from "@/components/group/join-card";
+import { joinGroupOrder } from "@/lib/actions/group";
+import { NAME_PRESET, type GroupStudio } from "@/lib/group-template";
 import type { CommunityForStudio } from "@/lib/data/community";
 
 const MAX_HISTORY = 60;
 const NUDGE = 1;
 
-export function Designer({ garments, locations, colors, fonts, options, tiers, settings, initialGarment, initialColor, initialCouple = false, initialShare = null, shareMissing = false, initialCommunity = null, templates = {} }: {
+export function Designer({ garments, locations, colors, fonts, options, tiers, settings, initialGarment, initialColor, initialCouple = false, initialShare = null, shareMissing = false, initialCommunity = null, templates = {}, mode = "order", group = null }: {
   garments: GarmentTypeRow[];
   locations: PrintLocationRow[];
   colors: Color[];
@@ -44,6 +47,10 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   initialShare?: { token: string; role: "owner" | "partner"; garment_type: string; pieces: SharedPiece[]; partner_done_at: string | null; from_name: string | null } | null;
   /** the shared link was wrong or has expired */
   shareMissing?: boolean;
+  /** "order" (default): design and add to the bag · "publish": design and send it to the community page, nothing is ordered ·
+   *  "group": a member of a group order designs their own piece on the organiser's template */
+  mode?: "order" | "publish" | "group";
+  group?: GroupStudio | null;
   /** a design from the community page, opened to order it */
   initialCommunity?: CommunityForStudio | null;
   /** admin-managed photos + print areas per garment code (Dashboard → Print designer → Printing images) */
@@ -187,6 +194,9 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   }, [snapshot]);
 
   /** Re-applies clipping / visibility / guides for the current view. */
+  const groupRef = useRef(group);
+  groupRef.current = group;
+  const backdropCache = useRef(new Map<string, string>());
   const renderScene = useCallback(async (override?: { view: StudioView; location: PrintLocation }) => {
     const c = canvasRef.current;
     const F = fabricRef.current;
@@ -210,8 +220,22 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       bg = await F.FabricImage.fromURL(garmentDataUrl(g as GarmentType, v === "back" ? "back" : "front", colorHex));
       bg.set({ originX: "left", originY: "top", left: 0, top: 0, scaleX: ARTBOARD.width / (bg.width || 600), scaleY: ARTBOARD.height / (bg.height || 700) });
     }
-    c.backgroundImage = bg;
     const areaMap = podAreas(tpl(g), g as GarmentType);
+    // a group's fixed design (the organiser's) is part of the garment for its members
+    const fixed = Object.entries(groupRef.current?.fixedUrls ?? {}).filter(([pl, u]) => u && viewOf(tpl(g), pl as PrintLocation) === v) as [PrintLocation, string][];
+    if (fixed.length && bg) {
+      const key = `${g}|${v}|${cid}|${fixed.map(([pl, u]) => pl + u).join(",")}`;
+      let url = backdropCache.current.get(key);
+      if (!url) {
+        url = await composeBackdrop(bg, fixed.map(([pl, u]) => ({ url: u, area: areaMap[pl] }))).catch(() => undefined);
+        if (url) backdropCache.current.set(key, url);
+      }
+      if (url) {
+        bg = await F.FabricImage.fromURL(url);
+        bg.set({ originX: "left", originY: "top", left: 0, top: 0, scaleX: ARTBOARD.width / (bg.width || 1), scaleY: ARTBOARD.height / (bg.height || 1) });
+      }
+    }
+    c.backgroundImage = bg;
     for (const o of c.getObjects() as Tagged[]) if (o.tpacKind === "guide") c.remove(o);
     const dark = luminance(colorHex) < 0.35;
     for (const l of Object.keys(areaMap) as PrintLocation[]) {
@@ -509,6 +533,65 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
+  // ------------------------------------------------------------------ group order: a member designs their own piece
+  const [joinValue, setJoinValue] = useState<GroupJoinValue>({ name: "", size: "", qty: 1, note: "" });
+  const [joining, setJoining] = useState(false);
+  const [joined, setJoined] = useState<string | null>(null);
+  useEffect(() => {
+    if (!ready || mode !== "group" || !group) return;
+    void (async () => {
+      if (group.colorId && garmentColors.some((c) => c.id === group.colorId)) await showStored(0, { objects: "[]", colorId: group.colorId, sizes: liveRef.current.sizes });
+      const m = group.template.member;
+      // the organiser asked for everyone's name on one placement: it is already there, the member types it and can move / resize it
+      if (m.kind === "name" && garment.print_locations.includes(m.placement)) {
+        const txt = await makeText(NAME_PRESET[m.font][locale === "ar" ? 0 : 1], { text: t("اسمك", "YOUR NAME"), fill: m.color, loc: m.placement });
+        txt.tpacGroupName = true;
+        txt.tpacLabel = t("اسمك", "Your name");
+        placeNew(txt, "text", m.placement, m.placement === "back" ? -0.28 : 0);
+        await finishAdd(txt);
+      } else if (m.kind === "design" && garment.print_locations.includes(m.placement)) setLocation(m.placement);
+      else if (availableLocations[0]) setLocation(availableLocations[0].code as PrintLocation);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
+  const joinGroup = async () => {
+    if (!group) return;
+    const v = joinValue;
+    if (v.name.trim().length < 2) { toast.error(t("اكتب اسمك", "Write your name")); return; }
+    if (!v.size) { toast.error(t("اختار قياسك", "Pick your size")); pieceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    const objs = design().filter((o) => !o.tpacHidden);
+    const nameObj = objs.find((o) => o.tpacGroupName) as unknown as FabricIText | undefined;
+    const printed = (nameObj?.text ?? "").trim();
+    const kind = group.template.member.kind;
+    if (kind === "name" && (!printed || printed === t("اسمك", "YOUR NAME"))) {
+      toast.error(t("اكتب اسمك على القطعة — اضغط على «اسمك» وغيّره", "Write your name on the piece — tap “YOUR NAME” and change it"));
+      return;
+    }
+    if (kind === "design" && !objs.some((o) => o.tpacLocation === group.template.member.placement)) {
+      toast.error(t("أضف تصميمك على المكان المحدد", "Add your design on the marked placement"));
+      setLocation(group.template.member.placement);
+      return;
+    }
+    setJoining(true);
+    try {
+      const front = await compact(await exportView("front"));
+      const back = await compact(await exportView("back"));
+      const r = await joinGroupOrder(group.code, {
+        name: v.name.trim(), size_code: v.size, quantity: v.qty, note: v.note.trim() || undefined,
+        print_name: printed && kind === "name" ? printed.slice(0, 30) : undefined,
+        design: objs.length ? { fabric: JSON.parse(serialize()), preview_front: front, preview_back: back } : undefined,
+      });
+      if (!r.ok) {
+        toast.error(r.error === "closed" ? t("التسجيل انغلق", "This list is closed") : r.error === "full" ? t("القائمة امتلت", "The list is full") : r.error === "artwork" ? t("ارفع صورتك مرة ثانية", "Upload your image again") : r.error === "rate_limited" ? dict.checkout.errors.rate_limited! : dict.common.somethingWrong);
+        return;
+      }
+      setJoined(v.name.trim());
+      toast.success(t(`تم تسجيلك يا ${v.name.trim()} 🎉`, `You're on the list, ${v.name.trim()} 🎉`));
+    } finally {
+      setJoining(false);
+    }
+  };
+
   // ------------------------------------------------------------------ shared couple design (two people, one link)
   const [shareToken, setShareToken] = useState<string | null>(initialShare?.token ?? null);
   const role = initialShare?.role ?? "owner";
@@ -776,6 +859,11 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       const o = design().find((x) => x.tpacId === id);
       if (!c || !o) return;
       if (action === "delete") {
+        // in a group order the member's name is what gets printed for them: it can change, not go
+        if (o.tpacGroupName) {
+          toast.error(t("هذا اسمك اللي ينطبع — غيّر الكتابة بدل ما تحذفه", "This is your printed name — change the text instead of deleting it"));
+          return;
+        }
         c.remove(o);
         if (selected === o) { c.discardActiveObject(); setSelected(null); }
       } else if (action === "hide") {
@@ -1237,7 +1325,15 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layers, tick, settings.min_dpi, locale]);
 
-  const availableLocations = locations.filter((l) => garment.print_locations.includes(l.code));
+  // a group member can't print over the organiser's fixed design (nor on a placement that overlaps it)
+  const fixedAreas = Object.keys(group?.fixedUrls ?? {}).map((p) => ({ p: p as PrintLocation, a: area(p as PrintLocation), v: viewOf(templates[garmentCode] ?? null, p as PrintLocation) }));
+  const overlapsFixed = (code: PrintLocation) => {
+    if (!fixedAreas.length || code === group?.template.member.placement) return false;
+    const a = area(code);
+    const v = viewOf(templates[garmentCode] ?? null, code);
+    return fixedAreas.some((f) => f.p === code || (f.v === v && a.x < f.a.x + f.a.width && f.a.x < a.x + a.width && a.y < f.a.y + f.a.height && f.a.y < a.y + a.height));
+  };
+  const availableLocations = locations.filter((l) => garment.print_locations.includes(l.code) && !overlapsFixed(l.code as PrintLocation));
   const hereCount = layers.filter((l) => l.location === location && !l.hidden).length;
   const anyContent = refOn || layers.some((l) => !l.hidden);
   const locLabel = dict.designer.locations[location] ?? location;
@@ -1268,12 +1364,12 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
           </div>
 
           {/* one piece, or two for a couple */}
-          {initialShare || shareToken ? (
+          {mode === "order" && (initialShare || shareToken) ? (
             <div className="px-5 pt-3 sm:px-7">
               <ShareBanner role={role} fromName={initialShare?.from_name ?? null} partnerDone={!!partnerDone} sent={sent} onOpen={() => setShareOpen(true)} />
             </div>
           ) : null}
-          <div className="px-5 pt-3 sm:px-7">
+          <div className={cn("px-5 pt-3 sm:px-7", mode !== "order" && "hidden")}>
             {couple ? (
               <div className="flex items-center gap-1.5">
                 <div className="flex flex-1 gap-1 rounded-2xl bg-bone p-1" role="tablist" aria-label={t("القطع", "Pieces")}>
@@ -1331,7 +1427,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
           )}
 
           {/* no design of their own: a photo of a piece they liked + what they want */}
-          <div className="px-4 pt-3">
+          <div className={cn("px-4 pt-3", mode !== "order" && "hidden")}>
             <ReferencePanel
               value={reference} onChange={setReference} disabled={!ready}
               locations={availableLocations.map((l) => l.code)} locationName={(l) => dict.designer.locations[l] ?? l}
@@ -1339,7 +1435,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
           </div>
 
           {/* the community page: its own action, separate from ordering */}
-          {!couple && role === "owner" && !initialCommunity && layers.some((l) => !l.hidden) && (
+          {mode === "order" && !couple && role === "owner" && !initialCommunity && layers.some((l) => !l.hidden) && (
             <div className="px-4 pt-2">
               <button type="button" onClick={() => void openPublish()} disabled={!ready || preparing} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-amber/60 bg-amber/5 px-4 py-2.5 text-sm font-bold transition hover:bg-amber/10">
                 <Sparkles className="size-4 text-amber-deep" aria-hidden="true" /> {t("انشر تصميمك بصفحة «تصاميم الزبائن»", "Publish your design on “Customer designs”")}
@@ -1407,24 +1503,42 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
               onClear={() => { if (confirm(t("مسح كل عناصر التصميم؟", "Remove every element of the design?"))) api.clearAll(); }}
             />
           </div>
-          <PieceCard
+          {mode === "group" && group ? (
+            <GroupJoinCard group={group} value={joinValue} onChange={setJoinValue} joined={joined} onAgain={() => setJoined(null)} />
+          ) : (
+          <PieceCard pickOnly={mode === "publish"}
             garments={garments} garmentCode={garmentCode} setGarmentCode={setGarmentCode} colors={garmentColors} colorId={colorId} setColorId={setColorId}
             sizes={sizes} setSizes={setSizes} locations={availableLocations} used={usedLocations} options={options} choice={choice} setChoice={setChoice}
             tiers={tiers.filter((x) => x.is_active)} totalQty={totalQty} pct={pct} unit={unit} unitAfter={unitAfter} settings={settings} rush={resolved.choice.addons.includes("rush")}
             notes={notes} setNotes={setNotes} designName={designName} setDesignName={setDesignName} sectionRef={pieceRef}
             giftOption={giftOption} boxText={boxText} setBoxText={setBoxText} boxFont={boxFont}
           />
+          )}
         </div>
       </div>
 
       {/* price + main action, always within thumb reach */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/92 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
         <div className="container-x flex items-center justify-between gap-4">
+          {mode === "publish" ? (
+            <p className="min-w-0 text-sm font-semibold text-mute">{t("صمّم، وبعدها انشره بصفحة «تصاميم الزبائن»", "Design it, then publish it on “Customer designs”")}</p>
+          ) : mode === "group" && group ? (
+            <p className="min-w-0 text-sm font-semibold"><span className="block text-xs font-normal text-mute">{t("طلب جماعي", "Group order")}</span>{group.title}</p>
+          ) : (
           <div className="min-w-0">
             <p className="text-xs text-mute">{couple ? t("القطعتين مع الطباعة", "Both pieces with printing") : t("السعر مع الطباعة", "Price with printing")}{totalQty + otherQty > 1 && ` · ${totalQty + otherQty} ${t("قطع", "pcs")}`}{pct > 0 && <span className="ms-1.5 rounded-full bg-pine-soft px-1.5 py-0.5 font-bold text-pine">-{pct}%</span>}</p>
             <p className="display text-2xl tabular-nums">{formatIQD(grandTotal, locale)}</p>
           </div>
-          {role === "partner" ? (
+          )}
+          {mode === "publish" ? (
+            <button onClick={() => void openPublish()} disabled={uploading || preparing || !ready || !layers.some((l) => !l.hidden)} className="btn btn-brand h-14 min-w-[44%] rounded-2xl px-6 text-base sm:min-w-64">
+              {preparing ? <Loader2 className="size-5 animate-spin" /> : <><Sparkles className="size-5" /> {t("انشر تصميمي", "Publish my design")}</>}
+            </button>
+          ) : mode === "group" ? (
+            <button onClick={() => void joinGroup()} disabled={joining || uploading || preparing || !ready || !!joined} className="btn btn-brand h-14 min-w-[44%] rounded-2xl px-6 text-base sm:min-w-64">
+              {joining || preparing ? <Loader2 className="size-5 animate-spin" /> : <><Check className="size-5" /> {joined ? t("تم تسجيلك ✓", "You're on the list ✓") : t("سجّلني بالطلب", "Add me to the order")}</>}
+            </button>
+          ) : role === "partner" ? (
             <button onClick={() => void sendToOwner()} disabled={sharing || uploading || !ready || sent} className="btn btn-brand h-14 min-w-[44%] rounded-2xl px-6 text-base sm:min-w-64">
               {sharing ? <Loader2 className="size-5 animate-spin" /> : <><Send className="size-5" /> {sent ? t("انرسل ✓", "Sent ✓") : t("إرسال التصميم لشريكك", "Send to your partner")}</>}
             </button>
@@ -1497,4 +1611,27 @@ async function downscale(dataUrl: string, width: number): Promise<string> {
   c.height = Math.round((img.height / img.width) * width);
   c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
   return c.toDataURL("image/jpeg", 0.8);
+}
+
+/** Draws the garment photo with fixed artwork on it into one image (a group's design is part of the garment). */
+async function composeBackdrop(bg: { getElement: () => unknown; left?: number; top?: number; width?: number; height?: number; scaleX?: number; scaleY?: number }, items: { url: string; area: { x: number; y: number; width: number; height: number } }[]): Promise<string> {
+  const k = 2;
+  const cv = document.createElement("canvas");
+  cv.width = ARTBOARD.width * k;
+  cv.height = ARTBOARD.height * k;
+  const ctx = cv.getContext("2d")!;
+  ctx.scale(k, k);
+  const el = bg.getElement() as CanvasImageSource;
+  ctx.drawImage(el, bg.left ?? 0, bg.top ?? 0, (bg.width ?? 600) * (bg.scaleX ?? 1), (bg.height ?? 700) * (bg.scaleY ?? 1));
+  for (const it of items) {
+    const img = new Image();
+    img.src = it.url;
+    await img.decode();
+    const a = it.area;
+    const s = Math.min((a.width * 0.96) / img.naturalWidth, (a.height * 0.96) / img.naturalHeight);
+    const w = img.naturalWidth * s;
+    const h = img.naturalHeight * s;
+    ctx.drawImage(img, a.x + (a.width - w) / 2, a.y + (a.height - h) / 2, w, h);
+  }
+  return cv.toDataURL("image/png");
 }
