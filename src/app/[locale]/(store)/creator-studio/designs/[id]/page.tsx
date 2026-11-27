@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { isLocale } from "@/lib/i18n/config";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { effectiveCommission, getCreatorSettings, getMyCreator } from "@/lib/creators";
+import { effectiveCommission, getCreatorSettings, getMyCreator, creatorBasePrice, creatorMaxMarkup } from "@/lib/creators";
 import { getColors } from "@/lib/data/catalog";
 import { normType, type ProductDesignRow, type ProductTypeRow } from "@/lib/print-config";
 import { CreatorDesignEditor } from "@/components/creators/design-editor";
@@ -32,7 +32,7 @@ export default async function EditCreatorDesign({ params }: { params: Promise<{ 
         listing={{ id: cp.id, product_id: cp.product_id, title: cp.title, description: cp.description, category: cp.category, tags: cp.tags ?? [], markup: cp.markup, status: cp.status, review_note: cp.review_note, slug: (cp.products as { slug: string }).slug }}
         type={type} colors={colors} designs={(designs as ProductDesignRow[]) ?? []}
         chosenColors={[...new Set(active.map((v) => v.color_id))]} chosenSizes={[...new Set(active.map((v) => v.size_code))]}
-        base={type.default_price} maxMarkup={type.creator_max_markup ?? settings.max_markup}
+        base={creatorBasePrice(type as { default_price: number; creator_base_price?: number | null })} maxMarkup={creatorMaxMarkup(type, settings)}
         rule={effectiveCommission(me, type, settings)} reviewRequired={settings.review_required}
       />
     </div>

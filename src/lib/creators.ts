@@ -50,6 +50,17 @@ export const getCreatorById = cache(async (id: string): Promise<Pick<Creator, "u
   return data ?? null;
 });
 
+/** The price a creator's piece starts from: the admin's price for creators, or the garment's normal store price. */
+export function creatorBasePrice(type: { default_price: number; creator_base_price?: number | null }): number {
+  return type.creator_base_price ?? type.default_price;
+}
+/** The most a creator may add on this garment: its own cap, else the platform cap; null = no limit (0 on the platform). */
+export function creatorMaxMarkup(type: { creator_max_markup?: number | null }, s: CreatorSettings): number | null {
+  if (type.creator_max_markup != null) return type.creator_max_markup;
+  return s.max_markup > 0 ? s.max_markup : null;
+}
+export { MARKUP_CEILING } from "@/lib/creator-labels";
+
 /** Which rule applies to a sale: this creator's own > this garment's > the platform default. */
 export function effectiveCommission(c: Pick<Creator, "commission_mode" | "commission_value">, type: { creator_commission_mode?: string | null; creator_commission_value?: number | null } | null, s: CreatorSettings): { mode: "percent" | "fixed"; value: number } {
   if (c.commission_mode) return { mode: c.commission_mode, value: c.commission_value ?? 0 };

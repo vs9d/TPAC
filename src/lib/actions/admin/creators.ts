@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assertStaff, assertAdmin } from "@/lib/auth";
-import { getCreatorSettings, notifyCreator, emailCreatorsSoon, DEFAULT_CREATOR_SETTINGS } from "@/lib/creators";
+import { getCreatorSettings, notifyCreator, emailCreatorsSoon, creatorBasePrice, DEFAULT_CREATOR_SETTINGS, MARKUP_CEILING } from "@/lib/creators";
 import { bool, str, logActivity, type ActionState } from "./common";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -135,21 +135,53 @@ export async function saveCreatorSettings(_: ActionState, form: FormData): Promi
   return { ok: true, message: "انحفظ ✓" };
 }
 
+/**
+ * One garment for creators: open or closed, the price creators start from, a markup cap and an optional commission.
+ * A new price for creators reprices every creator listing of this garment (price = new price + the creator's markup)
+ * and tells those creators; orders already placed keep their prices and earnings.
+ */
 export async function saveCreatorTypeOptions(_: ActionState, form: FormData): Promise<ActionState> {
   await assertAdmin();
   const id = str(form.get("id"));
   const mode = str(form.get("mode"));
   if (!UUID.test(id) || !["", "percent", "fixed"].includes(mode)) return { ok: false, error: "validation" };
   const max = str(form.get("max_markup")).trim();
-  await createAdminClient().from("product_types").update({
+  const baseRaw = str(form.get("creator_base_price")).trim();
+  const baseIn = baseRaw === "" ? null : int(form.get("creator_base_price"));
+  if (baseIn !== null && (baseIn < 0 || baseIn > MARKUP_CEILING)) return { ok: false, error: "validation", fields: { creator_base_price: "range" } };
+  if (mode === "percent" && int(form.get("value")) > 100) return { ok: false, error: "validation", fields: { value: "range" } };
+  const db = createAdminClient();
+  const { data: before } = await db.from("product_types").select("default_price, creator_base_price, name_ar").eq("id", id).maybeSingle();
+  if (!before) return { ok: false, error: "not_found" };
+  await db.from("product_types").update({
     creator_enabled: bool(form.get("creator_enabled")),
+    creator_base_price: baseIn,
     creator_max_markup: max === "" ? null : Math.max(0, int(form.get("max_markup"))),
     creator_commission_mode: mode || null,
     creator_commission_value: mode ? Math.max(0, int(form.get("value"))) : null,
   }).eq("id", id);
-  await logActivity("creator.type_options", "product_type", id);
+
+  const oldBase = creatorBasePrice(before as { default_price: number; creator_base_price: number | null });
+  const newBase = creatorBasePrice({ default_price: before.default_price as number, creator_base_price: baseIn });
+  let repriced = 0;
+  if (newBase !== oldBase) {
+    const { data: listings } = await db.from("creator_products").select("id, product_id, creator_id, markup").eq("product_type_id", id);
+    const rows = (listings ?? []) as { id: string; product_id: string; creator_id: string; markup: number }[];
+    for (const l of rows) {
+      await db.from("products").update({ base_price: newBase + l.markup }).eq("id", l.product_id);
+      await db.from("creator_products").update({ base_price: newBase, updated_at: new Date().toISOString() }).eq("id", l.id);
+    }
+    repriced = rows.length;
+    const creators = [...new Set(rows.map((l) => l.creator_id))];
+    for (const c of creators) {
+      await notifyCreator(c, `تغيّر سعر ${before.name_ar} الأساسي`,
+        `صار ${newBase} د.ع بدل ${oldBase} د.ع. سعر تصاميمك على ${before.name_ar} صار ${newBase} + إضافتك. ربحك من كل قطعة ما يتغير، والطلبات السابقة تبقى مثل ما هي.`, "/creator-studio/designs", "admin");
+    }
+  }
+  await logActivity("creator.type_options", "product_type", id, { creator_base_price: baseIn, repriced });
   refresh();
-  return { ok: true, message: "✓" };
+  revalidatePath("/[locale]/product/[slug]", "page");
+  return { ok: true, message: repriced ? `انحفظ ✓ — تحدّث سعر ${repriced} تصميم` : "✓" };
 }
 
 export async function broadcastToCreators(_: ActionState, form: FormData): Promise<ActionState> {

@@ -6,7 +6,7 @@ import { useI18n } from "@/components/i18n-provider";
 import { toast } from "@/components/ui/toast";
 import { ProductStudio, type StudioHandle } from "@/components/admin/printing/product-studio";
 import { saveCreatorDesign } from "@/lib/actions/creators";
-import { STATUS_LABEL } from "@/lib/creator-labels";
+import { MARKUP_CEILING, STATUS_LABEL } from "@/lib/creator-labels";
 import { cn, formatIQD } from "@/lib/format";
 import type { ProductDesignRow, ProductTypeRow } from "@/lib/print-config";
 import type { Color } from "@/lib/types";
@@ -21,7 +21,7 @@ export interface EditorListing {
 /** A creator's listing: the official mockups with their artwork, colours, sizes, price and earning — then review. */
 export function CreatorDesignEditor({ listing, type, colors, designs, chosenColors, chosenSizes, base, maxMarkup, rule, reviewRequired }: {
   listing: EditorListing; type: ProductTypeRow; colors: Color[]; designs: ProductDesignRow[];
-  chosenColors: string[]; chosenSizes: string[]; base: number; maxMarkup: number;
+  chosenColors: string[]; chosenSizes: string[]; base: number; maxMarkup: number | null;
   rule: { mode: "percent" | "fixed"; value: number }; reviewRequired: boolean;
 }) {
   const { locale } = useI18n();
@@ -36,7 +36,10 @@ export function CreatorDesignEditor({ listing, type, colors, designs, chosenColo
   const [tags, setTags] = useState(listing.tags.join("، "));
   const [colorIds, setColorIds] = useState<string[]>(chosenColors.length ? chosenColors : offered.slice(0, 2).map((c) => c.id));
   const [sizes, setSizes] = useState<string[]>(chosenSizes.length ? chosenSizes : sizesOffered);
-  const [markup, setMarkup] = useState(listing.markup || Math.min(5000, maxMarkup));
+  // no cap from the admin: the slider covers a sensible range, the number field takes any amount
+  const cap = maxMarkup ?? MARKUP_CEILING;
+  const sliderMax = maxMarkup ?? Math.max(50000, Math.ceil(((listing.markup || 0) * 2) / 1000) * 1000);
+  const [markup, setMarkup] = useState(listing.markup || Math.min(5000, cap));
   const [progress, setProgress] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const earning = rule.mode === "fixed" ? rule.value : Math.round((markup * Math.min(rule.value, 100)) / 100);
@@ -60,7 +63,7 @@ export function CreatorDesignEditor({ listing, type, colors, designs, chosenColo
         markup, designs: ds, images, submit,
       });
       if (!r.ok) {
-        toast.error(r.fields?.markup ? (ar ? `أعلى إضافة مسموحة ${formatIQD(maxMarkup, locale)}` : `Max markup is ${formatIQD(maxMarkup, locale)}`) : r.error === "hidden" ? (ar ? "هذا التصميم مخفي من الإدارة" : "This design was hidden by staff") : ar ? "ما انحفظ — تأكد من الخانات" : "Not saved — check the fields");
+        toast.error(r.fields?.markup ? (ar ? `أعلى إضافة مسموحة ${formatIQD(cap, locale)}` : `Max markup is ${formatIQD(cap, locale)}`) : r.error === "hidden" ? (ar ? "هذا التصميم مخفي من الإدارة" : "This design was hidden by staff") : ar ? "ما انحفظ — تأكد من الخانات" : "Not saved — check the fields");
         return;
       }
       toast.success(r.status === "approved" ? (ar ? "انشر ✓ صار بمتجرك" : "Published ✓") : r.status === "pending" ? (ar ? "انرسل للمراجعة ✓ نبلغك أول ما ينقبل" : "Sent for review ✓") : ar ? "انحفظ ✓" : "Saved ✓");
@@ -120,11 +123,12 @@ export function CreatorDesignEditor({ listing, type, colors, designs, chosenColo
             <h3 className="font-bold">{ar ? "السعر وربحك" : "Price and your earning"}</h3>
             <label className="block">
               <span className="mb-1.5 flex justify-between text-sm font-semibold"><span>{ar ? "اللي تضيفه على السعر" : "Your markup"}</span><span className="tabular-nums">{formatIQD(markup, locale)}</span></span>
-              <input type="range" min={0} max={maxMarkup} step={250} value={markup} onChange={(e) => setMarkup(Number(e.target.value))} className="w-full accent-[#376352]" aria-label={ar ? "الإضافة" : "Markup"} />
-              <input type="number" min={0} max={maxMarkup} step={250} value={markup} onChange={(e) => setMarkup(Math.max(0, Math.min(maxMarkup, Math.round(Number(e.target.value) || 0))))} className="field mt-2 w-full" aria-label={ar ? "الإضافة بالدينار" : "Markup in IQD"} />
+              <input type="range" min={0} max={sliderMax} step={250} value={Math.min(markup, sliderMax)} onChange={(e) => setMarkup(Number(e.target.value))} className="w-full accent-[#376352]" aria-label={ar ? "الإضافة" : "Markup"} />
+              <input type="number" min={0} max={cap} step={250} value={markup} onChange={(e) => setMarkup(Math.max(0, Math.min(cap, Math.round(Number(e.target.value) || 0))))} className="field mt-2 w-full" aria-label={ar ? "الإضافة بالدينار" : "Markup in IQD"} />
+              <span className="mt-1 block text-xs text-mute">{maxMarkup === null ? (ar ? "تكدر تضيف اللي يعجبك — اكتب المبلغ." : "Add any amount — type it in.") : (ar ? `لحد ${formatIQD(maxMarkup, locale)}` : `Up to ${formatIQD(maxMarkup, locale)}`)}</span>
             </label>
             <dl className="space-y-1.5 text-sm">
-              <div className="flex justify-between"><dt className="text-mute">{ar ? "سعر القطعة من TPAC" : "TPAC garment price"}</dt><dd className="tabular-nums">{formatIQD(base, locale)}</dd></div>
+              <div className="flex justify-between"><dt className="text-mute">{ar ? "سعر القطعة الأساسي (من TPAC)" : "Garment base price (set by TPAC)"}</dt><dd className="tabular-nums">{formatIQD(base, locale)}</dd></div>
               <div className="flex justify-between"><dt className="text-mute">{ar ? "إضافتك" : "Your markup"}</dt><dd className="tabular-nums">+ {formatIQD(markup, locale)}</dd></div>
               <div className="flex justify-between border-t border-line pt-1.5 font-bold"><dt>{ar ? "سعر البيع للزبون" : "Customer price"}</dt><dd className="tabular-nums">{formatIQD(base + markup, locale)}</dd></div>
               <div className="flex justify-between rounded-xl bg-paper px-3 py-2 font-bold text-pine"><dt>{ar ? "صافي ربحك لكل قطعة" : "Your net per piece"}</dt><dd className="tabular-nums">{formatIQD(earning, locale)}</dd></div>

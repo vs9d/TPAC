@@ -1829,7 +1829,9 @@ await flow("TPAC Creators: join → approval → design on the official mockup w
   await db.query(readFileSync(new URL("../../supabase/add-creators.sql", import.meta.url), "utf8"));
   await db.query(readFileSync(new URL("../../supabase/add-creator-email.sql", import.meta.url), "utf8"));
   await db.query("delete from rate_limits");
-  await db.query("update product_types set creator_enabled = (code = 'hoodie'), creator_max_markup = 15000 where true");
+  await db.query(readFileSync(new URL("../../supabase/add-creator-base-price.sql", import.meta.url), "utf8"));
+  // the admin's price for creators: a hoodie starts at 20,000 for them (whatever its normal store price)
+  await db.query("update product_types set creator_enabled = (code = 'hoodie'), creator_max_markup = 15000, creator_base_price = case when code = 'hoodie' then 20000 end where true");
   await db.query("update website_settings set value = value || '{\"commission_mode\":\"percent\",\"commission_value\":70,\"review_required\":true,\"min_withdrawal\":1000}'::jsonb where key = 'creators'");
   const uname = `artist${Date.now() % 1000000}`;
   // 1) join (with a new account)
@@ -1871,7 +1873,7 @@ await flow("TPAC Creators: join → approval → design on the official mockup w
   await page.getByRole("button", { name: "Send for review" }).click();
   await page.getByText(/Sent for review/).waitFor({ timeout: 60000 });
   const cp = await one("select c.status, c.markup, c.base_price, p.base_price as price, p.is_published, p.creator_id, (select count(*)::int from product_images i where i.product_id = p.id and i.is_generated) gen, (select count(*)::int from product_variants v where v.product_id = p.id and v.is_active) variants from creator_products c join products p on p.id = c.product_id where c.id = $1", [cpId]);
-  assert.deepEqual([cp.status, cp.markup, cp.price, cp.is_published, cp.creator_id], ["pending", 6000, cp.base_price + 6000, false, me.user_id]);
+  assert.deepEqual([cp.status, cp.markup, cp.base_price, cp.price, cp.is_published, cp.creator_id], ["pending", 6000, 20000, 26000, false, me.user_id], "the admin's 20,000 + the creator's 6,000");
   assert.ok(cp.gen > 0 && cp.variants > 0, "mockups generated and variants made");
 
   // 4) staff review and publish
@@ -1909,6 +1911,20 @@ await flow("TPAC Creators: join → approval → design on the official mockup w
   await db.query("update website_settings set value = value || '{\"commission_value\":10}'::jsonb where key = 'creators'");
   assert.equal((await one("select amount from creator_earnings where order_id = $1", [earn.order_id])).amount, 8400);
   await db.query("update website_settings set value = value || '{\"commission_value\":70}'::jsonb where key = 'creators'");
+
+  // 5b) the admin changes the hoodie's price for creators: the listing is repriced, the past sale is not
+  await admin.goto(`${BASE}/en/admin/creators/settings`);
+  const hoodieRow = admin.locator("form:has(input[name=creator_base_price])").filter({ hasText: "Hoodie" }).first();
+  await hoodieRow.locator("input[name=creator_base_price]").fill("22000");
+  await hoodieRow.getByRole("button", { name: "Save" }).click();
+  await waitFor("select c.base_price, p.base_price as price from creator_products c join products p on p.id = c.product_id where c.id = $1", [cpId], (r) => r.base_price === 22000 && r.price === 28000);
+  assert.equal((await one("select amount from creator_earnings where order_id = $1", [earn.order_id])).amount, 8400, "the past sale keeps its earning");
+  assert.equal((await one("select unit_price from order_items where order_id = $1 limit 1", [earn.order_id])).unit_price, 26000, "the past order keeps its price");
+  await waitFor("select count(*)::int n from creator_notifications where creator_id = $1 and title like '%الأساسي%'", [me.user_id], (r) => r.n === 1);
+  const buyer2 = await browser.newPage();
+  await buyer2.goto(`${BASE}/en/product/${prod.slug}`);
+  await buyer2.getByText("28,000").first().waitFor();
+  await buyer2.close();
 
   // 6) the creator sees the sale (no customer data), then the order completes
   await page.goto(`${BASE}/en/creator-studio/orders`);

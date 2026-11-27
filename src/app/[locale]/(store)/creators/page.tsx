@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { Brush, Coins, Rocket, Sparkles, Truck, Trophy } from "lucide-react";
 import { isLocale } from "@/lib/i18n/config";
 import { topCreators } from "@/lib/data/creators";
-import { getMyCreator, getCreatorSettings } from "@/lib/creators";
+import { getMyCreator, getCreatorSettings, creatorBasePrice } from "@/lib/creators";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { isSupabaseConfigured } from "@/lib/env";
 import { CreatorCardView } from "@/components/creators/creator-card";
 import { formatIQD } from "@/lib/format";
 
@@ -24,7 +26,12 @@ export default async function CreatorsPage({ params }: { params: Promise<{ local
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const ar = locale === "ar";
-  const [top, me, s] = await Promise.all([topCreators("all", 8), getMyCreator().catch(() => null), getCreatorSettings()]);
+  const [top, me, s, { data: open }] = await Promise.all([topCreators("all", 8), getMyCreator().catch(() => null), getCreatorSettings(),
+    isSupabaseConfigured() ? createAdminClient().from("product_types").select("code, name_ar, name_en, default_price, creator_base_price").eq("is_active", true).eq("creator_enabled", true).order("sort_order") : Promise.resolve({ data: [] })]);
+  // the example uses the real price for creators (a hoodie if it's open to creators)
+  const ex = ((open ?? []) as { code: string; name_ar: string; name_en: string; default_price: number; creator_base_price: number | null }[]).sort((a, b) => Number(b.code === "hoodie") - Number(a.code === "hoodie"))[0];
+  const exBase = ex ? creatorBasePrice(ex) : 25000;
+  const exName = ex ? (ar ? ex.name_ar : ex.name_en) : ar ? "الهودي" : "hoodie";
   const steps = ar
     ? [[Brush, "ارفع تصميمك", "PNG بخلفية شفافة، على الهودي أو التيشيرت أو السويتشيرت."], [Coins, "حدّد سعرك", "سعر القطعة من TPAC + اللي تضيفه أنت. تشوف ربحك قبل النشر."], [Truck, "إحنا نكمّل", "نطبع ونجهّز ونوصّل ونخدم الزبون."], [Rocket, "اربح", "ربحك من كل قطعة تكتمل، وتسحبه لزين كاش أو حساب بنكي."]]
     : [[Brush, "Upload your design", "Transparent PNG, on hoodies, tees or sweatshirts."], [Coins, "Set your price", "TPAC's garment price + your markup. See your earning before you publish."], [Truck, "We do the rest", "Printing, packing, delivery and customer care."], [Rocket, "Earn", "From every completed piece — withdraw to ZainCash or a bank account."]];
@@ -55,7 +62,7 @@ export default async function CreatorsPage({ params }: { params: Promise<{ local
               );
             })}
           </ol>
-          <p className="mt-10 text-sm text-paper/60">{ar ? `مثال: سعر الهودي من TPAC ${formatIQD(25000, locale)} وأنت تضيف ${formatIQD(5000, locale)} ← الزبون يدفع ${formatIQD(30000, locale)}، وربحك ${s.commission_mode === "percent" ? `${s.commission_value}% من الإضافة (${formatIQD(Math.round(5000 * s.commission_value / 100), locale)})` : `${formatIQD(s.commission_value, locale)} لكل قطعة`}.` : `Example: TPAC's hoodie ${formatIQD(25000, locale)} + your ${formatIQD(5000, locale)} → the customer pays ${formatIQD(30000, locale)}; you earn ${s.commission_mode === "percent" ? `${s.commission_value}% of your markup (${formatIQD(Math.round(5000 * s.commission_value / 100), locale)})` : `${formatIQD(s.commission_value, locale)} per piece`}.`}</p>
+          <p className="mt-10 text-sm text-paper/60">{ar ? `مثال: سعر ${exName} من TPAC ${formatIQD(exBase, locale)} وأنت تضيف ${formatIQD(5000, locale)} ← الزبون يدفع ${formatIQD(exBase + 5000, locale)}، وربحك ${s.commission_mode === "percent" ? `${s.commission_value}% من الإضافة (${formatIQD(Math.round(5000 * s.commission_value / 100), locale)})` : `${formatIQD(s.commission_value, locale)} لكل قطعة`}.` : `Example: TPAC's ${exName} ${formatIQD(exBase, locale)} + your ${formatIQD(5000, locale)} → the customer pays ${formatIQD(exBase + 5000, locale)}; you earn ${s.commission_mode === "percent" ? `${s.commission_value}% of your markup (${formatIQD(Math.round(5000 * s.commission_value / 100), locale)})` : `${formatIQD(s.commission_value, locale)} per piece`}.`}</p>
         </div>
       </section>
       <section className="container-x py-14 md:py-20">

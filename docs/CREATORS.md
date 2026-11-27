@@ -4,7 +4,7 @@ A marketplace for designers on top of the existing store. Creators sell designs 
 
 ## Enabling it in production
 
-1. Run `supabase/add-creators.sql` and then `supabase/add-creator-email.sql` in the Supabase SQL Editor. They are the same files as `migrations/20261128000026_creators.sql` and `migrations/20261128000027_creator_email.sql`.
+1. Run `supabase/add-creators.sql`, then `supabase/add-creator-email.sql`, then `supabase/add-creator-base-price.sql` in the Supabase SQL Editor. They are the same files as migrations `…026_creators`, `…027_creator_email` and `…028_creator_base_price`.
 2. Go to Admin → TPAC Creators → Settings and switch on the garments that creators may use (`product_types.creator_enabled`). Each garment can also have its own maximum markup and commission.
 3. Review the platform rules on the same page: commission, minimum withdrawal, return window (hold days), mandatory review, maximum markup and payout methods.
 
@@ -43,8 +43,10 @@ The store's design and existing flows are unchanged. The additions are a "Design
 
 ### Earnings
 
-- Price shown to the customer = `product_types.default_price` + markup, computed on the server.
-- The markup is capped by the garment's `creator_max_markup`, or else by the platform's `max_markup`.
+- Price shown to the customer = the garment's **price for creators** + markup, computed on the server.
+  - The price for creators is set by the admin per garment (`product_types.creator_base_price`, e.g. a hoodie at 20,000). If it is empty, the garment's normal store price is used.
+  - Changing it reprices every creator listing of that garment and notifies those creators. Orders already placed keep their prices and earnings.
+- The markup is capped by the garment's `creator_max_markup`, or else by the platform's `max_markup`. A platform cap of 0 means no limit, so the creator adds what they like.
 - Commission priority: the creator's own rule → the garment's rule → the platform rule.
 - A **percent** rule pays `round(markup × pct / 100) × qty`. A **fixed** rule pays `value × qty`.
 - The trigger `creator_earning_on_item` (AFTER INSERT on `order_items`) snapshots the rule in force at the moment of the sale. Later changes to the rules never change historical earnings.

@@ -9,7 +9,7 @@ import { getSession } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { publicEnv } from "@/lib/env";
 import { phoneSchema, fieldErrors, uuid } from "@/lib/validation";
-import { assertCreator, creatorBalance, effectiveCommission, earningPerPiece, getCreatorSettings, getMyCreator } from "@/lib/creators";
+import { assertCreator, creatorBalance, creatorBasePrice, creatorMaxMarkup, effectiveCommission, earningPerPiece, getCreatorSettings, getMyCreator, MARKUP_CEILING } from "@/lib/creators";
 import { designItem, generatedImage, writeProductPrinting } from "@/lib/printing-write";
 import { skuPrefix } from "@/lib/product-tools";
 import { notifyAdmin } from "@/lib/notifications";
@@ -159,12 +159,13 @@ export async function createCreatorDraft(productTypeId: string): Promise<{ ok: t
   if (!uuid.safeParse(productTypeId).success) return { ok: false, error: "validation" };
   if (!(await rateLimit("design", "creator-draft"))) return { ok: false, error: "rate_limited" };
   const db = createAdminClient();
-  const { data: type } = await db.from("product_types").select("id, default_price, category_id, creator_enabled, is_active, name_ar, name_en").eq("id", productTypeId).maybeSingle();
+  const { data: type } = await db.from("product_types").select("id, default_price, creator_base_price, category_id, creator_enabled, is_active, name_ar, name_en").eq("id", productTypeId).maybeSingle();
   if (!type || !type.creator_enabled || !type.is_active) return { ok: false, error: "type_unavailable" };
+  const base = creatorBasePrice(type);
   const slug = `c-${c.username.replace(/[^a-z0-9]/g, "")}-${randomBytes(4).toString("hex")}`;
   const { data: p, error } = await db.from("products").insert({
     slug, name_ar: `${type.name_ar} — ${c.display_name}`, name_en: `${type.name_en} — ${c.display_name}`,
-    base_price: type.default_price, category_id: type.category_id, product_type_id: type.id, print_enabled: true,
+    base_price: base, category_id: type.category_id, product_type_id: type.id, print_enabled: true,
     is_published: false, creator_id: c.user_id, tags: ["creators", c.username],
   }).select("id").single();
   if (error || !p) {
@@ -172,7 +173,7 @@ export async function createCreatorDraft(productTypeId: string): Promise<{ ok: t
     return { ok: false, error: "generic" };
   }
   const { data: cp, error: e2 } = await db.from("creator_products").insert({
-    creator_id: c.user_id, product_id: p.id, product_type_id: type.id, title: `${type.name_ar}`, base_price: type.default_price,
+    creator_id: c.user_id, product_id: p.id, product_type_id: type.id, title: `${type.name_ar}`, base_price: base,
   }).select("id").single();
   if (e2 || !cp) return { ok: false, error: "generic" };
   return { ok: true, id: cp.id as string, product_id: p.id as string };
@@ -187,7 +188,7 @@ const saveSchema = z.object({
   color_ids: z.array(uuid).min(1).max(20),
   sizes: z.array(z.string().regex(/^[A-Z0-9]{1,6}$/)).min(1).max(12),
   cover_color: uuid.nullable().optional(),
-  markup: z.number().int().min(0).max(10_000_000),
+  markup: z.number().int().min(0).max(MARKUP_CEILING),
   designs: z.array(designItem).min(1).max(20),
   images: z.array(generatedImage).max(40),
   submit: z.boolean(),
@@ -195,7 +196,7 @@ const saveSchema = z.object({
 
 /**
  * Saves a listing: artwork placement, generated mockups, colours, sizes and the creator's markup.
- * The price is always TPAC's garment price + the markup (capped by the admin) — computed here, never sent.
+ * The price is always the admin's garment price for creators + the markup (within the admin's cap, if any) — computed here, never sent.
  * Submitting sends it for review (or publishes it straight away when review is off).
  */
 export async function saveCreatorDesign(input: unknown): Promise<{ ok: true; status: string; price: number; earning: number } | Fail> {
@@ -209,7 +210,7 @@ export async function saveCreatorDesign(input: unknown): Promise<{ ok: true; sta
   if (!cp) return { ok: false, error: "not_found" };
   if (cp.status === "hidden") return { ok: false, error: "hidden" };
   const [{ data: type }, settings, { data: product }] = await Promise.all([
-    db.from("product_types").select("id, default_price, default_sizes, default_color_ids, creator_max_markup, creator_commission_mode, creator_commission_value, creator_enabled").eq("id", cp.product_type_id).maybeSingle(),
+    db.from("product_types").select("id, default_price, creator_base_price, default_sizes, default_color_ids, creator_max_markup, creator_commission_mode, creator_commission_value, creator_enabled").eq("id", cp.product_type_id).maybeSingle(),
     getCreatorSettings(),
     db.from("products").select("slug").eq("id", cp.product_id).single(),
   ]);
@@ -218,12 +219,12 @@ export async function saveCreatorDesign(input: unknown): Promise<{ ok: true; sta
   const allowedColors = new Set((type.default_color_ids as string[]) ?? []);
   const allowedSizes = new Set((type.default_sizes as string[]) ?? []);
   if ((allowedColors.size && d.color_ids.some((x) => !allowedColors.has(x))) || (allowedSizes.size && d.sizes.some((x) => !allowedSizes.has(x)))) return { ok: false, error: "validation", fields: { color_ids: "unavailable" } };
-  const maxMarkup = type.creator_max_markup ?? settings.max_markup;
-  if (d.markup > maxMarkup) return { ok: false, error: "validation", fields: { markup: "max" } };
+  const maxMarkup = creatorMaxMarkup(type, settings);
+  if (maxMarkup !== null && d.markup > maxMarkup) return { ok: false, error: "validation", fields: { markup: "max" } };
   // the images must be this listing's own files
   if (d.designs.some((x) => x.artwork_path && !x.artwork_path.startsWith(`products/${cp.product_id}/art/`)) || d.images.some((x) => !x.storage_path.startsWith(`products/${cp.product_id}/gen/`))) return { ok: false, error: "validation" };
 
-  const base = type.default_price as number;
+  const base = creatorBasePrice(type as { default_price: number; creator_base_price: number | null });
   const price = base + d.markup;
   const res = await writeProductPrinting(db as never, cp.product_id, type.id, d.designs, d.images);
   if (!res?.ok) return { ok: false, error: "validation", fields: (res as { fields?: Record<string, string> }).fields };
