@@ -1480,6 +1480,54 @@ await flow("studio: packaging is optional, gift box with the customer's words on
   }
 });
 
+await flow("gift box on any product: words on the lid, priced per piece by the server, kept on the order", async (page) => {
+  await db.query(readFileSync(new URL("../../supabase/add-gift-box-all-products.sql", import.meta.url), "utf8"));
+  const gift = await one("select name_ar, price from designer_options where group_code = 'package' and code = 'gift'");
+  await page.goto(`${BASE}/ar/product/baghdad-oversized-tee`);
+  const sizes = page.locator('[role=radiogroup][aria-label="اختر المقاس"] [role=radio]:not([data-disabled=true])');
+  await sizes.first().click();
+  const chosen = (await sizes.first().innerText()).trim();
+  const sw = page.getByRole("switch", { name: /علبة هدية/ });
+  await sw.scrollIntoViewIfNeeded();
+  await sw.click();
+  await page.getByLabel("شنو نكتب على العلبة؟").fill("ليت العناق يُرسل");
+  await page.getByRole("img", { name: /ليت العناق يُرسل/ }).first().waitFor();
+  await page.getByRole("button", { name: "+" }).first().click(); // two pieces
+  await page.screenshot({ path: `${SHOTS}/product-gift.png` });
+  await page.getByRole("button", { name: "أضف إلى السلة" }).click();
+  await page.getByRole("dialog", { name: "سلة التسوق" }).waitFor();
+  await page.getByRole("link", { name: "إتمام الطلب" }).click();
+  await page.waitForURL(/checkout/);
+  await page.fill("#customer_name", "زبون هدية");
+  await page.fill("#phone", "07712345679");
+  await page.selectOption("#governorate", "basra");
+  await page.fill("#city", "العشار");
+  await page.fill("#address_line", "شارع الوطن");
+  await page.waitForFunction(() => document.body.innerText.includes("٧٬٠٠٠") || document.body.innerText.includes("7,000"));
+  await page.getByRole("button", { name: "تأكيد الطلب" }).click();
+  await page.waitForURL(/checkout\/success\?order=TP\d+/);
+  const number = new URL(page.url()).searchParams.get("order");
+  const o = await one("select o.subtotal, i.unit_price, i.quantity, i.options, i.size_code, coalesce(v.price_override, p.base_price) as base from orders o join order_items i on i.order_id = o.id join product_variants v on v.id = i.variant_id join products p on p.id = v.product_id where o.order_number = $1", [number]);
+  assert.equal(o.size_code, chosen);
+  assert.equal(o.quantity, 2);
+  assert.equal(o.unit_price, o.base + gift.price, "box priced per piece by the server");
+  assert.equal(o.subtotal, (o.base + gift.price) * 2);
+  const box = o.options.find((x) => x.key === "gift_box");
+  assert.ok(box && box.value === "ليت العناق يُرسل" && box.label_ar === gift.name_ar, "the words are kept on the order");
+
+  // the browser cannot set its own price for the box: a forged cart line is re-priced
+  const q = await db.query("select public.quote_cart($1::jsonb) q", [JSON.stringify({ items: [{ variant_id: (await one("select variant_id from order_items i join orders o on o.id = i.order_id where o.order_number = $1", [number])).variant_id, quantity: 1, options: { gift_box: "1", box_text: "x" }, unit_price: 1 }] })]);
+  assert.equal(q.rows[0].q.lines[0].unit_price, o.base + gift.price);
+  // with no paid box in the dashboard, nothing is added
+  await db.query("update designer_options set is_active = false where group_code = 'package' and price > 0");
+  try {
+    const q2 = await db.query("select public.quote_cart($1::jsonb) q", [JSON.stringify({ items: [{ variant_id: q.rows[0].q.lines[0].variant_id, quantity: 1, options: { gift_box: "1" } }] })]);
+    assert.equal(q2.rows[0].q.lines[0].unit_price, o.base);
+  } finally {
+    await db.query("update designer_options set is_active = true where group_code = 'package'");
+  }
+});
+
 console.log(results.join("\n"));
 await browser.close();
 await db.end();

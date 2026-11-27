@@ -14,6 +14,11 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { publicEnv } from "@/lib/env";
 import { formatDate } from "@/lib/format";
 import { customerUploadsEnabled } from "@/lib/designer-settings";
+import { getGiftBox } from "@/lib/gift-box";
+import { Amiri } from "next/font/google";
+
+// the calligraphic face the gift box lid is previewed in (same as in the studio)
+const amiri = Amiri({ subsets: ["arabic", "latin"], weight: ["700"], display: "swap", preload: false });
 
 type Props = { params: Promise<{ locale: string; slug: string }> };
 
@@ -46,12 +51,13 @@ export default async function ProductPage({ params }: Props) {
   const dict = getDictionary(locale);
   const product = await getProductBySlug(slug);
   if (!product) notFound();
-  const [sizes, reviews, related, session, customStudio] = await Promise.all([
+  const [sizes, reviews, related, session, customStudio, giftBox] = await Promise.all([
     getSizes(),
     getReviews(product.id),
     searchProducts({ category: product.category?.slug, exclude: product.id, limit: 4, sort: "popular" }).catch(() => ({ total: 0, items: [] })),
     getSession(),
     customerUploadsEnabled(),
+    getGiftBox().catch(() => null),
   ]);
   let favorite = false;
   if (session) {
@@ -114,7 +120,7 @@ export default async function ProductPage({ params }: Props) {
         <span className="text-ink">{name}</span>
       </nav>
 
-      <ProductView product={product} sizeOrder={sizes.map((s) => s.code)} garment={garment} initialFavorite={favorite} signedIn={!!session} customStudio={customStudio} />
+      <ProductView product={product} sizeOrder={sizes.map((s) => s.code)} garment={garment} initialFavorite={favorite} signedIn={!!session} customStudio={customStudio} giftBox={giftBox} boxFont={amiri.style.fontFamily} />
 
       <section className="mt-20 border-t border-line pt-12" aria-labelledby="reviews">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">

@@ -15,9 +15,10 @@ import { SizeGuideTable } from "./size-guide";
 import { MockupPreview } from "./mockup-preview";
 import { designCm } from "@/lib/print-config";
 import { CoupleFields } from "./couple-fields";
-import { cleanValues, missingInputs, parseCoupleOptions, resolveLocally, type OptionValues } from "@/lib/couple-options";
+import { cleanValues, missingInputs, parseCoupleOptions, resolveLocally, type OptionValues, type ResolvedOption } from "@/lib/couple-options";
+import { GiftBoxPicker, type GiftOption } from "@/components/designer/gift-box";
 
-export function ProductView({ product, sizeOrder, garment, initialFavorite, signedIn, customStudio = true }: { product: ProductDetail; sizeOrder: string[]; garment: string; initialFavorite: boolean; signedIn: boolean; customStudio?: boolean }) {
+export function ProductView({ product, sizeOrder, garment, initialFavorite, signedIn, customStudio = true, giftBox = null, boxFont }: { product: ProductDetail; sizeOrder: string[]; garment: string; initialFavorite: boolean; signedIn: boolean; customStudio?: boolean; giftBox?: GiftOption | null; boxFont?: string }) {
   const { locale, dict } = useI18n();
   const router = useRouter();
   const add = useCart((s) => s.add);
@@ -45,6 +46,9 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
   const couple = useMemo(() => parseCoupleOptions(product.couple_options), [product.couple_options]);
   const [answers, setAnswers] = useState<OptionValues>({});
   const [showErrors, setShowErrors] = useState(false);
+  // optional gift box with the customer's words on the lid (priced per piece by the server)
+  const [gift, setGift] = useState(false);
+  const [boxText, setBoxText] = useState("");
 
   const variantsForColor = product.product_variants.filter((v) => v.color_id === colorId);
   const sizes = sizeOrder.filter((s) => product.product_variants.some((v) => v.size_code === s));
@@ -87,7 +91,10 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
       toast.error(dict.product.chooseOptions);
       return;
     }
-    const options = couple ? cleanValues(answers) : undefined;
+    const giftOn = !!giftBox && gift;
+    const options = couple || giftOn ? cleanValues({ ...(couple ? answers : {}), ...(giftOn ? { gift_box: "1", box_text: boxText } : {}) }) : undefined;
+    const giftLine: ResolvedOption[] = giftOn ? [{ key: "gift_box", label_ar: giftBox!.name_ar, label_en: giftBox!.name_en, value: boxText.trim() || "بدون كتابة" }] : [];
+    const shownOptions = [...(couple ? resolveLocally(couple, variant.size_code, answers) : []), ...giftLine];
     if (couple && missingInputs(couple, answers).length) {
       setShowErrors(true);
       toast.error(locale === "ar" ? "كمّل قياس الهودي الثاني والخانات المطلوبة" : "Fill in the second size and the required boxes");
@@ -105,9 +112,9 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
         color_hex: color?.hex,
         color_name_ar: color?.name_ar,
         color_name_en: color?.name_en,
-        unit_price: price,
+        unit_price: price + (giftOn ? giftBox!.price : 0),
         slug: product.slug,
-        ...(couple ? { options: resolveLocally(couple, variant.size_code, answers) } : {}),
+        ...(shownOptions.length ? { options: shownOptions } : {}),
       },
     });
     if (buyNow) router.push(`/${locale}/checkout`);
@@ -280,6 +287,12 @@ export function ProductView({ product, sizeOrder, garment, initialFavorite, sign
           </div>
 
           {couple && <CoupleFields cfg={couple} sizes={sizes} values={answers} onChange={setAnswers} locale={locale} showErrors={showErrors} />}
+
+          {giftBox && !designOnly && (
+            <div className="mt-5">
+              <GiftBoxPicker option={giftBox} on={gift} onToggle={() => setGift((g) => !g)} text={boxText} setText={setBoxText} font={boxFont} />
+            </div>
+          )}
 
           <div className="mt-4 flex gap-3">
             <div className="flex items-center border border-line" role="group" aria-label={dict.common.quantity}>

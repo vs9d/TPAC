@@ -194,8 +194,10 @@ export function GiftBoxArt({ text, font, view = "angle", className, decorative =
 }
 
 /** Gift box with the customer's own words — optional, chosen by the customer, priced by the admin. */
+export type GiftOption = Pick<DesignerOptionRow, "name_ar" | "name_en" | "price">;
+
 export function GiftBoxPicker({ option, on, onToggle, text, setText, font }: {
-  option: DesignerOptionRow;
+  option: GiftOption;
   on: boolean;
   onToggle: () => void;
   text: string;
