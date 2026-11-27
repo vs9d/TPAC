@@ -820,7 +820,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     return paid.find((o) => o.code === "gift") ?? paid[0] ?? null;
   }, [options]);
   const giftOn = !!giftOption && resolved.choice.package === giftOption.code;
-  const boxFont = fonts.find((f) => /ruqaa/i.test(f.label))?.family;
+  // calligraphic naskh like the real box, Ruqaa as a fallback
+  const boxFont = (fonts.find((f) => f.label === "Amiri") ?? fonts.find((f) => /ruqaa/i.test(f.label)))?.family;
   const totalQty = Object.values(sizes).reduce((n, q) => n + q, 0);
   // placements picked for a "make it like this photo" request count like designed ones (same price per placement)
   const refOn = reference.items.length > 0;
