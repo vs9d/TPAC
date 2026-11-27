@@ -29,6 +29,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     entry("/couples", undefined, 0.8),
     entry("/group", undefined, 0.6),
     entry("/community", undefined, 0.7),
+    entry("/creators", undefined, 0.8),
+    entry("/creators/top", undefined, 0.6),
     entry("/contact", undefined, 0.4),
     ...PAGE_SLUGS.map((s) => entry(`/pages/${s}`, undefined, 0.3)),
   ];

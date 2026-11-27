@@ -415,7 +415,7 @@ await flow("admin: dashboard, order workflow, stock, product, settings, quotatio
   assert.equal((await one("select standard_fee from delivery_zones where governorate = 'baghdad'")).standard_fee, 5500);
 
   // bulk: quotation -> approve -> convert
-  const br = await one("select id from bulk_order_requests order by created_at desc limit 1");
+  const br = await one("select id from bulk_order_requests where group_order_id is null order by created_at desc limit 1");
   await page.goto(`${BASE}/ar/admin/bulk/${br.id}`);
   const newQuote = page.locator("section:has-text('عرض سعر جديد') form");
   await newQuote.locator("select[name=status]").selectOption("approved");
@@ -1811,6 +1811,122 @@ await flow("group order with the organiser's design: fixed front, each name on t
   assert.ok(mem.artwork_ids.length === 1 && mem.preview_back_path, "the member's design is kept");
   await page.goto(b.manage);
   await page.getByRole("img", { name: "Back — Noor" }).waitFor();
+});
+
+await flow("TPAC Creators: join → approval → design on the official mockup with markup → review → store → sale → earnings → withdrawal", async (page) => {
+  await db.query(readFileSync(new URL("../../supabase/add-creators.sql", import.meta.url), "utf8"));
+  await db.query("delete from rate_limits");
+  await db.query("update product_types set creator_enabled = (code = 'hoodie'), creator_max_markup = 15000 where true");
+  await db.query("update website_settings set value = value || '{\"commission_mode\":\"percent\",\"commission_value\":70,\"review_required\":true,\"min_withdrawal\":1000}'::jsonb where key = 'creators'");
+  const uname = `artist${Date.now() % 1000000}`;
+  // 1) join (with a new account)
+  await page.goto(`${BASE}/en/creators`);
+  await page.getByRole("link", { name: "Join as a creator" }).first().click();
+  await page.fill("input[name=display_name]", "Ali Art");
+  await page.getByLabel("Username").fill(uname);
+  await page.fill("input[name=phone]", `0771${String(Date.now()).slice(-7)}`);
+  await page.fill("input[name=email]", `${uname}@thetpac.com`);
+  await page.fill("input[name=password]", "creator-pass-2026");
+  await page.fill("textarea[name=bio]", "Street art from Baghdad");
+  await page.getByRole("button", { name: "Apply to join" }).click();
+  await page.getByText(/Application received/).first().waitFor({ timeout: 20000 });
+  const me = await one("select user_id, status from creators where username = $1", [uname]);
+  assert.equal(me.status, "pending");
+  await page.goto(`${BASE}/en/creator-studio`);
+  await page.getByText(/Under review/).waitFor();
+
+  // 2) staff approve
+  const adminCtx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
+  const admin = await adminCtx.newPage();
+  await becomeAdmin(admin, "creators");
+  await admin.goto(`${BASE}/en/admin/creators`);
+  await admin.locator("section").filter({ hasText: `@${uname}` }).getByRole("button", { name: "Approve" }).click();
+  await waitFor("select status from creators where user_id = $1", [me.user_id], (r) => r.status === "approved");
+
+  // 3) a design on the official hoodie mockup, priced
+  await page.goto(`${BASE}/en/creator-studio/designs/new`);
+  await page.getByRole("button", { name: /Hoodie/ }).click();
+  await page.waitForURL(/creator-studio\/designs\/[0-9a-f-]{36}$/, { timeout: 20000 });
+  const cpId = page.url().split("/").pop();
+  await page.getByLabel("Design file").setInputFiles(await pngFile("creator-art", "#E3963C"));
+  await page.getByText(/Print size: (≈ )?\d/).waitFor({ timeout: 20000 });
+  await page.getByLabel("Design name").fill("Baghdad Nights");
+  await page.getByLabel("Markup in IQD").fill("6000");
+  // net per piece shown before publishing: 70% of 6,000
+  await page.getByText("4,200 IQD").first().waitFor();
+  await page.screenshot({ path: `${SHOTS}/creator-editor.png`, fullPage: true });
+  await page.getByRole("button", { name: "Send for review" }).click();
+  await page.getByText(/Sent for review/).waitFor({ timeout: 60000 });
+  const cp = await one("select c.status, c.markup, c.base_price, p.base_price as price, p.is_published, p.creator_id, (select count(*)::int from product_images i where i.product_id = p.id and i.is_generated) gen, (select count(*)::int from product_variants v where v.product_id = p.id and v.is_active) variants from creator_products c join products p on p.id = c.product_id where c.id = $1", [cpId]);
+  assert.deepEqual([cp.status, cp.markup, cp.price, cp.is_published, cp.creator_id], ["pending", 6000, cp.base_price + 6000, false, me.user_id]);
+  assert.ok(cp.gen > 0 && cp.variants > 0, "mockups generated and variants made");
+
+  // 4) staff review and publish
+  await admin.goto(`${BASE}/en/admin/creators/designs`);
+  await admin.locator("section").filter({ hasText: "Baghdad Nights" }).getByRole("button", { name: "Approve & publish" }).click();
+  await waitFor("select p.is_published from creator_products c join products p on p.id = c.product_id where c.id = $1", [cpId], (r) => r.is_published === true);
+  const prod = await one("select p.slug, p.base_price from creator_products c join products p on p.id = c.product_id where c.id = $1", [cpId]);
+
+  // 5) the store: creator page + product page credit the creator
+  const buyerCtx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
+  const buyer = await buyerCtx.newPage();
+  await buyer.goto(`${BASE}/en/creator/${uname}`);
+  await buyer.getByRole("heading", { name: "Ali Art" }).waitFor();
+  await buyer.getByRole("link", { name: /Baghdad Nights/ }).click();
+  await buyer.getByText("Designed by").waitFor();
+  const sizes = buyer.locator('[role=radiogroup] [role=radio]:not([data-disabled=true])');
+  await buyer.getByRole("radiogroup", { name: "Select size" }).getByRole("radio").first().click();
+  await buyer.getByRole("button", { name: "+" }).first().click(); // two pieces
+  void sizes;
+  await buyer.getByRole("button", { name: "Add to bag" }).click();
+  await buyer.getByRole("dialog", { name: "Your bag" }).waitFor();
+  await buyer.goto(`${BASE}/en/checkout`);
+  await buyer.fill("#customer_name", "Creator Fan");
+  await buyer.fill("#phone", "07809990022");
+  await buyer.selectOption("#governorate", "najaf");
+  await buyer.fill("#city", "Kufa");
+  await buyer.fill("#address_line", "Main road");
+  await buyer.getByRole("button", { name: "Place order" }).click();
+  await buyer.waitForURL(/success/);
+  const number = new URL(buyer.url()).searchParams.get("order");
+  await buyerCtx.close();
+  const earn = await one("select e.amount, e.status, e.markup, e.commission_value, e.quantity, o.id as order_id from creator_earnings e join orders o on o.id = e.order_id where o.order_number = $1", [number]);
+  assert.deepEqual([earn.amount, earn.status, earn.markup, earn.commission_value, earn.quantity], [8400, "pending", 6000, 70, 2], "70% of 6,000 × 2, computed by the server");
+  // later rule changes don't rewrite history
+  await db.query("update website_settings set value = value || '{\"commission_value\":10}'::jsonb where key = 'creators'");
+  assert.equal((await one("select amount from creator_earnings where order_id = $1", [earn.order_id])).amount, 8400);
+  await db.query("update website_settings set value = value || '{\"commission_value\":70}'::jsonb where key = 'creators'");
+
+  // 6) the creator sees the sale (no customer data), then the order completes
+  await page.goto(`${BASE}/en/creator-studio/orders`);
+  await page.getByText(number).waitFor();
+  assert.equal(await page.getByText("Creator Fan").count(), 0, "no customer name");
+  assert.equal(await page.getByText("0780 999 0022").count(), 0, "no customer phone");
+  await db.query("update orders set status = 'delivered' where id = $1", [earn.order_id]);
+  assert.equal((await one("select status from creator_earnings where order_id = $1", [earn.order_id])).status, "cleared");
+  await db.query("update creator_earnings set available_at = now() - interval '1 minute' where order_id = $1", [earn.order_id]);
+  await page.goto(`${BASE}/en/creator-studio`);
+  await page.getByText("Total earnings").waitFor();
+  await page.screenshot({ path: `${SHOTS}/creator-dashboard.png`, fullPage: true });
+
+  // 7) withdraw → staff pay
+  await page.goto(`${BASE}/en/creator-studio/wallet`);
+  await page.getByText("8,400 IQD").first().waitFor();
+  await page.getByLabel("Wallet / account").fill("07712223344");
+  await page.getByRole("button", { name: "Request withdrawal" }).click();
+  await page.getByText(/Request received/).waitFor();
+  await admin.goto(`${BASE}/en/admin/creators/withdrawals`);
+  await admin.locator("section").filter({ hasText: "Ali Art" }).getByRole("button", { name: "Mark paid" }).click();
+  await waitFor("select status from creator_withdrawals where creator_id = $1 order by created_at desc limit 1", [me.user_id], (r) => r.status === "paid");
+  await page.goto(`${BASE}/en/creator-studio/notifications`);
+  await page.getByText(/Your earnings were transferred|تم تحويل أرباحك/).first().waitFor();
+
+  // 8) reports are staff only
+  const csv = await admin.request.get(`${BASE}/api/admin/creators/earnings`);
+  assert.equal(csv.status(), 200);
+  assert.match(await csv.text(), /Baghdad Nights/);
+  assert.equal((await page.request.get(`${BASE}/api/admin/creators/earnings`)).status(), 403, "creators can't read the report");
+  await adminCtx.close();
 });
 
 console.log(results.join("\n"));

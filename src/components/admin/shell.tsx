@@ -35,6 +35,7 @@ export function AdminShell({ children, role, name, badges }: { children: React.R
         { href: `${base}/customizer`, label: t("أداة الطباعة", "Print designer"), icon: Shirt },
         { href: `${base}/designs`, label: t("تصاميم العملاء", "Customer designs"), icon: Brush },
         { href: `${base}/community`, label: t("صفحة تصاميم الزبائن", "Community designs"), icon: Sparkles },
+        { href: `${base}/creators`, label: "TPAC Creators", icon: Brush },
         { href: `${base}/reviews`, label: t("التقييمات", "Reviews"), icon: Star },
       ],
     },

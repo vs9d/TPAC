@@ -7,7 +7,7 @@ import { toast } from "@/components/ui/toast";
 import { checkImageFile, extOf, imageSize, uploadProductImage } from "@/lib/admin-upload";
 import { composeProductImage } from "@/lib/compose";
 import { absolute, clampRect, copyToView, designCm, fitArtwork, mockupFor, normArea, resizeDesign, viewAspect, type PrintAreaRow, type ProductDesignRow, type ProductTypeRow, type TypeViewRow } from "@/lib/print-config";
-import { discardPrintFile, ensureFreeArea } from "@/lib/actions/admin/printing";
+import { discardPrintFile as discardStaffFile, ensureFreeArea } from "@/lib/actions/admin/printing";
 import { cn } from "@/lib/format";
 import type { Color } from "@/lib/types";
 import { DragRect, MockupStage, rectStyle } from "./stage";
@@ -39,10 +39,19 @@ const strip = ({ key: _k, ...d }: Draft): DesignDraft => { void _k; return d; };
  * - Print areas: one design per configured print area, sized within its maximum in cm.
  * Proportions are always kept while resizing; the print size is shown in cm.
  */
+export type StudioUploader = (file: Blob, path: string, contentType: string) => Promise<{ url: string; path: string }>;
+
 export const ProductStudio = forwardRef<StudioHandle, {
   type: ProductTypeRow; colors: Color[]; productId: string; previewColorIds?: string[];
   initialDesigns?: ProductDesignRow[]; initialDisabled?: string[]; initialEnabled?: boolean; initialCover?: string | null;
-}>(function ProductStudio({ type, colors, productId, previewColorIds, initialDesigns = [], initialDisabled = [], initialEnabled = true, initialCover = null }, ref) {
+  /** creators: uploads go through a signed URL from the server (staff upload directly) */
+  uploader?: StudioUploader;
+  /** creators: only the print areas TPAC set (no free placement) */
+  areasOnly?: boolean;
+}>(function ProductStudio({ type, colors, productId, previewColorIds, initialDesigns = [], initialDisabled = [], initialEnabled = true, initialCover = null, uploader, areasOnly = false }, ref) {
+  const upload: StudioUploader = uploader ?? uploadProductImage;
+  // a creator never removes files themselves: the server keeps what each listing really uses
+  const discardPrintFile = (path: string) => (uploader ? Promise.resolve() : discardStaffFile(path));
   const { locale } = useI18n();
   const t = adminT(locale);
   const views = useMemo(() => (type.product_type_views ?? []).filter((v) => v.is_active), [type]);
@@ -57,7 +66,7 @@ export const ProductStudio = forwardRef<StudioHandle, {
   const areasOf = (v?: TypeViewRow) => (v?.product_print_areas ?? []).filter((a) => a.is_active && a.code !== FREE);
   const freeIds = useMemo(() => new Set(Object.values(freeAreas).map((a) => a.id)), [freeAreas]);
   // free placement unless the product already uses the fixed print areas only
-  const [mode, setMode] = useState<"free" | "areas">(() => (initialDesigns.length && initialDesigns.every((d) => !views.some((v) => (v.product_print_areas ?? []).some((a) => a.id === d.area_id && a.code === FREE))) ? "areas" : "free"));
+  const [mode, setMode] = useState<"free" | "areas">(() => (areasOnly ? "areas" : initialDesigns.length && initialDesigns.every((d) => !views.some((v) => (v.product_print_areas ?? []).some((a) => a.id === d.area_id && a.code === FREE))) ? "areas" : "free"));
   const [areaId, setAreaId] = useState<string>(areasOf(view)[0]?.id ?? "");
   const [selKey, setSelKey] = useState<string>("");
   const [busy, setBusy] = useState(false);
@@ -135,7 +144,7 @@ export const ProductStudio = forwardRef<StudioHandle, {
         if (!src) continue;
         const items = active.filter((d) => areaById(d.area_id)?.v.id === v.id).map((d) => ({ url: d.artwork_url, ...absolute(areaById(d.area_id)!.a, d) }));
         const blob = await composeProductImage(src, viewAspect(v), items);
-        const up = await uploadProductImage(blob, `products/${pid}/gen/${crypto.randomUUID()}.jpg`, "image/jpeg");
+        const up = await upload(blob, `products/${pid}/gen/${crypto.randomUUID()}.jpg`, "image/jpeg");
         out.push({ url: up.url, storage_path: up.path, color_id: store, view_id: v.id });
         onProgress?.(++done, jobs.length);
       }
@@ -178,7 +187,7 @@ export const ProductStudio = forwardRef<StudioHandle, {
       const area = target ? areaById(target.area_id)?.a : mode === "free" ? await getFreeArea(view) : fixedArea;
       if (!area) throw new Error("area");
       const size = await imageSize(file);
-      const up = await uploadProductImage(file, `products/${productId}/art/${crypto.randomUUID()}.${extOf(file.type)}`, file.type);
+      const up = await upload(file, `products/${productId}/art/${crypto.randomUUID()}.${extOf(file.type)}`, file.type);
       uploaded.current.push(up.path);
       let rect;
       if (target) rect = resizeDesign(target, area, view, size.width, size.height, target.width);
@@ -209,7 +218,7 @@ export const ProductStudio = forwardRef<StudioHandle, {
     try {
       const r = await run(sel.artwork_url);
       if (!r.changed) { toast.info(t("ما تغيّر شي — جرّب لون ثاني أو خلفية أوضح", "Nothing changed — try another colour or a plainer background")); return; }
-      const up = await uploadProductImage(r.blob, `products/${productId}/art/${crypto.randomUUID()}.png`, "image/png");
+      const up = await upload(r.blob, `products/${productId}/art/${crypto.randomUUID()}.png`, "image/png");
       uploaded.current.push(up.path);
       if (!originals.current[sel.key]) originals.current[sel.key] = { artwork_url: sel.artwork_url, artwork_path: sel.artwork_path, artwork_width: sel.artwork_width, artwork_height: sel.artwork_height };
       else if (sel.artwork_path && sel.artwork_path !== originals.current[sel.key]!.artwork_path && uploaded.current.includes(sel.artwork_path) && !designs.some((x) => x.key !== sel.key && x.artwork_path === sel.artwork_path)) void discardPrintFile(sel.artwork_path);
@@ -268,9 +277,9 @@ export const ProductStudio = forwardRef<StudioHandle, {
 
   return (
     <div className="space-y-4">
-      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/avif" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onFile(f); }} />
+      <input ref={fileRef} type="file" accept={uploader ? "image/png,image/jpeg,image/webp" : "image/png,image/jpeg,image/webp,image/avif"} className="sr-only" aria-label={t("ملف التصميم", "Design file")} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onFile(f); }} />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex rounded-full border border-line p-1" role="tablist" aria-label={t("طريقة الوضع", "Placement mode")}>
+        <div className={cn("flex rounded-full border border-line p-1", areasOnly && "hidden")} role="tablist" aria-label={t("طريقة الوضع", "Placement mode")}>
           <button type="button" role="tab" aria-selected={mode === "free"} onClick={() => { setMode("free"); setSelKey(""); }} className={cn("flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition", mode === "free" ? "bg-pine text-white dark:text-night" : "hover:bg-bone")}><Move className="size-4" /> {t("حر — أي مكان", "Free — anywhere")}</button>
           <button type="button" role="tab" aria-selected={mode === "areas"} onClick={() => setMode("areas")} className={cn("flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition", mode === "areas" ? "bg-pine text-white dark:text-night" : "hover:bg-bone")}><ScanLine className="size-4" /> {t("مناطق الطباعة", "Print areas")}</button>
         </div>
@@ -340,12 +349,12 @@ export const ProductStudio = forwardRef<StudioHandle, {
         </div>
 
         <div className="space-y-4 lg:col-span-2">
-          <label className="flex items-center justify-between gap-3 rounded-2xl border border-line p-3 text-sm font-semibold">
+          <label className={cn("flex items-center justify-between gap-3 rounded-2xl border border-line p-3 text-sm font-semibold", uploader && "hidden")}>
             {t("الطباعة مفعّلة لهذا المنتج", "Printing enabled for this product")}
             <input type="checkbox" className="size-5 accent-[var(--color-pine)]" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
           </label>
 
-          {view.code === "combo" && (
+          {view.code === "combo" && !areasOnly && (
             <div className="rounded-2xl border border-amber/40 bg-amber/5 p-3">
               <p className="text-xs text-mute">{t("صورة وحدة بيها الظهر والأمام — تصير الصورة الرئيسية للمنتج إذا حطيت عليها تصميم.", "One photo with the back and the front — it becomes the product's main photo once it has artwork.")}</p>
               <button type="button" disabled={busy || !enabled} onClick={copyHere} className="btn btn-outline btn-sm mt-2 w-full"><Copy className="size-4" /> {t("انسخ تصميم الأمام والخلف هنا", "Copy the front & back artwork here")}</button>
@@ -376,7 +385,7 @@ export const ProductStudio = forwardRef<StudioHandle, {
                       <span className="block text-sm font-bold">{locale === "ar" ? a.name_ar : a.name_en}</span>
                       <span className="block text-xs text-mute">{t("حتى", "up to")} {a.max_width_cm}×{a.max_height_cm} cm{d ? ` · ${t("فيها تصميم", "has artwork")}` : ""}</span>
                     </button>
-                    <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" className="accent-ink" checked={!disabled.includes(a.id)} onChange={() => toggleArea(a.id)} /> {t("متاحة", "On")}</label>
+                    {!uploader && <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" className="accent-ink" checked={!disabled.includes(a.id)} onChange={() => toggleArea(a.id)} /> {t("متاحة", "On")}</label>}
                   </div>
                 );
               })}

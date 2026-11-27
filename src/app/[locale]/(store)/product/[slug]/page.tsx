@@ -15,6 +15,8 @@ import { publicEnv } from "@/lib/env";
 import { formatDate } from "@/lib/format";
 import { customerUploadsEnabled } from "@/lib/designer-settings";
 import { getGiftBox } from "@/lib/gift-box";
+import { getCreatorById } from "@/lib/creators";
+import { CreatorViewTracker } from "@/components/creators/view-tracker";
 import { Amiri } from "next/font/google";
 
 // the calligraphic face the gift box lid is previewed in (same as in the studio)
@@ -49,8 +51,10 @@ export default async function ProductPage({ params }: Props) {
   const { locale, slug } = await params;
   if (!isLocale(locale)) notFound();
   const dict = getDictionary(locale);
-  const product = await getProductBySlug(slug);
-  if (!product) notFound();
+  const found = await getProductBySlug(slug);
+  if (!found) notFound();
+  // a switched-off colour / size is never offered (creators' listings keep old variants for past orders)
+  const product = { ...found, product_variants: found.product_variants.filter((v) => v.is_active !== false) };
   const [sizes, reviews, related, session, customStudio, giftBox] = await Promise.all([
     getSizes(),
     getReviews(product.id),
@@ -59,6 +63,9 @@ export default async function ProductPage({ params }: Props) {
     customerUploadsEnabled(),
     getGiftBox().catch(() => null),
   ]);
+  // TPAC Creators: whose design this is
+  const creatorId = (product as unknown as { creator_id?: string | null }).creator_id;
+  const creator = creatorId ? await getCreatorById(creatorId).catch(() => null) : null;
   let favorite = false;
   if (session) {
     const supabase = await createClient();
@@ -120,6 +127,19 @@ export default async function ProductPage({ params }: Props) {
         <span className="text-ink">{name}</span>
       </nav>
 
+      {creator && <CreatorViewTracker creatorId={creator.user_id} productId={product.id} />}
+      {creator && (
+        <Link href={`/${locale}/creator/${creator.username}`} className="mb-5 flex w-fit items-center gap-3 rounded-full border border-line bg-paper py-1.5 pe-4 ps-1.5 text-sm transition hover:border-pine">
+          <span className="grid size-9 place-items-center overflow-hidden rounded-full bg-bone">
+            {creator.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={creator.avatar_url} alt="" className="size-full object-cover" />
+            ) : <span className="text-xs font-bold">{creator.display_name.slice(0, 1)}</span>}
+          </span>
+          <span><span className="block text-[11px] text-mute">{locale === "ar" ? "تصميم" : "Designed by"}</span><span className="font-bold">{creator.display_name}</span></span>
+          <span className="ms-2 text-xs font-semibold text-pine">{locale === "ar" ? "💚 تدعمه بكل قطعة" : "💚 supported by every piece"}</span>
+        </Link>
+      )}
       <ProductView product={product} sizeOrder={sizes.map((s) => s.code)} garment={garment} initialFavorite={favorite} signedIn={!!session} customStudio={customStudio} giftBox={giftBox} boxFont={amiri.style.fontFamily} />
 
       <section className="mt-20 border-t border-line pt-12" aria-labelledby="reviews">

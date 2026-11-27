@@ -53,6 +53,7 @@ export function Footer({ locale, dict, settings, categories }: { locale: Locale;
             <li><Link href={L("/couples")} className="hover:text-amber">{locale === "ar" ? "للمرتبطين" : "For couples"}</Link></li>
             <li><Link href={L("/group")} className="hover:text-amber">{locale === "ar" ? "طلب جماعي برابط" : "Group order by link"}</Link></li>
             <li><Link href={L("/community")} className="hover:text-amber">{locale === "ar" ? "تصاميم الزبائن" : "Customer designs"}</Link></li>
+            <li><Link href={L("/creators")} className="hover:text-amber">TPAC Creators</Link></li>
             <li><Link href={L("/portfolio")} className="hover:text-amber">{locale === "ar" ? "أعمالنا" : "Our work"}</Link></li>
             <li><Link href={L("/pages/privacy")} className="hover:text-amber">{dict.footer.privacy}</Link></li>
             <li><Link href={L("/pages/terms")} className="hover:text-amber">{dict.footer.terms}</Link></li>

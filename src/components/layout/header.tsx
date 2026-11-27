@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Menu, Search, ShoppingBag, User, X, Heart, Paintbrush, Building2, Star, PackageSearch, LayoutDashboard, Ruler, Images } from "lucide-react";
+import { ArrowLeft, ArrowRight, Menu, Search, ShoppingBag, User, X, Heart, Paintbrush, Building2, Star, PackageSearch, LayoutDashboard, Ruler, Images, Sparkles } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { useCart, cartCount } from "@/components/cart/store";
 import { Logo } from "@/components/ui/logo";
@@ -147,6 +147,7 @@ export function Header({ categories, signedIn, isStaff }: { categories: NavCateg
                     { href: L("/design"), label: dict.nav.customDesign, icon: Paintbrush, brand: true },
                     { href: L("/couples"), label: locale === "ar" ? "للمرتبطين 💞" : "For couples 💞", icon: Heart },
                     { href: L("/bulk"), label: dict.nav.bulk, icon: Building2 },
+                    { href: L("/creators"), label: locale === "ar" ? "TPAC Creators — للمصممين" : "TPAC Creators", icon: Sparkles },
                     { href: L("/portfolio"), label: locale === "ar" ? "أعمالنا" : "Our work", icon: Images },
                     { href: L("/reviews"), label: dict.reviews.navLabel, icon: Star },
                     { href: L("/size-finder"), label: locale === "ar" ? "اعرف قياسك" : "Find your size", icon: Ruler },
