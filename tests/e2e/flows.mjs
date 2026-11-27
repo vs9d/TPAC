@@ -1955,6 +1955,16 @@ await flow("TPAC Creators: join → approval → design on the official mockup w
   await page.getByText("Saved ✓").first().waitFor();
   assert.equal((await one("select email_notifications from creators where user_id = $1", [me.user_id])).email_notifications, false);
 
+  // 7c) privacy: the public never sees a creator's orders, sales or views
+  for (const path of [`/en/creators/top`, `/en/creators/top?range=all`, `/en/creators`, `/en/creator/${uname}`]) {
+    const visitor = await browser.newPage();
+    await visitor.goto(`${BASE}${path}`);
+    const html = await visitor.content();
+    assert.ok(!/\d[\d,]*\s*(views?|completed|pcs|sold|orders?)\b|\d[\d,]*\s*(مشاهدة|طلب|قطعة)/i.test(await visitor.locator("main").innerText()), `no sales or views on ${path}`);
+    assert.ok(!/"(pieces|orders|views|view_count)":/.test(html), `no counts in the page data on ${path}`);
+    await visitor.close();
+  }
+
   // 8) reports are staff only
   const csv = await admin.request.get(`${BASE}/api/admin/creators/earnings`);
   assert.equal(csv.status(), 200);

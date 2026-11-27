@@ -26,9 +26,13 @@ export async function creatorListings(creatorId: string, opts: { publishedOnly?:
   }));
 }
 
-export interface CreatorCard { user_id: string; username: string; display_name: string; avatar_url: string | null; cover_url: string | null; bio: string | null; pieces: number; orders: number; views: number; designs: number }
+/** What the public may see about a creator in a list: never sales, orders or views (those are private to the creator and staff). */
+export interface CreatorCard { user_id: string; username: string; display_name: string; avatar_url: string | null; cover_url: string | null; bio: string | null; designs: number }
 
-/** Ranking of approved creators: pieces sold (this month or all time), completed orders, page + product views. */
+/**
+ * Ranking of approved creators: pieces sold (this month or all time), then completed orders, then views.
+ * The numbers are only used to order the list here on the server; the result carries the public fields only.
+ */
 export const topCreators = cache(async (range: "month" | "all" = "month", limit = 24): Promise<CreatorCard[]> => {
   if (!isSupabaseConfigured()) return [];
   const db = createAdminClient();
@@ -48,10 +52,11 @@ export const topCreators = cache(async (range: "month" | "all" = "month", limit 
   }
   for (const s of (stats ?? []) as { creator_id: string; page_views: number; product_views: number }[]) get(s.creator_id).views += s.page_views + s.product_views;
   for (const l of (listings ?? []) as { creator_id: string }[]) get(l.creator_id).designs += 1;
-  return ((creators ?? []) as Omit<CreatorCard, "pieces" | "orders" | "views" | "designs">[])
-    .map((c) => { const a = get(c.user_id); return { ...c, pieces: a.pieces, orders: a.orders.size, views: a.views, designs: a.designs }; })
-    .sort((a, b) => b.pieces - a.pieces || b.orders - a.orders || b.views - a.views || b.designs - a.designs)
-    .slice(0, limit);
+  return ((creators ?? []) as Omit<CreatorCard, "designs">[])
+    .map((c) => ({ c, a: get(c.user_id) }))
+    .sort((x, y) => y.a.pieces - x.a.pieces || y.a.orders.size - x.a.orders.size || y.a.views - x.a.views || y.a.designs - x.a.designs)
+    .slice(0, limit)
+    .map(({ c, a }) => ({ ...c, designs: a.designs }));
 });
 
 export interface EarningRow {

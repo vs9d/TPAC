@@ -21,7 +21,7 @@ export default async function TopCreatorsPage({ params, searchParams }: { params
       <header className="space-y-3">
         <p className="eyebrow flex items-center gap-2 text-pine"><Trophy className="size-4" aria-hidden="true" /> Top Creators</p>
         <h1 className="display text-3xl md:text-5xl">{ar ? "أفضل مبدعين TPAC" : "TPAC's top creators"}</h1>
-        <p className="max-w-2xl text-mute">{ar ? "الترتيب حسب القطع المباعة، ثم الطلبات المكتملة، ثم المشاهدات. ادعم مبدعك المفضل بطلب قطعة من تصاميمه." : "Ranked by pieces sold, then completed orders, then views. Back your favourite with a piece from their designs."}</p>
+        <p className="max-w-2xl text-mute">{ar ? "المبدعين الأكثر طلباً. ادعم مبدعك المفضل بطلب قطعة من تصاميمه." : "The most loved creators. Back your favourite with a piece from their designs."}</p>
         <nav className="flex gap-1 rounded-full border border-line bg-bone p-1 text-sm font-bold sm:w-fit">
           {([["month", ar ? "هذا الشهر" : "This month"], ["all", ar ? "كل الوقت" : "All time"]] as const).map(([k, l]) => (
             <Link key={k} href={`/${locale}/creators/top?range=${k}`} className={cn("rounded-full px-4 py-2", range === k ? "bg-ink text-paper" : "text-mute")}>{l}</Link>
@@ -30,7 +30,7 @@ export default async function TopCreatorsPage({ params, searchParams }: { params
       </header>
       {list.length === 0 ? <p className="rounded-[1.5rem] bg-bone p-8 text-center text-mute">{ar ? "قريباً." : "Coming soon."}</p> : (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {list.map((c, i) => <CreatorCardView key={c.user_id} c={c} locale={locale} rank={i + 1} stat={ar ? `${c.pieces} قطعة · ${c.orders} طلب مكتمل · ${c.views} مشاهدة` : `${c.pieces} pcs · ${c.orders} completed · ${c.views} views`} />)}
+          {list.map((c, i) => <CreatorCardView key={c.user_id} c={c} locale={locale} rank={i + 1} stat={ar ? `${c.designs} تصميم` : `${c.designs} designs`} />)}
         </div>
       )}
     </div>
