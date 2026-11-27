@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Canvas as FabricCanvas, FabricObject, IText as FabricIText } from "fabric";
-import { Copy, Download, Eye, EyeOff, HeartHandshake, Loader2, Move, Redo2, Send, Share2, ShoppingBag, Type as TypeIcon, Undo2, Upload, X } from "lucide-react";
+import { Copy, Download, Eye, EyeOff, HeartHandshake, Loader2, Move, Redo2, Send, Share2, ShoppingBag, Sparkles, Type as TypeIcon, Undo2, Upload, X } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { useCart } from "@/components/cart/store";
 import { toast } from "@/components/ui/toast";
@@ -22,6 +22,7 @@ import { ReferencePanel, emptyReference, type ReferenceState } from "./reference
 import { ShareDialog, ShareBanner } from "./share";
 import { createDesignShare, getDesignShare, savePartnerPiece, type SharedPiece } from "@/lib/actions/share";
 import { publishCommunityDesign } from "@/lib/actions/community";
+import { PublishDialog, type PublishForm } from "./publish";
 import type { CommunityForStudio } from "@/lib/data/community";
 
 const MAX_HISTORY = 60;
@@ -74,8 +75,8 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
   const [notes, setNotes] = useState("");
   const [designName, setDesignName] = useState("");
   const [boxText, setBoxText] = useState("");
-  // offer the design to the community page (waits for the admin's approval)
-  const [publish, setPublish] = useState({ on: false, title: "", name: "", phone: "" });
+  // the community page: a design is offered on its own (nothing goes to the bag), then waits for approval
+  const [publishing, setPublishing] = useState<{ front: string; back: string; fabric: string } | null>(null);
   // "I don't have the design": photos of a piece the customer wants copied
   const [reference, setReference] = useState<ReferenceState>(emptyReference);
 
@@ -1093,6 +1094,31 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
     }
   };
 
+  /** Opens the publish dialog with fresh previews (front and back) of what is on the canvas. */
+  const openPublish = async () => {
+    if (!design().some((o) => !o.tpacHidden)) {
+      toast.error(dict.designer.emptyDesign);
+      return;
+    }
+    setPreparing(true);
+    try {
+      setPublishing({ front: await compact(await exportView("front")), back: await compact(await exportView("back")), fabric: serialize() });
+    } finally {
+      setPreparing(false);
+    }
+  };
+  const sendPublish = async (f: PublishForm): Promise<boolean> => {
+    if (!publishing) return false;
+    const r = await publishCommunityDesign({
+      garment_type: garmentCode, color_id: liveRef.current.colorId, fabric: JSON.parse(publishing.fabric),
+      preview_front: publishing.front, preview_back: publishing.back,
+      title: f.title.trim(), designer_name: f.name.trim(), designer_phone: f.phone.trim() || undefined,
+    }).catch(() => null);
+    if (r?.ok) return true;
+    toast.error(r?.error === "rate_limited" ? dict.checkout.errors.rate_limited! : r?.error === "artwork" ? t("وحدة من الصور ما تنفع للنشر — ارفعها مرة ثانية", "One of the images can't be published — upload it again") : r?.error === "validation" && f.phone.trim() ? t("تأكد من رقم الهاتف", "Check the phone number") : dict.common.somethingWrong);
+    return false;
+  };
+
   const download = async () => {
     setPreparing(true);
     try {
@@ -1128,14 +1154,9 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       uploads_disabled: t("رفع التصاميم الخاصة متوقف حالياً", "Uploading your own designs is paused right now"),
       save_failed: t("تعذّر حفظ التصميم — حاول بعد قليل", "Couldn't save the design — try again shortly"),
     };
-    if (publish.on && (publish.title.trim().length < 2 || publish.name.trim().length < 2)) {
-      toast.error(t("اكتب اسم التصميم واسمك حتى ننشره", "Write a design title and your name to publish it"));
-      return;
-    }
     const extras = pickedRows.filter((o) => o.group_code !== "package" || o.price > 0).map(optionLabel).join(" · ");
     const pieces = review.pieces;
     startSaving(async () => {
-      let firstSaved: string | null = null;
       for (const [i, p] of pieces.entries()) {
         const label = pieces.length > 1 ? ` (${t(`للمرتبطين ${i + 1}/2`, `couple ${i + 1}/2`)})` : "";
         // nothing drawn on the piece (only a photo request): the bag shows the customer's photo instead of a blank garment
@@ -1166,7 +1187,6 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
           toast.error((pieces.length > 1 ? t(`القطعة ${i + 1}: `, `Piece ${i + 1}: `) : "") + (errorText[res.error] ?? dict.common.somethingWrong));
           return;
         }
-        if (i === 0) firstSaved = res.lines[0]?.design_id ?? null;
         const col = colors.find((c) => c.id === p.colorId);
         for (const l of res.lines) {
           addToCart({
@@ -1186,13 +1206,6 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             },
           });
         }
-      }
-      // offered to the community page: the first saved piece, with its layout
-      const firstId = firstSaved;
-      if (publish.on && firstId && pieces.length === 1 && pieces[0]!.fabric) {
-        const pr = await publishCommunityDesign({ design_id: firstId, title: publish.title.trim(), designer_name: publish.name.trim(), designer_phone: publish.phone.trim() || undefined, fabric: JSON.parse(pieces[0]!.fabric) }).catch(() => null);
-        if (pr?.ok) toast.success(t("وصل تصميمك لصفحة «تصاميم الزبائن» — يظهر بعد موافقتنا", "Your design was sent to “Customer designs” — it appears once we approve it"));
-        else toast.error(t("انضاف للسلة، بس ما قدرنا ننشره — حاول مرة ثانية من تصميم جديد", "Added to your bag, but we couldn't publish it"));
       }
       setReview(null);
       setReference(emptyReference());
@@ -1325,6 +1338,15 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             />
           </div>
 
+          {/* the community page: its own action, separate from ordering */}
+          {!couple && role === "owner" && !initialCommunity && layers.some((l) => !l.hidden) && (
+            <div className="px-4 pt-2">
+              <button type="button" onClick={() => void openPublish()} disabled={!ready || preparing} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-amber/60 bg-amber/5 px-4 py-2.5 text-sm font-bold transition hover:bg-amber/10">
+                <Sparkles className="size-4 text-amber-deep" aria-hidden="true" /> {t("انشر تصميمك بصفحة «تصاميم الزبائن»", "Publish your design on “Customer designs”")}
+              </button>
+            </div>
+          )}
+
           {/* placements */}
           <div className="flex justify-center gap-1 overflow-x-auto px-4 pb-1 pt-2" role="tablist" aria-label={dict.designer.location}>
             {availableLocations.map((l) => {
@@ -1419,6 +1441,7 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
       </div>
 
       {shareOpen && inviteHref && <ShareDialog href={inviteHref} onClose={() => setShareOpen(false)} />}
+      {publishing && <PublishDialog front={publishing.front} back={publishing.back} onClose={() => setPublishing(null)} onSubmit={sendPublish} />}
 
       {review && (
         <ReviewDialog
@@ -1427,7 +1450,6 @@ export function Designer({ garments, locations, colors, fonts, options, tiers, s
             return { front: p.front, back: p.back, sides: p.sides, colorName: p.colorName, colorHex: p.colorHex, sizes: p.sizes, placements: p.used.map((l) => dict.designer.locations[l] ?? l), unit: discountedUnit(list, pct), listUnit: list };
           })}
           reference={refOn ? { urls: reference.items.map((x) => x.url), note: reference.note.trim() } : undefined}
-          publish={!couple && role === "owner" && !initialCommunity && review.pieces[0]!.objects.length > 0 ? { value: publish, onChange: setPublish } : undefined}
           warnings={warnings} saving={saving} garmentName={locale === "ar" ? garment.name_ar : garment.name_en} extras={pickedRows.map(optionLabel)} pct={pct}
           notice={locale === "ar" ? settings.notice_ar : settings.notice_en}
           onClose={() => setReview(null)} onConfirm={confirmSave}

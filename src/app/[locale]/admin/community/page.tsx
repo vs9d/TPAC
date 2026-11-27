@@ -14,7 +14,7 @@ import { formatDate, formatIQD, cn } from "@/lib/format";
 import { formatIraqiPhone } from "@/lib/phone";
 
 const STATUS = ["pending", "approved", "rejected", "hidden"] as const;
-type Row = { id: string; title: string; designer_name: string; designer_phone: string | null; garment_type: string; status: (typeof STATUS)[number]; preview_front_path: string | null; preview_back_path: string | null; image_front: string | null; reward_per_sale: number; rewards_paid: number; created_at: string };
+type Row = { id: string; artwork_ids: string[]; title: string; designer_name: string; designer_phone: string | null; garment_type: string; status: (typeof STATUS)[number]; preview_front_path: string | null; preview_back_path: string | null; image_front: string | null; reward_per_sale: number; rewards_paid: number; created_at: string };
 
 export default async function AdminCommunity({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ status?: string }> }) {
   const { locale } = await params;
@@ -24,7 +24,7 @@ export default async function AdminCommunity({ params, searchParams }: { params:
   const sp = await searchParams;
   const status = (STATUS as readonly string[]).includes(sp.status ?? "") ? (sp.status as Row["status"]) : "pending";
   const db = createAdminClient();
-  const { data, error } = await db.from("community_designs").select("id, title, designer_name, designer_phone, garment_type, status, preview_front_path, preview_back_path, image_front, reward_per_sale, rewards_paid, created_at").eq("status", status).order("created_at", { ascending: false }).limit(100);
+  const { data, error } = await db.from("community_designs").select("id, artwork_ids, title, designer_name, designer_phone, garment_type, status, preview_front_path, preview_back_path, image_front, reward_per_sale, rewards_paid, created_at").eq("status", status).order("created_at", { ascending: false }).limit(100);
   const rows = (data ?? []) as Row[];
   // pieces sold from each design: its customers' designs → order lines → orders that were not cancelled
   const sold = new Map<string, number>();
@@ -42,7 +42,11 @@ export default async function AdminCommunity({ params, searchParams }: { params:
       }
     }
   }
-  const urls = await signedUrls(rows.flatMap((r) => [r.preview_front_path, r.preview_back_path].filter(Boolean) as string[]));
+  // the real files that would be published — check them, not only the previews
+  const artIds = [...new Set(rows.flatMap((r) => r.artwork_ids ?? []))];
+  const { data: arts } = artIds.length ? await db.from("uploaded_artwork").select("id, storage_path, mime_type").in("id", artIds) : { data: [] };
+  const artPath = new Map(((arts ?? []) as { id: string; storage_path: string; mime_type: string }[]).map((a) => [a.id, a.storage_path]));
+  const urls = await signedUrls([...rows.flatMap((r) => [r.preview_front_path, r.preview_back_path].filter(Boolean) as string[]), ...artPath.values()]);
   const base = `/${locale}/admin/community`;
   const label: Record<Row["status"], string> = { pending: t("بانتظار الموافقة", "Pending"), approved: t("منشورة", "Published"), rejected: t("مرفوضة", "Rejected"), hidden: t("مخفية", "Hidden") };
 
@@ -65,6 +69,14 @@ export default async function AdminCommunity({ params, searchParams }: { params:
                 <div className="grid grid-cols-2 gap-2">
                   {[front, back].map((u, i) => u ? <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="relative block aspect-[6/7] overflow-hidden rounded-xl bg-bone"><Image src={u} alt="" fill sizes="200px" className="object-contain" unoptimized /></a> : <div key={i} className="aspect-[6/7] rounded-xl bg-bone" />)}
                 </div>
+                {(r.artwork_ids ?? []).length > 0 && (
+                  <div className="mt-3">
+                    <p className="mb-1.5 text-xs font-semibold text-mute">{t("الصور الأصلية بالتصميم", "Original images in the design")}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {r.artwork_ids.map((a) => { const p = artPath.get(a); const u = p ? urls[p] : null; return u ? <a key={a} href={u} target="_blank" rel="noopener noreferrer" className="relative block size-16 overflow-hidden rounded-lg border border-line bg-bone"><Image src={u} alt="" fill sizes="64px" className="object-contain" unoptimized /></a> : null; })}
+                    </div>
+                  </div>
+                )}
                 <dl className="mt-3 space-y-1 text-sm">
                   <div className="flex justify-between gap-2"><dt className="text-mute">{t("المصمم", "Designer")}</dt><dd className="font-semibold">{r.designer_name}</dd></div>
                   {r.designer_phone && <div className="flex justify-between gap-2"><dt className="text-mute">{t("الهاتف", "Phone")}</dt><dd><a className="inline-flex items-center gap-1 font-semibold underline" href={`https://wa.me/${r.designer_phone}`} target="_blank" rel="noopener noreferrer" dir="ltr"><MessageCircle className="size-3.5" /> {formatIraqiPhone(r.designer_phone)}</a></dd></div>}

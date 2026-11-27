@@ -1648,14 +1648,19 @@ await flow("community designs: publish from the studio → admin approves → pu
   await page.getByRole("button", { name: /Upload your design for the/ }).first().waitFor();
   await page.locator("input[type=file]").first().setInputFiles(await pngFile("community-art", "#376352"));
   await page.getByText(/Elements on Front · 1/).waitFor({ timeout: 20000 });
-  await page.getByRole("button", { name: "Review & add to bag" }).click();
-  const dlg = page.getByRole("dialog", { name: "Review your design" });
-  await dlg.getByRole("checkbox", { name: /Publish my design/ }).check();
+  const designsBefore = (await one("select count(*)::int n from custom_designs")).n;
+  // publishing is its own step: nothing goes to the bag
+  await page.getByRole("button", { name: /Publish your design on/ }).click();
+  const dlg = page.getByRole("dialog", { name: "Publish your design" });
+  await dlg.getByRole("img", { name: "Front" }).waitFor();
   await dlg.getByLabel("Design title").fill(title);
-  await dlg.getByLabel("Your name").fill("Zainab");
-  await dlg.getByLabel("Phone for rewards").fill("07701234567");
-  await dlg.getByRole("button", { name: "Confirm & add to bag" }).click();
-  await page.getByText(/it appears once we approve it/).waitFor({ timeout: 40000 });
+  await dlg.getByLabel("Your name (shown)").fill("Zainab");
+  await dlg.getByLabel("Phone for rewards (private)").fill("07701234567");
+  await dlg.getByRole("button", { name: "Send for publishing" }).click();
+  await dlg.getByText(/Sent ✓/).waitFor({ timeout: 30000 });
+  assert.equal((await one("select count(*)::int n from custom_designs")).n, designsBefore, "no design saved for ordering");
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("tpac-cart") ?? "{\"state\":{\"lines\":[]}}").state.lines.length), 0, "the bag is untouched");
+  await dlg.getByRole("button", { name: "Close" }).click();
   const c = await one("select id, status, artwork_ids, fabric, designer_phone from community_designs where title = $1", [title]);
   assert.equal(c.status, "pending");
   assert.equal(c.artwork_ids.length, 1);
@@ -1683,7 +1688,7 @@ await flow("community designs: publish from the studio → admin approves → pu
   await page.getByText(/Elements on Front · 1/).waitFor({ timeout: 20000 });
   await page.getByRole("button", { name: "Review & add to bag" }).click();
   const dlg2 = page.getByRole("dialog", { name: "Review your design" });
-  assert.equal(await dlg2.getByRole("checkbox", { name: /Publish my design/ }).count(), 0, "a community design is not published again");
+  assert.equal(await page.getByRole("button", { name: /Publish your design on/ }).count(), 0, "a community design is not published again");
   await dlg2.getByRole("button", { name: "Confirm & add to bag" }).click();
   await page.getByRole("dialog", { name: "Your bag" }).waitFor({ timeout: 40000 });
   const d = await one("select community_design_id from custom_designs order by created_at desc limit 1");

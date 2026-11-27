@@ -1,6 +1,6 @@
 "use client";
 import Image from "next/image";
-import { AlertTriangle, Check, ImagePlus, Loader2, Sparkles, X } from "lucide-react";
+import { AlertTriangle, Check, ImagePlus, Loader2, X } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { adminT } from "@/lib/admin-i18n";
 import { formatIQD } from "@/lib/format";
@@ -12,12 +12,9 @@ export interface ReviewPieceView {
 }
 
 /** Last look before the design (or both pieces of a couple design) is saved and added to the bag. */
-export type PublishState = { on: boolean; title: string; name: string; phone: string };
-
-export function ReviewDialog({ pieces, reference, publish, warnings, saving, garmentName, extras, pct, notice, onClose, onConfirm, onFix }: {
+export function ReviewDialog({ pieces, reference, warnings, saving, garmentName, extras, pct, notice, onClose, onConfirm, onFix }: {
   pieces: ReviewPieceView[]; reference?: { urls: string[]; note: string }; warnings: string[];
-  /** offer the design to the community page (single piece only) */
-  publish?: { value: PublishState; onChange: (v: PublishState) => void }; saving: boolean; garmentName: string; extras: string[]; pct: number; notice: string;
+ saving: boolean; garmentName: string; extras: string[]; pct: number; notice: string;
   onClose: () => void; onConfirm: () => void; onFix: () => void;
 }) {
   const { locale } = useI18n();
@@ -74,24 +71,6 @@ export function ReviewDialog({ pieces, reference, publish, warnings, saving, gar
               {warnings.map((w) => <p key={w} className="flex items-start gap-2 text-sm"><AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-deep" /> {w}</p>)}
               <button onClick={onFix} className="text-xs font-bold underline">{t("العودة للتعديل", "Go back and fix")}</button>
             </div>
-          )}
-          {publish && (
-            <section className={`space-y-3 rounded-2xl border p-4 ${publish.value.on ? "border-pine bg-pine-soft/40" : "border-line"}`} aria-label={t("انشر تصميمك", "Share your design")}>
-              <label className="flex cursor-pointer items-start gap-3">
-                <input type="checkbox" checked={publish.value.on} onChange={(e) => publish.onChange({ ...publish.value, on: e.target.checked })} className="mt-1 size-5 shrink-0 accent-[#376352]" />
-                <span>
-                  <span className="flex items-center gap-1.5 text-sm font-bold"><Sparkles className="size-4 text-amber-deep" aria-hidden="true" /> {t("انشر تصميمي بصفحة «تصاميم الزبائن»", "Publish my design on “Customer designs”")}</span>
-                  <span className="mt-0.5 block text-xs text-mute">{t("بعد موافقتنا، الناس تكدر تطلبه، وأنت تاخذ مكافأة على كل قطعة تنباع منه.", "Once we approve it, others can order it and you get a reward for every piece sold.")}</span>
-                </span>
-              </label>
-              {publish.value.on && (
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <input className="field" maxLength={60} value={publish.value.title} onChange={(e) => publish.onChange({ ...publish.value, title: e.target.value })} placeholder={t("اسم التصميم", "Design title")} aria-label={t("اسم التصميم", "Design title")} />
-                  <input className="field" maxLength={60} value={publish.value.name} onChange={(e) => publish.onChange({ ...publish.value, name: e.target.value })} placeholder={t("اسمك (يظهر للناس)", "Your name (shown)")} aria-label={t("اسمك", "Your name")} autoComplete="name" />
-                  <input className="field" inputMode="tel" dir="ltr" value={publish.value.phone} onChange={(e) => publish.onChange({ ...publish.value, phone: e.target.value })} placeholder={t("رقمك للمكافأة (مخفي)", "Phone for rewards (private)")} aria-label={t("رقمك للمكافأة", "Phone for rewards")} autoComplete="tel" />
-                </div>
-              )}
-            </section>
           )}
           <p className="rounded-2xl bg-bone p-4 text-xs leading-relaxed text-mute">{notice}</p>
         </div>
