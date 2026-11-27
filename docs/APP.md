@@ -19,7 +19,13 @@ The store installs on a phone as an app, with an icon on the home screen. It ope
 - Build files are cached permanently, and photos are refreshed in the background.
 - Nothing personal is cached: no API responses, no admin pages, no form posts.
 
-### "Get the app"
+### "Get the app" (hidden by default)
+
+- Admin → Settings → "Phone app" → "Show the Get the TPAC app button". It is off until an admin turns it on.
+- While it is off:
+  - The banner, the menu and footer buttons, and the iPhone "install first" message are all hidden.
+  - The browser's own install pop-up is suppressed as well.
+  - The site works as usual, and people who already installed the app keep it.
 
 - **Android:** the browser's own install dialog opens.
 - **iPhone (Safari):** step-by-step instructions (Share → Add to Home Screen).

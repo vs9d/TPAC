@@ -4,7 +4,7 @@ import { Bell, BellOff, BellRing, Loader2 } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
 import { toast } from "@/components/ui/toast";
 import { deletePushSubscription, pushPublicKey, savePushSubscription, sendTestPush } from "@/lib/actions/push";
-import { InstallAppLink } from "./install";
+import { InstallAppLink, useInstallEnabled } from "./install";
 import { cn } from "@/lib/format";
 
 type State = "loading" | "unsupported" | "install-first" | "denied" | "off" | "on";
@@ -30,6 +30,7 @@ export function PushToggle({ context = "orders", className }: { context?: "order
   const ar = locale === "ar";
   const [state, setState] = useState<State>("loading");
   const [pending, start] = useTransition();
+  const installOffered = useInstallEnabled();
 
   useEffect(() => {
     (async () => {
@@ -86,7 +87,8 @@ export function PushToggle({ context = "orders", className }: { context?: "order
       ? (ar ? "يوصلك كل طلب جديد على الموبايل." : "Get every new order on your phone.")
       : (ar ? "توصلك حالة طلبك على الموبايل: تأكيد، شحن، تسليم." : "Get your order updates on your phone: confirmed, shipped, delivered.");
 
-  if (state === "loading" || state === "unsupported") return null;
+  // iPhone without the app, while the admin keeps the app hidden: nothing to offer
+  if (state === "loading" || state === "unsupported" || (state === "install-first" && !installOffered)) return null;
   return (
     <div className={cn("flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-paper p-4", className)} role="group" aria-label={ar ? "إشعارات الموبايل" : "Phone notifications"}>
       <span className={cn("grid size-10 shrink-0 place-items-center rounded-full", state === "on" ? "bg-pine-soft text-pine" : "bg-bone")} aria-hidden>

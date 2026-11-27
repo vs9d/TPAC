@@ -2015,9 +2015,23 @@ await flow("app (PWA): manifest, service worker, offline page, install on iPhone
   await page.goto(`${BASE}/ar/shop`);
   assert.equal(await page.getByText("ماكو اتصال بالإنترنت").count(), 0);
 
-  // iPhone (Safari, not installed): the menu offers the app with step-by-step instructions
+  // the "Get the app" offers are hidden until the admin turns them on
+  await db.query("delete from website_settings where key = 'app'");
   const phone = await browser.newContext({ ...devices["iPhone 13"], serviceWorkers: "block" });
   const ip = await phone.newPage();
+  await ip.goto(`${BASE}/ar/shop`);
+  await ip.getByRole("button", { name: /القائمة|Menu/ }).first().click();
+  await ip.waitForTimeout(7000);
+  assert.equal(await ip.getByRole("button", { name: "نزّل تطبيق TPAC" }).count(), 0, "no install button while off");
+  assert.equal(await ip.getByRole("region", { name: "تطبيق TPAC" }).count(), 0, "no banner while off");
+  await becomeAdmin(page, "pwa");
+  await page.goto(`${BASE}/ar/admin/settings`);
+  const appCard = page.locator("form:has(input[name=show_install])");
+  await appCard.getByLabel(/إظهار زر «نزّل تطبيق TPAC»/).check();
+  await appCard.getByRole("button", { name: "حفظ" }).click();
+  await waitFor("select value from website_settings where key = 'app'", [], (r) => r?.value?.show_install === true);
+
+  // iPhone (Safari, not installed): the menu offers the app with step-by-step instructions
   await ip.goto(`${BASE}/ar`);
   await ip.getByRole("button", { name: /القائمة|Menu/ }).first().click();
   await ip.getByRole("navigation", { name: "القائمة" }).getByRole("button", { name: "نزّل تطبيق TPAC" }).click();

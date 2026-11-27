@@ -7,7 +7,7 @@ import { AnnouncementBar } from "@/components/layout/announcement-bar";
 import { CartDrawer } from "@/components/cart/cart-drawer";
 import { CartSync } from "@/components/cart/cart-sync";
 import { WhatsAppButton } from "@/components/layout/whatsapp-button";
-import { InstallPrompt } from "@/components/pwa/install";
+import { InstallPrompt, InstallSettings } from "@/components/pwa/install";
 import { whatsappNumber } from "@/lib/whatsapp";
 import { getCategories } from "@/lib/data/catalog";
 import { getBanners, getSettings } from "@/lib/data/content";
@@ -21,7 +21,7 @@ export default async function StoreLayout({ children, params }: { children: Reac
   const [categories, announcements, settings, session] = await Promise.all([getCategories(), getBanners("announcement"), getSettings(), getSession()]);
   const nav = categories.filter((c) => !c.parent_id).map((c) => ({ slug: c.slug, name_ar: c.name_ar, name_en: c.name_en }));
   return (
-    <>
+    <InstallSettings enabled={settings.app?.show_install === true}>
       <a href="#main" className="fixed start-2 top-2 z-[100] -translate-y-24 bg-paper p-3 text-sm font-semibold focus:translate-y-0">
         {locale === "ar" ? "انتقل إلى المحتوى" : "Skip to content"}
       </a>
@@ -34,6 +34,6 @@ export default async function StoreLayout({ children, params }: { children: Reac
       <CartSync userId={session?.userId ?? null} />
       <WhatsAppButton number={whatsappNumber(settings.contact.whatsapp)} locale={locale} />
       <InstallPrompt />
-    </>
+    </InstallSettings>
   );
 }

@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   currency: { code: "IQD", symbol_ar: "د.ع", symbol_en: "IQD" },
   languages: { default: "ar", enabled: ["ar", "en"] },
   notifications: { admin_email: "", admin_whatsapp: "", customer_email: true, customer_whatsapp: true, admin_new_order: true, admin_low_stock: true, admin_bulk_request: true },
+  app: { show_install: false },
 };
 
 export const getSettings = cache(async (): Promise<SiteSettings> => {

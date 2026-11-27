@@ -85,6 +85,14 @@ export default async function AdminSettings({ params }: { params: Promise<{ loca
             <Submit className="w-fit" variant="outline">{t("حفظ", "Save")}</Submit>
           </AdminForm>
         </Card>
+        <Card title={t("تطبيق الموبايل", "Phone app")} className="xl:col-span-2">
+          <AdminForm action={saveSettings} className="grid gap-3">
+            <input type="hidden" name="key" value="app" />
+            <Checkbox name="show_install" label={t("إظهار زر «نزّل تطبيق TPAC» للزبائن", "Show the “Get the TPAC app” button to customers")} defaultChecked={s.app.show_install} />
+            <p className="text-xs text-mute">{t("لمن يكون شغّال: يطلع شريط صغير بالموبايل، وزر بالقائمة والفوتر، وزبائن الآيفون ينطلب منهم تنزيل التطبيق حتى توصلهم الإشعارات. لمن يكون مطفّي: كلها تختفي، والموقع يبقى يشتغل عادي، واللي منزّل التطبيق يبقى عنده.", "On: a small banner on phones, a button in the menu and footer, and iPhone customers are asked to install the app for notifications. Off: all hidden; the site works as usual and existing installs keep working.")}</p>
+            <Submit className="w-fit">{t("حفظ", "Save")}</Submit>
+          </AdminForm>
+        </Card>
         <Card title={t("إشعارات الطلبات", "Order notifications")} className="xl:col-span-2">
           <AdminForm action={saveSettings} className="grid gap-3 sm:grid-cols-2">
             <input type="hidden" name="key" value="notifications" />

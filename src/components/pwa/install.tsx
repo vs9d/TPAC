@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Download, MoreVertical, Share, SquarePlus, X } from "lucide-react";
 import { useI18n } from "@/components/i18n-provider";
@@ -20,6 +20,13 @@ declare global { interface Window { __tpacInstall?: PromptEvent | null } }
 const DISMISS_KEY = "tpac-install-dismissed";
 const DISMISS_DAYS = 14;
 const OPEN_EVENT = "tpac:install";
+
+/** Whether the admin shows the "Get the app" offers (Admin → Settings → Phone app). Off by default. */
+const InstallEnabled = createContext(false);
+export function InstallSettings({ enabled, children }: { enabled: boolean; children: React.ReactNode }) {
+  return <InstallEnabled.Provider value={enabled}>{children}</InstallEnabled.Provider>;
+}
+export const useInstallEnabled = () => useContext(InstallEnabled);
 
 function detect(): { installed: boolean; mode: Mode | null } {
   if (typeof window === "undefined") return { installed: false, mode: null };
@@ -66,6 +73,7 @@ const rememberDismiss = () => {
 
 /** Banner (mobile, after a few seconds on browsing pages) + the install sheet; mounted once in the store layout. */
 export function InstallPrompt() {
+  const enabled = useInstallEnabled();
   const { locale } = useI18n();
   const ar = locale === "ar";
   const path = usePathname();
@@ -77,10 +85,10 @@ export function InstallPrompt() {
   const browsing = /^\/(ar|en)(\/(shop|collections|community|creators|creator\/[^/]+|couples|reviews|portfolio|size-finder))?\/?$/.test(path);
 
   useEffect(() => {
-    if (!mode || !browsing || dismissedRecently() || window.innerWidth >= 768) return;
+    if (!enabled || !mode || !browsing || dismissedRecently() || window.innerWidth >= 768) return;
     const t = window.setTimeout(() => setBanner(true), 6000);
     return () => window.clearTimeout(t);
-  }, [mode, browsing]);
+  }, [enabled, mode, browsing]);
 
   const install = useCallback(async () => {
     const e = window.__tpacInstall;
@@ -113,6 +121,7 @@ export function InstallPrompt() {
     rememberDismiss();
   };
 
+  if (!enabled) return null;
   return (
     <>
       {banner && mode && (
@@ -184,9 +193,10 @@ function InstallSheet({ mode, ar, onClose }: { mode: Mode; ar: boolean; onClose:
 
 /** A "Get the app" link for the footer and the menu; hidden when installed or not installable on this device. */
 export function InstallAppLink({ className, children }: { className?: string; children?: React.ReactNode }) {
+  const enabled = useInstallEnabled();
   const { locale } = useI18n();
   const { mode } = useInstall();
-  if (!mode) return null;
+  if (!enabled || !mode) return null;
   return (
     <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN_EVENT))} className={cn("text-start", className)}>
       {children ?? (locale === "ar" ? "نزّل تطبيق TPAC" : "Get the TPAC app")}

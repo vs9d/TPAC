@@ -7,7 +7,7 @@ import { normalizeIraqiPhone } from "@/lib/phone";
 import { PAGE_SLUGS } from "@/lib/content/pages";
 import { bool, str, dbError, logActivity, type ActionState } from "./common";
 
-const KEYS = ["brand", "contact", "social", "checkout", "languages", "notifications"] as const;
+const KEYS = ["brand", "contact", "social", "checkout", "languages", "notifications", "app"] as const;
 type Key = (typeof KEYS)[number];
 
 function build(key: Key, f: FormData): Record<string, unknown> | string {
@@ -36,6 +36,8 @@ function build(key: Key, f: FormData): Record<string, unknown> | string {
     }
     case "languages":
       return { default: s("default") === "en" ? "en" : "ar", enabled: ["ar", "en"] };
+    case "app":
+      return { show_install: bool(f.get("show_install")) };
     case "notifications": {
       const wa = s("admin_whatsapp") ? normalizeIraqiPhone(s("admin_whatsapp")) : "";
       if (wa === null) return "phone";

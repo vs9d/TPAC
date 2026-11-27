@@ -367,4 +367,6 @@ export interface SiteSettings {
     admin_low_stock: boolean;
     admin_bulk_request: boolean;
   };
+  /** The phone app (PWA): whether the "Get the app" button, banner and menu entry are shown. Off by default. */
+  app: { show_install: boolean };
 }
