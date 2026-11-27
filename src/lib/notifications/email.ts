@@ -7,7 +7,7 @@ export function emailConfigured(): boolean {
 
 export async function sendEmail(input: { to: string; subject: string; text: string; html?: string }): Promise<void> {
   if (!emailConfigured()) throw new Error("email_provider_not_configured");
-  const res = await fetch("https://api.resend.com/emails", {
+  const res = await fetch(`${process.env.RESEND_API_BASE || "https://api.resend.com"}/emails`, {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({ from: process.env.EMAIL_FROM, to: [input.to], subject: input.subject, text: input.text, html: input.html }),

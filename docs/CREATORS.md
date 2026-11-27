@@ -4,9 +4,22 @@ A marketplace for designers on top of the existing store. Creators sell designs 
 
 ## Enabling it in production
 
-1. Run `supabase/add-creators.sql` in the Supabase SQL Editor. It is the same file as `migrations/20261128000026_creators.sql`.
+1. Run `supabase/add-creators.sql` and then `supabase/add-creator-email.sql` in the Supabase SQL Editor. They are the same files as `migrations/20261128000026_creators.sql` and `migrations/20261128000027_creator_email.sql`.
 2. Go to Admin → TPAC Creators → Settings and switch on the garments that creators may use (`product_types.creator_enabled`). Each garment can also have its own maximum markup and commission.
 3. Review the platform rules on the same page: commission, minimum withdrawal, return window (hold days), mandatory review, maximum markup and payout methods.
+
+## Email notifications
+
+- Every creator notification is shown in the dashboard and also emailed: account approved, design reviewed, new sale, order completed or cancelled, earning returned, withdrawal approved, paid or rejected, commission changes and staff broadcasts.
+- Email is required for every creator. It is asked for when joining (pre-filled from the TPAC account) and cannot be removed from the profile.
+- A creator can turn off the optional emails from their profile. Account and payout emails are always sent.
+- Sending uses the store's existing Resend setup (`RESEND_API_KEY`, `EMAIL_FROM`). Without it, notifications still appear in the dashboard and the email is marked "not sent". It is never reported as sent.
+- `creator_notifications.email_status` works as a queue, so notifications written by the database triggers (sales and order changes) are emailed too.
+  - Each row is claimed before it is sent, so it is never sent twice. A failed send is retried up to 5 times.
+  - The queue runs after every creator notification and after every order or order status change.
+  - It also runs from the cron route `/api/cron/notifications`, called with `Authorization: Bearer <CRON_SECRET>`.
+- Admins can see each creator's latest emails and their delivery status on the creator's page.
+- The emails never contain customer data.
 
 ## Analysis of the existing store (what is reused)
 
@@ -80,4 +93,4 @@ The store's design and existing flows are unchanged. The additions are a "Design
 
 - Creator discount codes (approved by admin).
 - Monthly contests and challenges with prizes.
-- Email and WhatsApp notifications for creators. Today, creators are notified in the dashboard only.
+- WhatsApp notifications for creators (email is done).

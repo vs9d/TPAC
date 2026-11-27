@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -7,7 +8,7 @@ import { isSupabaseConfigured } from "@/lib/env";
 export type CreatorStatus = "pending" | "approved" | "rejected" | "suspended";
 export interface Creator {
   user_id: string; username: string; display_name: string; bio: string | null; avatar_url: string | null; cover_url: string | null;
-  phone: string | null; email: string | null; socials: Record<string, string>; status: CreatorStatus; review_note: string | null;
+  phone: string | null; email: string | null; email_notifications: boolean; socials: Record<string, string>; status: CreatorStatus; review_note: string | null;
   commission_mode: "percent" | "fixed" | null; commission_value: number | null; created_at: string; approved_at: string | null;
 }
 export interface CreatorSettings {
@@ -80,8 +81,17 @@ export async function creatorBalance(creatorId: string): Promise<Balance> {
   return { pending, cleared_waiting: waiting, available: Math.max(0, ready - withdrawn - requested), withdrawn, requested, total: pending + waiting + ready };
 }
 
+/** In the dashboard, and by email (sent right after the response; failures retried by the next run and the cron route). */
 export async function notifyCreator(creatorId: string, title: string, body: string, link?: string, kind = "info") {
   await createAdminClient().from("creator_notifications").insert({ creator_id: creatorId, title, body, link: link ?? null, kind });
+  emailCreatorsSoon();
+}
+/** Runs the creator email queue after the current response (rows are claimed, so overlapping runs never send twice). */
+export function emailCreatorsSoon() {
+  after(async () => {
+    const { processCreatorEmails } = await import("@/lib/notifications/creator-email");
+    await processCreatorEmails(100).catch((e) => console.error("creator emails", e));
+  });
 }
 
 /** How a store order's status reads for a creator (no customer data ever leaves with it). */

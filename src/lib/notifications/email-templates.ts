@@ -32,7 +32,7 @@ const stepIndex = (s: string) => ({ received: 0, confirmed: 1, preparing: 2, pri
 
 export const statusText = (status: string, l: L) => (STATUS[status] ?? STATUS.received!)[l];
 
-function shell(l: L, ctx: EmailContext, preheader: string, body: string) {
+export function shell(l: L, ctx: EmailContext, preheader: string, body: string) {
   const dir = l === "ar" ? "rtl" : "ltr";
   const align = l === "ar" ? "right" : "left";
   const wa = ctx.whatsapp ? `https://wa.me/${esc(ctx.whatsapp)}` : null;
@@ -130,4 +130,26 @@ export function adminNewOrderEmail(order: Order, items: EmailItem[], ctx: EmailC
   const subject = `🛍️ طلب جديد ${order.order_number} — ${formatIQD(order.total, l)}${order.has_custom_items ? " (تصميم خاص)" : ""}`;
   const text = [`طلب جديد ${order.order_number}`, `${order.customer_name} — ${formatIraqiPhone(order.phone)}`, address.replace(/&[a-z#0-9]+;/g, ""), ...items.map((it) => `• ${it.name_ar} ${it.size_code ?? ""} ×${it.quantity}`), `الإجمالي: ${formatIQD(order.total, l)}`, link].join("\n");
   return { subject, html: shell(l, { ...ctx, whatsapp: null }, `${order.customer_name} — ${formatIQD(order.total, l)}`, body), text };
+}
+
+/* ------------------------------------------------------------------ TPAC Creators */
+
+export interface CreatorEmailInput { name: string; username: string; title: string; body: string | null; link: string | null; kind: string }
+const CREATOR_CTA: Record<string, string> = { sale: "شوف طلباتك", earning: "شوف أرباحك", wallet: "المحفظة", design: "شوف التصميم", account: "افتح لوحتك", admin: "افتح لوحتك" };
+
+/** A creator notification as an email (Arabic, the language of the creator dashboard). */
+export function creatorEmail(n: CreatorEmailInput, ctx: EmailContext) {
+  const path = n.link && n.link.startsWith("/") && !n.link.startsWith("//") ? n.link : "/creator-studio/notifications";
+  const url = `${ctx.siteUrl}/ar${path}`;
+  const cta = CREATOR_CTA[n.kind] ?? "افتح لوحتك";
+  const body = `<tr><td style="padding:28px 28px 8px">
+<p style="margin:0 0 6px;font-size:13px;color:${C.pine};font-weight:bold">TPAC Creators · @${esc(n.username)}</p>
+<h1 style="margin:0 0 10px;font-size:24px;line-height:1.4">${esc(n.title)}</h1>
+<p style="margin:0;font-size:15px;line-height:1.8;color:#333">هلا ${esc(n.name)} 👋${n.body ? `<br>${esc(n.body)}` : ""}</p>
+<p style="margin:22px 0 22px" align="center"><a href="${esc(url)}" style="display:inline-block;background:${C.ink};color:#ffffff;text-decoration:none;font-weight:bold;font-size:15px;padding:13px 30px;border-radius:999px">${cta}</a></p>
+</td></tr>
+<tr><td style="padding:0 28px 20px;font-size:12px;line-height:1.7;color:${C.mute}" align="center">توصلك هاي الرسالة لأنك مبدع بـ TPAC Creators. تكدر توقف الإيميلات الاختيارية من <a href="${esc(ctx.siteUrl)}/ar/creator-studio/profile" style="color:${C.mute}">صفحتك</a>.</td></tr>`;
+  const subject = `${n.title} — TPAC Creators`;
+  const text = [`هلا ${n.name}`, n.title, n.body ?? "", "", `${cta}: ${url}`, "", "TPAC Creators"].join("\n");
+  return { subject, html: shell("ar", ctx, n.body ?? n.title, body), text };
 }

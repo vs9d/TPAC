@@ -28,7 +28,7 @@ export default async function CreatorJoinPage({ params }: { params: Promise<{ lo
           <Link href={`/${locale}/creator-studio`} className="btn btn-brand mt-4 h-12">{ar ? "لوحة المبدع" : "Creator dashboard"}</Link>
         </div>
       ) : (
-        <CreatorJoinForm signedIn={!!session} defaults={{ name: session?.profile?.full_name ?? "", phone: session?.profile?.phone ?? "" }} />
+        <CreatorJoinForm signedIn={!!session} defaults={{ name: session?.profile?.full_name ?? "", phone: session?.profile?.phone ?? "", email: session?.email ?? "" }} />
       )}
     </div>
   );

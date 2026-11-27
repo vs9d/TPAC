@@ -43,6 +43,12 @@ export default async function CreatorStudioLayout({ children, params }: { childr
         </div>
       </header>
       <CreatorStudioNav unread={count ?? 0} username={me.username} />
+      {!me.email && (
+        <p role="alert" className="rounded-2xl border border-danger bg-danger/5 p-4 text-sm">
+          <b>{ar ? "الإيميل مطلوب" : "Email required"}</b> — {ar ? "ضيف إيميلك حتى توصلك إشعارات المبيعات والأرباح." : "add your email to get sales and earnings notifications."}{" "}
+          <Link href={`/${locale}/creator-studio/profile`} className="font-semibold underline">{ar ? "ضيفه هسه" : "Add it now"}</Link>
+        </p>
+      )}
       {children}
     </div>
   );

@@ -11,7 +11,7 @@ import { creatorUpload } from "./upload";
 const SOCIALS = [["instagram", "Instagram"], ["tiktok", "TikTok"], ["facebook", "Facebook"], ["behance", "Behance"], ["website", "Website"]] as const;
 
 /** Becoming a TPAC creator: account (if needed), public name and @username, phone, bio, photo, social links. */
-export function CreatorJoinForm({ signedIn, defaults }: { signedIn: boolean; defaults: { name: string; phone: string } }) {
+export function CreatorJoinForm({ signedIn, defaults }: { signedIn: boolean; defaults: { name: string; phone: string; email: string } }) {
   const { locale } = useI18n();
   const ar = locale === "ar";
   const [pending, start] = useTransition();
@@ -27,8 +27,8 @@ export function CreatorJoinForm({ signedIn, defaults }: { signedIn: boolean; def
     const socials = Object.fromEntries(SOCIALS.map(([k]) => [k, String(fd.get(k) ?? "").trim()]).filter(([, v]) => v));
     start(async () => {
       const r = await joinCreators({
-        username: user, display_name: fd.get("display_name"), phone: fd.get("phone"), bio: fd.get("bio") || undefined, socials,
-        ...(signedIn ? {} : { email: fd.get("email"), password: fd.get("password") }),
+        username: user, display_name: fd.get("display_name"), phone: fd.get("phone"), bio: fd.get("bio") || undefined, socials, email: fd.get("email"),
+        ...(signedIn ? {} : { password: fd.get("password") }),
       });
       if (!r.ok) {
         setErrors(r.fields ?? {});
@@ -37,6 +37,7 @@ export function CreatorJoinForm({ signedIn, defaults }: { signedIn: boolean; def
             : r.error === "email_taken" ? (ar ? "هذا الإيميل عنده حساب — سجّل دخول أولاً" : "That email has an account — sign in first")
               : r.error === "weak_password" ? (ar ? "الرمز ضعيف — ٨ أحرف أو أكثر" : "Password too weak — 8+ characters")
                 : r.error === "already" ? (ar ? "عندك طلب انضمام من قبل" : "You've already applied")
+                  : r.fields?.email ? (ar ? "اكتب إيميل صحيح — عليه توصلك إشعارات المبيعات والأرباح" : "Enter a valid email — sales and earnings notifications go there")
                   : r.fields?.phone ? (ar ? "رقم الهاتف غير صحيح" : "Phone number is not valid")
                     : r.error === "rate_limited" ? (ar ? "محاولات كثيرة — حاول بعد شوي" : "Too many tries — try again shortly") : ar ? "تأكد من الخانات" : "Check the fields",
         );
@@ -45,7 +46,7 @@ export function CreatorJoinForm({ signedIn, defaults }: { signedIn: boolean; def
       if (avatar && !r.needsEmail) {
         try {
           const up = await creatorUpload(avatar, "avatar", avatar.type);
-          await updateCreatorProfile({ display_name: String(fd.get("display_name")), phone: String(fd.get("phone")), bio: String(fd.get("bio") ?? ""), socials, avatar_url: up.url });
+          await updateCreatorProfile({ display_name: String(fd.get("display_name")), phone: String(fd.get("phone")), email: String(fd.get("email") ?? ""), bio: String(fd.get("bio") ?? ""), socials, avatar_url: up.url });
         } catch { /* the photo can be added later from the profile */ }
       }
       // keep the thank-you on screen (a refresh would swap the form for the status box)
@@ -93,12 +94,13 @@ export function CreatorJoinForm({ signedIn, defaults }: { signedIn: boolean; def
           <span className="mb-1.5 block text-sm font-semibold">{ar ? "رقم الهاتف" : "Phone"} <span className="text-danger">*</span></span>
           <input name="phone" required inputMode="tel" dir="ltr" defaultValue={defaults.phone} className={cn("field w-full", err("phone"))} placeholder="07XX XXX XXXX" autoComplete="tel" />
         </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold">{ar ? "البريد الإلكتروني" : "Email"} <span className="text-danger">*</span></span>
+          <input name="email" type="email" required dir="ltr" defaultValue={defaults.email} className={cn("field w-full", err("email"))} autoComplete="email" aria-describedby="creator-email-help" />
+          <span id="creator-email-help" className="mt-1 block text-xs text-mute">{ar ? "عليه توصلك إشعارات المبيعات والأرباح والسحب." : "Sales, earnings and payout notifications are sent here."}</span>
+        </label>
         {!signedIn && (
           <>
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-semibold">{ar ? "البريد الإلكتروني" : "Email"} <span className="text-danger">*</span></span>
-              <input name="email" type="email" required dir="ltr" className={cn("field w-full", err("email"))} autoComplete="email" />
-            </label>
             <label className="block sm:col-span-2">
               <span className="mb-1.5 block text-sm font-semibold">{ar ? "كلمة المرور (٨ أحرف أو أكثر)" : "Password (8+ characters)"} <span className="text-danger">*</span></span>
               <input name="password" type="password" required minLength={8} className={cn("field w-full", err("password"))} autoComplete="new-password" />

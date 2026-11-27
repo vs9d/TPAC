@@ -20,6 +20,18 @@ const extraPlacements = async (locs) => {
 };
 
 const browser = await chromium.launch();
+
+// a stand-in for the email provider (Resend): RESEND_API_BASE points the app here during the tests
+const mails = [];
+const mailServer = (await import("node:http")).createServer((req, res) => {
+  let body = "";
+  req.on("data", (c) => (body += c));
+  req.on("end", () => {
+    try { mails.push(JSON.parse(body)); } catch { /* ignore */ }
+    res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ id: `mail_${mails.length}` }));
+  });
+});
+await new Promise((r) => mailServer.listen(4098, "127.0.0.1", r));
 const results = [];
 async function flow(name, fn, ctxOpts = { viewport: { width: 1366, height: 900 } }) {
   // E2E_ONLY=<text> runs just the flows whose name contains it
@@ -1815,6 +1827,7 @@ await flow("group order with the organiser's design: fixed front, each name on t
 
 await flow("TPAC Creators: join → approval → design on the official mockup with markup → review → store → sale → earnings → withdrawal", async (page) => {
   await db.query(readFileSync(new URL("../../supabase/add-creators.sql", import.meta.url), "utf8"));
+  await db.query(readFileSync(new URL("../../supabase/add-creator-email.sql", import.meta.url), "utf8"));
   await db.query("delete from rate_limits");
   await db.query("update product_types set creator_enabled = (code = 'hoodie'), creator_max_markup = 15000 where true");
   await db.query("update website_settings set value = value || '{\"commission_mode\":\"percent\",\"commission_value\":70,\"review_required\":true,\"min_withdrawal\":1000}'::jsonb where key = 'creators'");
@@ -1825,7 +1838,7 @@ await flow("TPAC Creators: join → approval → design on the official mockup w
   await page.fill("input[name=display_name]", "Ali Art");
   await page.getByLabel("Username").fill(uname);
   await page.fill("input[name=phone]", `0771${String(Date.now()).slice(-7)}`);
-  await page.fill("input[name=email]", `${uname}@thetpac.com`);
+  await page.locator("form:has(input[name=display_name]) input[name=email]").fill(`${uname}@thetpac.com`);
   await page.fill("input[name=password]", "creator-pass-2026");
   await page.fill("textarea[name=bio]", "Street art from Baghdad");
   await page.getByRole("button", { name: "Apply to join" }).click();
@@ -1921,6 +1934,27 @@ await flow("TPAC Creators: join → approval → design on the official mockup w
   await page.goto(`${BASE}/en/creator-studio/notifications`);
   await page.getByText(/Your earnings were transferred|تم تحويل أرباحك/).first().waitFor();
 
+  // 7b) every notification is also emailed — including the ones the database writes (a new sale, a completed order)
+  const inbox = `${uname}@thetpac.com`;
+  for (const kind of ["account", "design", "sale", "earning", "wallet"]) {
+    await waitFor("select bool_and(email_status = 'sent') ok, count(*)::int n from creator_notifications where creator_id = $1 and kind = $2", [me.user_id, kind], (r) => r.n > 0 && r.ok, 20000);
+  }
+  const mine = mails.filter((m) => m.to?.[0] === inbox);
+  assert.ok(mine.some((m) => /تم تحويل أرباحك/.test(m.subject) && /creator-studio\/wallet/.test(m.html)), "payout email with a link to the wallet");
+  assert.ok(mine.some((m) => /بيعة جديدة/.test(m.subject)), "sale email");
+  assert.ok(!mine.some((m) => /Creator Fan|0780 ?999 ?0022/.test(m.html + m.text)), "no customer data in creator emails");
+  // the email can't be removed; optional emails can be turned off (payout emails still go out)
+  await page.goto(`${BASE}/en/creator-studio/profile`);
+  await page.locator("form:has(input[name=display_name]) input[name=email]").fill("");
+  await page.getByRole("button", { name: "Save" }).click();
+  assert.ok(await page.locator("form:has(input[name=display_name]) input[name=email]").evaluate((el) => el.validity.valueMissing), "the form won't send without an email");
+  assert.equal((await one("select email from creators where user_id = $1", [me.user_id])).email, inbox);
+  await page.locator("form:has(input[name=display_name]) input[name=email]").fill(inbox);
+  await page.getByLabel(/Email me notifications/).uncheck();
+  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByText("Saved ✓").first().waitFor();
+  assert.equal((await one("select email_notifications from creators where user_id = $1", [me.user_id])).email_notifications, false);
+
   // 8) reports are staff only
   const csv = await admin.request.get(`${BASE}/api/admin/creators/earnings`);
   assert.equal(csv.status(), 200);
@@ -1929,6 +1963,7 @@ await flow("TPAC Creators: join → approval → design on the official mockup w
   await adminCtx.close();
 });
 
+mailServer.close();
 console.log(results.join("\n"));
 await browser.close();
 await db.end();

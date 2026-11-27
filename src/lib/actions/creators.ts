@@ -29,8 +29,8 @@ const joinSchema = z.object({
   phone: phoneSchema,
   bio: z.string().trim().max(600).optional(),
   socials,
-  // only when there is no account yet
-  email: z.string().trim().toLowerCase().email().max(200).optional(),
+  // required: the creator's notifications are emailed here (with no account yet, it is also the sign-in email)
+  email: z.string().trim().toLowerCase().email().max(200),
   password: z.string().min(8).max(72).optional(),
 });
 
@@ -54,10 +54,10 @@ export async function joinCreators(input: unknown): Promise<{ ok: true; needsEma
   const session = await getSession();
   if (session) {
     userId = session.userId;
-    email = session.email;
+    email = d.email;
     if (await getMyCreator()) return { ok: false, error: "already" };
   } else {
-    if (!d.email || !d.password) return { ok: false, error: "validation", fields: { email: "required", password: "required" } };
+    if (!d.password) return { ok: false, error: "validation", fields: { password: "required" } };
     const supabase = await createClient();
     const { data, error } = await supabase.auth.signUp({
       email: d.email, password: d.password,
@@ -87,6 +87,8 @@ const profileSchema = z.object({
   display_name: z.string().trim().min(2).max(60),
   bio: z.string().trim().max(600).optional(),
   phone: phoneSchema,
+  email: z.string().trim().toLowerCase().email().max(200),
+  email_notifications: z.boolean().default(true),
   socials,
   avatar_url: z.string().max(1000).nullable().optional(),
   cover_url: z.string().max(1000).nullable().optional(),
@@ -102,7 +104,7 @@ export async function updateCreatorProfile(input: unknown): Promise<{ ok: true }
   // pictures must be the creator's own uploads
   if (!ownImage(d.avatar_url, c.user_id) || !ownImage(d.cover_url, c.user_id)) return { ok: false, error: "validation" };
   await createAdminClient().from("creators").update({
-    display_name: d.display_name, bio: d.bio || null, phone: d.phone, socials: cleanSocials(d.socials),
+    display_name: d.display_name, bio: d.bio || null, phone: d.phone, email: d.email, email_notifications: d.email_notifications, socials: cleanSocials(d.socials),
     ...(d.avatar_url !== undefined ? { avatar_url: d.avatar_url } : {}), ...(d.cover_url !== undefined ? { cover_url: d.cover_url } : {}),
     updated_at: new Date().toISOString(),
   }).eq("user_id", c.user_id);

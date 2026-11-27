@@ -89,7 +89,7 @@ async function emailItems(orderId: string): Promise<EmailItem[]> {
 }
 
 /** Links and contact details shown in every email. */
-async function emailContext() {
+export async function emailContext() {
   const { data } = await createAdminClient().from("website_settings").select("key, value").in("key", ["contact", "social"]);
   const get = (k: string) => (data ?? []).find((r) => r.key === k)?.value as Record<string, string> | undefined;
   return { siteUrl: publicEnv.siteUrl, whatsapp: whatsappNumber(get("contact")?.whatsapp), instagram: get("social")?.instagram || null };
@@ -118,6 +118,8 @@ function adminRecipients(s: SiteSettings["notifications"]) {
 
 /** Customer + admin notifications for an order event. Never throws. */
 export async function notifyOrder(orderId: string, event: "created" | "status_changed"): Promise<void> {
+  // a sale or a status change may have written creator notifications (database triggers): email them
+  await import("./creator-email").then((m) => m.processCreatorEmails()).catch((e) => console.error("creator emails", e));
   try {
     const db = createAdminClient();
     const { data } = await db.from("orders").select("*").eq("id", orderId).single();

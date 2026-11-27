@@ -36,10 +36,10 @@ export function CreatorProfileForm({ c }: { c: Creator }) {
   return (
     <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); start(async () => {
       const r = await updateCreatorProfile({
-        display_name: fd.get("display_name"), bio: fd.get("bio") || undefined, phone: fd.get("phone"),
+        display_name: fd.get("display_name"), bio: fd.get("bio") || undefined, phone: fd.get("phone"), email: fd.get("email"), email_notifications: fd.get("email_notifications") === "on",
         socials: Object.fromEntries(SOCIALS.map(([k]) => [k, String(fd.get(k) ?? "").trim()])), avatar_url: avatar, cover_url: cover,
       });
-      if (!r.ok) { toast.error(r.fields?.phone ? (ar ? "رقم الهاتف غير صحيح" : "Phone is not valid") : r.fields ? (ar ? "الروابط لازم تبدي بـ https://" : "Links must start with https://") : ar ? "ما انحفظ" : "Not saved"); return; }
+      if (!r.ok) { toast.error(r.fields?.email ? (ar ? "الإيميل مطلوب — اكتب إيميل صحيح" : "Email is required — enter a valid one") : r.fields?.phone ? (ar ? "رقم الهاتف غير صحيح" : "Phone is not valid") : r.fields ? (ar ? "الروابط لازم تبدي بـ https://" : "Links must start with https://") : ar ? "ما انحفظ" : "Not saved"); return; }
       toast.success(ar ? "انحفظت صفحتك ✓" : "Saved ✓");
       router.refresh();
     }); }}>
@@ -66,6 +66,16 @@ export function CreatorProfileForm({ c }: { c: Creator }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block"><span className="mb-1.5 block text-sm font-semibold">{ar ? "الاسم" : "Name"}</span><input name="display_name" defaultValue={c.display_name} maxLength={60} className="field w-full" /></label>
         <label className="block"><span className="mb-1.5 block text-sm font-semibold">{ar ? "الهاتف (مخفي)" : "Phone (private)"}</span><input name="phone" defaultValue={c.phone ?? ""} dir="ltr" inputMode="tel" className="field w-full" /></label>
+      </div>
+      <div className="space-y-3 rounded-2xl border border-line p-4">
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold">{ar ? "الإيميل (مخفي)" : "Email (private)"} <span className="text-danger">*</span></span>
+          <input name="email" type="email" required defaultValue={c.email ?? ""} dir="ltr" className="field w-full" autoComplete="email" />
+        </label>
+        <label className="flex items-start gap-3 text-sm">
+          <input type="checkbox" name="email_notifications" defaultChecked={c.email_notifications !== false} className="mt-1 size-4 accent-ink" />
+          <span><b>{ar ? "وصّلني إشعارات بالإيميل" : "Email me notifications"}</b><br /><span className="text-mute">{ar ? "المبيعات، اكتمال الطلبات، مراجعة التصاميم. إيميلات الحساب والسحب توصلك دائماً." : "Sales, completed orders, design reviews. Account and payout emails are always sent."}</span></span>
+        </label>
       </div>
       <label className="block"><span className="mb-1.5 block text-sm font-semibold">{ar ? "النبذة" : "Bio"}</span><textarea name="bio" defaultValue={c.bio ?? ""} rows={4} maxLength={600} className="field w-full" /></label>
       <fieldset>

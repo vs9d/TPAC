@@ -20,7 +20,10 @@ export default async function AdminCreatorDetail({ params }: { params: Promise<{
   const { data } = await createAdminClient().from("creators").select("*").eq("user_id", id).maybeSingle();
   if (!data) notFound();
   const c = data as Creator;
-  const [b, earnings, listings, s] = await Promise.all([creatorBalance(id), creatorEarnings(id, 300), creatorListings(id), getCreatorSettings()]);
+  const [b, earnings, listings, s, { data: mails }] = await Promise.all([creatorBalance(id), creatorEarnings(id, 300), creatorListings(id), getCreatorSettings(),
+    createAdminClient().from("creator_notifications").select("id, title, created_at, email_status, email_error, emailed_at").eq("creator_id", id).order("created_at", { ascending: false }).limit(8)]);
+  const MAIL: Record<string, [string, string, string]> = { sent: ["انرسل", "Sent", "text-pine"], pending: ["بالانتظار", "Pending", "text-amber-deep"], sending: ["ينرسل", "Sending", "text-amber-deep"], skipped: ["ما انرسل", "Not sent", "text-mute"], failed: ["فشل", "Failed", "text-danger"] };
+  const WHY: Record<string, [string, string]> = { provider_not_configured: ["خدمة الإيميل مو مفعّلة", "Email service not set up"], no_email: ["ماكو إيميل", "No email"], turned_off: ["المبدع موقفها", "Turned off by the creator"], before_email: ["قبل تفعيل الإيميل", "Before email was enabled"] };
   const live = earnings.filter((e) => e.status !== "void");
   const money = (n: number) => formatIQD(n, locale);
   return (
@@ -79,9 +82,27 @@ export default async function AdminCreatorDetail({ params }: { params: Promise<{
               <Submit>{t("حفظ", "Save")}</Submit>
             </AdminForm>
           </Card>
+          <Card title={t("إيميلات الإشعارات", "Notification emails")}>
+            {(mails ?? []).length === 0 ? <p className="text-sm text-mute">{t("ماكو إشعارات بعد.", "No notifications yet.")}</p> : (
+              <ul className="space-y-2 text-sm">
+                {((mails ?? []) as { id: string; title: string; created_at: string; email_status: string; email_error: string | null }[]).map((m) => {
+                  const st = MAIL[m.email_status] ?? MAIL.pending!;
+                  const why = m.email_error ? (WHY[m.email_error] ?? [m.email_error.slice(0, 60), m.email_error.slice(0, 60)]) : null;
+                  return (
+                    <li key={m.id} className="flex items-start justify-between gap-3">
+                      <span className="min-w-0"><span className="block truncate">{m.title}</span><span className="text-xs text-mute">{formatDate(m.created_at, locale)}</span></span>
+                      <span className={cn("shrink-0 text-end text-xs font-semibold", st[2])}>{ar ? st[0] : st[1]}{why && m.email_status !== "sent" ? <span className="block font-normal text-mute">{ar ? why[0] : why[1]}</span> : null}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
           <Card title={t("الحساب", "Account")}>
             <dl className="space-y-1 text-sm">
               <div className="flex justify-between"><dt className="text-mute">{t("الهاتف", "Phone")}</dt><dd dir="ltr">{c.phone}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-mute">{t("الإيميل", "Email")}</dt><dd dir="ltr" className={cn("truncate", !c.email && "text-danger")}>{c.email ?? t("ناقص", "Missing")}</dd></div>
+              <div className="flex justify-between"><dt className="text-mute">{t("إيميلات اختيارية", "Optional emails")}</dt><dd>{c.email_notifications === false ? t("موقفة", "Off") : t("شغّالة", "On")}</dd></div>
               <div className="flex justify-between"><dt className="text-mute">{t("انضم", "Joined")}</dt><dd>{formatDate(c.created_at, locale)}</dd></div>
               {Object.entries(c.socials ?? {}).map(([k, v]) => <div key={k} className="flex justify-between gap-2"><dt className="text-mute">{k}</dt><dd className="truncate"><a className="underline" href={v} target="_blank" rel="noopener noreferrer nofollow">{v}</a></dd></div>)}
             </dl>

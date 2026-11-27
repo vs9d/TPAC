@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assertStaff, assertAdmin } from "@/lib/auth";
-import { getCreatorSettings, notifyCreator, DEFAULT_CREATOR_SETTINGS } from "@/lib/creators";
+import { getCreatorSettings, notifyCreator, emailCreatorsSoon, DEFAULT_CREATOR_SETTINGS } from "@/lib/creators";
 import { bool, str, logActivity, type ActionState } from "./common";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -128,6 +128,7 @@ export async function saveCreatorSettings(_: ActionState, form: FormData): Promi
     const { data: list } = await db.from("creators").select("user_id").eq("status", "approved").is("commission_mode", null);
     const text = next.commission_mode === "percent" ? `صارت ${next.commission_value}% من إضافتك على كل قطعة` : `صارت ${next.commission_value} د.ع لكل قطعة`;
     if ((list ?? []).length) await db.from("creator_notifications").insert(((list ?? []) as { user_id: string }[]).map((c) => ({ creator_id: c.user_id, kind: "earning", title: "تحديث نسبة الأرباح", body: `${text} — للمبيعات الجاية فقط، أرباحك السابقة ما تتغير.`, link: "/creator-studio" })));
+    emailCreatorsSoon();
   }
   await logActivity("creator.settings", "website_settings", null, next);
   refresh();
@@ -160,6 +161,7 @@ export async function broadcastToCreators(_: ActionState, form: FormData): Promi
   const { data } = await db.from("creators").select("user_id").eq("status", "approved");
   const rows = ((data ?? []) as { user_id: string }[]).map((c) => ({ creator_id: c.user_id, kind: "admin", title, body: body || null }));
   if (rows.length) await db.from("creator_notifications").insert(rows);
+  emailCreatorsSoon();
   await logActivity("creator.broadcast", "creator", null, { title, count: rows.length });
   return { ok: true, message: `انرسل لـ ${rows.length}` };
 }

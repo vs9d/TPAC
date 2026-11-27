@@ -37,3 +37,22 @@ describe("order emails", () => {
     expect(m.html).not.toContain("<script>");
   });
 });
+
+describe("creator notification email", () => {
+  it("escapes text, links into the creator dashboard and offers a way to turn optional emails off", async () => {
+    const { creatorEmail } = await import("@/lib/notifications/email-templates");
+    const m = creatorEmail({ name: "<i>علي</i>", username: "ali.art", title: "بيعة جديدة 🎉", body: "هودي × 2 — ربحك 8400 د.ع", link: "/creator-studio/orders", kind: "sale" }, ctx);
+    expect(m.subject).toBe("بيعة جديدة 🎉 — TPAC Creators");
+    expect(m.html).toContain("https://thetpac.com/ar/creator-studio/orders");
+    expect(m.html).toContain("&lt;i&gt;علي&lt;/i&gt;");
+    expect(m.html).not.toContain("<i>علي</i>");
+    expect(m.html).toContain("/ar/creator-studio/profile");
+    expect(m.text).toContain("https://thetpac.com/ar/creator-studio/orders");
+  });
+  it("never links outside the site", async () => {
+    const { creatorEmail } = await import("@/lib/notifications/email-templates");
+    const m = creatorEmail({ name: "a", username: "a", title: "t", body: null, link: "//evil.example/x", kind: "admin" }, ctx);
+    expect(m.html).toContain("https://thetpac.com/ar/creator-studio/notifications");
+    expect(m.html).not.toContain("evil.example");
+  });
+});
