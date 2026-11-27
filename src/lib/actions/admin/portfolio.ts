@@ -6,7 +6,7 @@ import { assertStaff } from "@/lib/auth";
 import { fieldErrors } from "@/lib/validation";
 import { bool, str, dbError, logActivity, type ActionState } from "./common";
 
-const CATEGORIES = ["university", "college", "company", "organization", "custom"] as const;
+const CATEGORIES = ["university", "college", "company", "organization", "sports", "custom"] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const opt = (max: number) => z.string().trim().max(max).optional().transform((v) => (v ? v : null));
 /** images live in the public product-images bucket under portfolio/ (staff-only uploads) or ship with the site (/clients/…) */
@@ -70,6 +70,9 @@ const projectSchema = z.object({
   category: z.enum(CATEGORIES),
   photos: z.array(photo).max(24),
   completed_on: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal("")]).transform((v) => v || null),
+  // a post on Instagram: kept clean (no tracking ?query), instagram.com only
+  instagram_url: z.string().trim().max(300).transform((v) => v.split(/[?#]/)[0]!.replace(/^http:\/\//, "https://").replace(/^https:\/\/instagram\.com/, "https://www.instagram.com"))
+    .refine((v) => v === "" || /^https:\/\/www\.instagram\.com\/[A-Za-z0-9_./-]+$/.test(v), "instagram").transform((v) => v || null),
   is_featured: z.boolean(),
   is_active: z.boolean(),
   sort_order: z.coerce.number().int().min(-1000).max(100000),
@@ -82,7 +85,7 @@ export async function savePortfolioProject(_prev: ActionState, form: FormData): 
   const p = projectSchema.safeParse({
     id: str(form.get("id")) || undefined, client_id: str(form.get("client_id")), title_ar: form.get("title_ar"), title_en: str(form.get("title_en")),
     description_ar: str(form.get("description_ar")), description_en: str(form.get("description_en")), category: form.get("category"), photos,
-    completed_on: str(form.get("completed_on")), is_featured: bool(form.get("is_featured")), is_active: bool(form.get("is_active")), sort_order: form.get("sort_order") || 0,
+    completed_on: str(form.get("completed_on")), instagram_url: str(form.get("instagram_url")), is_featured: bool(form.get("is_featured")), is_active: bool(form.get("is_active")), sort_order: form.get("sort_order") || 0,
   });
   if (!p.success) return { ok: false, error: "validation", fields: fieldErrors(p.error) };
   const { id, ...row } = p.data;

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera } from "lucide-react";
 import { isLocale } from "@/lib/i18n/config";
 import { CATEGORY_LABEL, getProject } from "@/lib/data/portfolio";
 import { Gallery } from "@/components/portfolio/gallery";
@@ -42,6 +42,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ locale
         </div>
       </div>
       {desc && <p className="mt-5 max-w-3xl whitespace-pre-line leading-relaxed text-mute">{desc}</p>}
+      {p.instagram_url && (
+        <a href={p.instagram_url} target="_blank" rel="noopener noreferrer" className="btn mt-5 h-12 gap-2 bg-gradient-to-r from-[#833ab4] via-[#e1306c] to-[#f77737] px-6 text-white">
+          <Camera className="size-5" aria-hidden /> {ar ? "شوف البوست على إنستغرام" : "See the post on Instagram"}
+        </a>
+      )}
       <div className="mt-8">{p.photos.length ? <Gallery photos={p.photos} title={title} /> : null}</div>
       <div className="mt-12 flex flex-col items-start gap-3 rounded-[1.75rem] bg-bone p-6 md:flex-row md:items-center md:justify-between md:p-8">
         <p className="font-semibold">{ar ? "تريد نفس الشغل لجهتك؟" : "Want the same for your organisation?"}</p>

@@ -2,13 +2,14 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
 
-export const PORTFOLIO_CATEGORIES = ["university", "college", "company", "organization", "custom"] as const;
+export const PORTFOLIO_CATEGORIES = ["university", "college", "company", "organization", "sports", "custom"] as const;
 export type PortfolioCategory = (typeof PORTFOLIO_CATEGORIES)[number];
 export const CATEGORY_LABEL: Record<PortfolioCategory, { ar: string; en: string }> = {
   university: { ar: "جامعات", en: "Universities" },
   college: { ar: "كليات", en: "Colleges" },
   company: { ar: "شركات", en: "Companies" },
   organization: { ar: "منظمات", en: "Organizations" },
+  sports: { ar: "أندية رياضية", en: "Sports clubs" },
   custom: { ar: "طلبات خاصة", en: "Custom orders" },
 };
 
@@ -16,7 +17,7 @@ export interface PortfolioClient { id: string; name_ar: string; name_en: string 
 export interface PortfolioPhoto { url: string; path?: string | null }
 export interface PortfolioProject {
   id: string; client_id: string | null; title_ar: string; title_en: string | null; description_ar: string | null; description_en: string | null;
-  category: PortfolioCategory; photos: PortfolioPhoto[]; completed_on: string | null; is_featured: boolean; sort_order: number; is_active: boolean;
+  category: PortfolioCategory; photos: PortfolioPhoto[]; completed_on: string | null; instagram_url?: string | null; is_featured: boolean; sort_order: number; is_active: boolean;
   client?: PortfolioClient | null;
 }
 

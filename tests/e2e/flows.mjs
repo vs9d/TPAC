@@ -1088,9 +1088,15 @@ await flow("quotation: request → under review → price → approved → order
 
 await flow("portfolio: real clients' logos, admin project with photos, filters, gallery", async (page) => {
   await db.query(readFileSync(new URL("../../supabase/add-portfolio-clients.sql", import.meta.url), "utf8"));
+  // a previous run's test project goes first (the site's own projects stay)
+  await db.query("delete from portfolio_projects where title_ar = 'هوديات تخرج دفعة ٢٠٢٦'");
   await page.goto(`${BASE}/ar/portfolio`);
-  assert.equal(await page.locator('ul[aria-label="عملاؤنا"] li').count(), 8, "only the named, visible clients");
-  await page.getByText("صور المشاريع جاية قريباً.").waitFor();
+  const visibleClients = (await one("select count(*)::int n from portfolio_clients where is_active")).n;
+  assert.ok(visibleClients >= 8, "the real clients are seeded");
+  assert.equal(await page.locator('ul[aria-label="عملاؤنا"] li').count(), visibleClients, "only the named, visible clients");
+  // no projects yet → "coming soon"; otherwise the site's projects (e.g. the Al-Quwa Al-Jawiya club)
+  if ((await one("select count(*)::int n from portfolio_projects where is_active")).n === 0) await page.getByText("صور المشاريع جاية قريباً.").waitFor();
+  else await page.getByRole("link", { name: /نادي القوة الجوية/ }).first().waitFor();
   const png = async (color, name) => {
     const b64 = await page.evaluate((c) => { const k = document.createElement("canvas"); k.width = 1200; k.height = 900; const x = k.getContext("2d"); x.fillStyle = c; x.fillRect(0, 0, 1200, 900); x.fillStyle = "#fff"; x.fillRect(400, 300, 400, 300); return k.toDataURL("image/png").split(",")[1]; }, color);
     writeFileSync(`${SHOTS}/${name}.png`, Buffer.from(b64, "base64"));
@@ -1108,7 +1114,7 @@ await flow("portfolio: real clients' logos, admin project with photos, filters, 
   await page.waitForFunction(() => JSON.parse([...document.querySelectorAll("input[name=photos_json]")].pop().value).length === 2, null, { timeout: 20000 });
   await form.getByText("مشروع مميّز").click();
   await form.getByRole("button", { name: "إضافة" }).click();
-  const pr = await waitFor("select id, photos, is_featured, category from portfolio_projects order by created_at desc limit 1", [], (r) => !!r);
+  const pr = await waitFor("select id, photos, is_featured, category from portfolio_projects where title_ar = 'هوديات تخرج دفعة ٢٠٢٦' order by created_at desc limit 1", [], (r) => !!r);
   assert.equal(pr.photos.length, 2);
   assert.ok(pr.photos.every((x) => x.path.startsWith("portfolio/")) && pr.is_featured && pr.category === "organization");
   await page.goto(`${BASE}/ar/portfolio?category=organization`);
@@ -1123,6 +1129,7 @@ await flow("portfolio: real clients' logos, admin project with photos, filters, 
   assert.equal(await page.getByRole("link", { name: /هوديات تخرج دفعة ٢٠٢٦/ }).count(), 0, "category filter");
   await page.goto(`${BASE}/ar/portfolio`);
   await page.screenshot({ path: `${SHOTS}/portfolio.png`, fullPage: true });
+
 });
 
 await flow("WhatsApp: opt-in at checkout → status messages via Cloud API, dedupe, retry, receipts, resend", async (page) => {

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, Images, Star } from "lucide-react";
+import { ArrowLeft, ArrowRight, Images, Star, Camera } from "lucide-react";
 import { isLocale } from "@/lib/i18n/config";
 import { CATEGORY_LABEL, PORTFOLIO_CATEGORIES, getPortfolio, type PortfolioCategory } from "@/lib/data/portfolio";
 import { formatDate } from "@/lib/format";
@@ -72,6 +72,10 @@ export default async function PortfolioPage({ params, searchParams }: { params: 
                         {p.photos[0] ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={p.photos[0].url} alt={title} loading="lazy" className="size-full object-cover transition duration-500 group-hover:scale-105" />
+                        ) : p.instagram_url ? (
+                          <span className="absolute inset-0 grid place-items-center bg-gradient-to-br from-[#833ab4] via-[#e1306c] to-[#f77737] text-white">
+                            <span className="flex flex-col items-center gap-2 text-sm font-bold"><Camera className="size-9" aria-hidden /> {ar ? "شوف الصور على إنستغرام" : "See the photos on Instagram"}</span>
+                          </span>
                         ) : <Images className="absolute inset-0 m-auto size-10 text-mute" />}
                         {p.is_featured && <span className="absolute start-3 top-3 flex items-center gap-1 rounded-full bg-amber px-2.5 py-1 text-xs font-bold text-ink"><Star className="size-3.5" /> {ar ? "مميّز" : "Featured"}</span>}
                         {p.photos.length > 1 && <span className="absolute bottom-3 end-3 flex items-center gap-1 rounded-full bg-paper/85 px-2.5 py-1 text-xs font-semibold backdrop-blur"><Images className="size-3.5" /> {p.photos.length}</span>}

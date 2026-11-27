@@ -53,6 +53,7 @@ export default async function AdminPortfolio({ params }: { params: Promise<{ loc
       <Textarea name="description_ar" id={x ? `p-dar-${x.id}` : "p-dar-new"} label={t("وصف قصير", "Short description (Arabic)")} defaultValue={x?.description_ar ?? ""} rows={3} />
       <Textarea name="description_en" id={x ? `p-den-${x.id}` : "p-den-new"} label={t("الوصف بالإنجليزي", "Description (English)")} defaultValue={x?.description_en ?? ""} rows={3} dir="ltr" />
       <Input name="completed_on" id={x ? `p-dt-${x.id}` : "p-dt-new"} type="date" label={t("تاريخ الإنجاز (اختياري)", "Completed on (optional)")} defaultValue={x?.completed_on ?? ""} />
+      <Input name="instagram_url" id={x ? `p-ig-${x.id}` : "p-ig-new"} type="url" label={t("رابط البوست على إنستغرام (اختياري)", "Instagram post link (optional)")} defaultValue={x?.instagram_url ?? ""} dir="ltr" placeholder="https://www.instagram.com/p/…" className="sm:col-span-2" />
       <Input name="sort_order" id={x ? `p-so-${x.id}` : "p-so-new"} type="number" label={t("الترتيب", "Order")} defaultValue={x?.sort_order ?? projects.length + 1} />
       <div className="sm:col-span-2"><PhotosField initial={x?.photos ?? []} /></div>
       <Checkbox name="is_featured" label={t("مشروع مميّز (يطلع أول)", "Featured (shown first)")} defaultChecked={x?.is_featured ?? false} />
