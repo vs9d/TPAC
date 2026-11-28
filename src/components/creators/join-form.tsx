@@ -6,9 +6,21 @@ import { useI18n } from "@/components/i18n-provider";
 import { toast } from "@/components/ui/toast";
 import { joinCreators, updateCreatorProfile } from "@/lib/actions/creators";
 import { cn } from "@/lib/format";
+import { CREATOR_SOCIALS as SOCIALS } from "@/lib/creator-labels";
 import { creatorUpload } from "./upload";
 
-const SOCIALS = [["instagram", "Instagram"], ["tiktok", "TikTok"], ["facebook", "Facebook"], ["behance", "Behance"], ["website", "Website"]] as const;
+/** Which field to fix, in words (the first wrong one). */
+export function creatorFieldError(fields: Record<string, string> | undefined, ar: boolean): string | null {
+  if (!fields) return null;
+  const social = Object.keys(fields).find((k) => k.startsWith("socials."));
+  if (social) {
+    const label = SOCIALS.find(([k]) => `socials.${k}` === social)?.[1] ?? "";
+    return ar ? `رابط ${label} مو صحيح — اكتب اسم حسابك مثل ‎@yourname أو انسخ الرابط كامل` : `${label} link isn't valid — type your handle like @yourname or paste the full link`;
+  }
+  const names: Record<string, [string, string]> = { display_name: ["الاسم (حرفين أو أكثر)", "Name (2+ characters)"], email: ["البريد الإلكتروني", "Email"], password: ["كلمة المرور (٨ أحرف أو أكثر)", "Password (8+ characters)"], bio: ["النبذة (لغاية ٦٠٠ حرف)", "Bio (up to 600 characters)"], phone: ["رقم الهاتف", "Phone"] };
+  const k = Object.keys(fields).find((x) => names[x]);
+  return k ? (ar ? `صحّح: ${names[k]![0]}` : `Please fix: ${names[k]![1]}`) : null;
+}
 
 /** Becoming a TPAC creator: account (if needed), public name and @username, phone, bio, photo, social links. */
 export function CreatorJoinForm({ signedIn, defaults }: { signedIn: boolean; defaults: { name: string; phone: string; email: string } }) {
@@ -39,7 +51,9 @@ export function CreatorJoinForm({ signedIn, defaults }: { signedIn: boolean; def
                 : r.error === "already" ? (ar ? "عندك طلب انضمام من قبل" : "You've already applied")
                   : r.fields?.email ? (ar ? "اكتب إيميل صحيح — عليه توصلك إشعارات المبيعات والأرباح" : "Enter a valid email — sales and earnings notifications go there")
                   : r.fields?.phone ? (ar ? "رقم الهاتف غير صحيح" : "Phone number is not valid")
-                    : r.error === "rate_limited" ? (ar ? "محاولات كثيرة — حاول بعد شوي" : "Too many tries — try again shortly") : ar ? "تأكد من الخانات" : "Check the fields",
+                    : r.error === "rate_limited" ? (ar ? "محاولات كثيرة — حاول بعد شوي" : "Too many tries — try again shortly")
+                      : r.error === "signup_busy" ? (ar ? "التسجيلات كثيرة هسه — جرّب بعد ساعة، أو سجّل دخول إذا عندك حساب" : "Too many sign-ups right now — try again in an hour, or sign in if you have an account")
+                      : creatorFieldError(r.fields, ar) ?? (r.error === "generic" ? (ar ? "صار خلل بسيط — جرّب مرة ثانية" : "Something went wrong — try again") : ar ? "تأكد من الخانات" : "Check the fields"),
         );
         return;
       }
@@ -115,7 +129,7 @@ export function CreatorJoinForm({ signedIn, defaults }: { signedIn: boolean; def
       <fieldset>
         <legend className="mb-1.5 text-sm font-semibold">{ar ? "حساباتك (اختياري)" : "Your accounts (optional)"}</legend>
         <div className="grid gap-2 sm:grid-cols-2">
-          {SOCIALS.map(([k, label]) => <input key={k} name={k} type="url" dir="ltr" className="field w-full text-sm" placeholder={`${label} — https://…`} aria-label={label} />)}
+          {SOCIALS.map(([k, label]) => <input key={k} name={k} type="text" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} dir="ltr" className={cn("field w-full text-sm", err(`socials.${k}`))} placeholder={k === "website" ? "Website — yoursite.com" : `${label} — @yourname`} aria-label={label} aria-invalid={!!errors[`socials.${k}`]} />)}
         </div>
       </fieldset>
       <button type="submit" disabled={pending || user.length < 3} className="btn btn-brand h-12 w-full text-base">

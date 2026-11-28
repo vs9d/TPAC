@@ -1850,10 +1850,17 @@ await flow("TPAC Creators: join → approval → design on the official mockup w
   await page.locator("form:has(input[name=display_name]) input[name=email]").fill(`${uname}@thetpac.com`);
   await page.fill("input[name=password]", "creator-pass-2026");
   await page.fill("textarea[name=bio]", "Street art from Baghdad");
+  // accounts as people type them: "@name" works; a wrong link says which one to fix
+  await page.locator("form:has(input[name=display_name])").getByLabel("Instagram", { exact: true }).fill(`@${uname}`);
+  await page.locator("form:has(input[name=display_name])").getByLabel("Website", { exact: true }).fill("not a site");
+  await page.getByRole("button", { name: "Apply to join" }).click();
+  await page.getByText(/Website link isn't valid/).first().waitFor();
+  await page.locator("form:has(input[name=display_name])").getByLabel("Website", { exact: true }).fill("");
   await page.getByRole("button", { name: "Apply to join" }).click();
   await page.getByText(/Application received/).first().waitFor({ timeout: 20000 });
-  const me = await one("select user_id, status from creators where username = $1", [uname]);
+  const me = await one("select user_id, status, socials from creators where username = $1", [uname]);
   assert.equal(me.status, "pending");
+  assert.equal(me.socials.instagram, `https://www.instagram.com/${uname}`);
   await page.goto(`${BASE}/en/creator-studio`);
   await page.getByText(/Under review/).waitFor();
 

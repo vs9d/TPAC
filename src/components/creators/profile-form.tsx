@@ -6,9 +6,9 @@ import { useI18n } from "@/components/i18n-provider";
 import { toast } from "@/components/ui/toast";
 import { updateCreatorProfile } from "@/lib/actions/creators";
 import type { Creator } from "@/lib/creators";
+import { CREATOR_SOCIALS as SOCIALS } from "@/lib/creator-labels";
 import { creatorUpload } from "./upload";
-
-const SOCIALS = [["instagram", "Instagram"], ["tiktok", "TikTok"], ["facebook", "Facebook"], ["behance", "Behance"], ["website", "Website"]] as const;
+import { creatorFieldError } from "./join-form";
 
 /** The creator edits their public page: photo, cover, name, bio, phone and links. */
 export function CreatorProfileForm({ c }: { c: Creator }) {
@@ -39,7 +39,7 @@ export function CreatorProfileForm({ c }: { c: Creator }) {
         display_name: fd.get("display_name"), bio: fd.get("bio") || undefined, phone: fd.get("phone"), email: fd.get("email"), email_notifications: fd.get("email_notifications") === "on",
         socials: Object.fromEntries(SOCIALS.map(([k]) => [k, String(fd.get(k) ?? "").trim()])), avatar_url: avatar, cover_url: cover,
       });
-      if (!r.ok) { toast.error(r.fields?.email ? (ar ? "الإيميل مطلوب — اكتب إيميل صحيح" : "Email is required — enter a valid one") : r.fields?.phone ? (ar ? "رقم الهاتف غير صحيح" : "Phone is not valid") : r.fields ? (ar ? "الروابط لازم تبدي بـ https://" : "Links must start with https://") : ar ? "ما انحفظ" : "Not saved"); return; }
+      if (!r.ok) { toast.error(r.fields?.email ? (ar ? "الإيميل مطلوب — اكتب إيميل صحيح" : "Email is required — enter a valid one") : r.fields?.phone ? (ar ? "رقم الهاتف غير صحيح" : "Phone is not valid") : creatorFieldError(r.fields, ar) ?? (ar ? "ما انحفظ — جرّب مرة ثانية" : "Not saved — try again")); return; }
       toast.success(ar ? "انحفظت صفحتك ✓" : "Saved ✓");
       router.refresh();
     }); }}>
@@ -80,7 +80,7 @@ export function CreatorProfileForm({ c }: { c: Creator }) {
       <label className="block"><span className="mb-1.5 block text-sm font-semibold">{ar ? "النبذة" : "Bio"}</span><textarea name="bio" defaultValue={c.bio ?? ""} rows={4} maxLength={600} className="field w-full" /></label>
       <fieldset>
         <legend className="mb-1.5 text-sm font-semibold">{ar ? "الروابط" : "Links"}</legend>
-        <div className="grid gap-2 sm:grid-cols-2">{SOCIALS.map(([k, l]) => <input key={k} name={k} defaultValue={c.socials?.[k] ?? ""} dir="ltr" className="field w-full text-sm" placeholder={`${l} — https://…`} aria-label={l} />)}</div>
+        <div className="grid gap-2 sm:grid-cols-2">{SOCIALS.map(([k, l]) => <input key={k} name={k} defaultValue={c.socials?.[k] ?? ""} type="text" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} dir="ltr" className="field w-full text-sm" placeholder={k === "website" ? "Website — yoursite.com" : `${l} — @yourname`} aria-label={l} />)}</div>
       </fieldset>
       <p className="text-xs text-mute" dir="ltr">thetpac.com/creator/{c.username}</p>
       <button type="submit" disabled={pending || !!busy} className="btn btn-brand h-12">{pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} {ar ? "حفظ" : "Save"}</button>

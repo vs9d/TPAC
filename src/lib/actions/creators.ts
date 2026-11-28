@@ -12,11 +12,17 @@ import { phoneSchema, fieldErrors, uuid } from "@/lib/validation";
 import { assertCreator, creatorBalance, creatorBasePrice, creatorMaxMarkup, effectiveCommission, earningPerPiece, getCreatorSettings, getMyCreator, MARKUP_CEILING } from "@/lib/creators";
 import { designItem, generatedImage, writeProductPrinting } from "@/lib/printing-write";
 import { skuPrefix } from "@/lib/product-tools";
+import { normalizeSocialLink, type CreatorSocial } from "@/lib/creator-labels";
 import { notifyAdmin } from "@/lib/notifications";
 
 type Fail = { ok: false; error: string; fields?: Record<string, string> };
-const url = z.string().trim().max(300).refine((u) => u === "" || /^https:\/\/[^\s]+$/.test(u), "url").optional();
-const socials = z.object({ instagram: url, tiktok: url, facebook: url, behance: url, website: url }).default({});
+// "@name", "name", "instagram.com/name" or a full link → a clean https link (anything else: "url")
+const link = (kind: CreatorSocial) => z.unknown().transform((v, ctx) => {
+  const out = normalizeSocialLink(kind, v);
+  if (out === null) { ctx.addIssue({ code: "custom", message: "url" }); return z.NEVER; }
+  return out || undefined;
+}).optional();
+const socials = z.object({ instagram: link("instagram"), tiktok: link("tiktok"), facebook: link("facebook"), behance: link("behance"), website: link("website") }).default({ instagram: undefined, tiktok: undefined, facebook: undefined, behance: undefined, website: undefined });
 const username = z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9_.]{2,29}$/, "username");
 const RESERVED = new Set(["admin", "tpac", "studio", "new", "top", "join", "settings", "support", "help", "creators", "creator"]);
 const cleanSocials = (s: Record<string, string | undefined>) => Object.fromEntries(Object.entries(s).filter(([, v]) => v));
@@ -40,7 +46,11 @@ const joinSchema = z.object({
  */
 export async function joinCreators(input: unknown): Promise<{ ok: true; needsEmail?: boolean } | Fail> {
   const parsed = joinSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "validation", fields: fieldErrors(parsed.error) };
+  if (!parsed.success) {
+    const fields = fieldErrors(parsed.error);
+    console.warn("joinCreators: invalid fields", Object.keys(fields).join(", "));
+    return { ok: false, error: "validation", fields };
+  }
   const d = parsed.data;
   if (RESERVED.has(d.username)) return { ok: false, error: "validation", fields: { username: "taken" } };
   if (!(await rateLimit("auth", "creator"))) return { ok: false, error: "rate_limited" };
@@ -66,6 +76,9 @@ export async function joinCreators(input: unknown): Promise<{ ok: true; needsEma
     if (error || !data.user) {
       if (error && (error.code === "user_already_exists" || /already/i.test(error.message))) return { ok: false, error: "email_taken" };
       if (error?.code === "weak_password") return { ok: false, error: "weak_password" };
+      if (error?.code === "email_address_invalid") return { ok: false, error: "validation", fields: { email: "invalid" } };
+      if (error?.code === "over_email_send_rate_limit" || error?.code === "over_request_rate_limit" || error?.status === 429) return { ok: false, error: "signup_busy" };
+      console.error("joinCreators: sign-up failed", error?.code, error?.message);
       return { ok: false, error: "generic" };
     }
     userId = data.user.id;
